@@ -128,6 +128,7 @@ fun WorkoutScreen(viewModel: MainViewModel, isTrainerConnected: Boolean = true, 
             totalDurationSec = workoutState.totalDurationSec,
             samples = samples,
             ftpWatts = settings.ftpWatts,
+            intensityPercent = workoutState.intensityPercent,
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
@@ -253,6 +254,7 @@ private fun ChartCard(
     totalDurationSec: Int,
     samples: List<SamplePoint>,
     ftpWatts: Int,
+    intensityPercent: Int,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -285,6 +287,7 @@ private fun ChartCard(
             totalDurationSec = totalDurationSec,
             samples = samples,
             ftpWatts = ftpWatts,
+            intensityPercent = intensityPercent,
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
@@ -317,6 +320,11 @@ private fun mutedZoneColor(zoneColor: Color, active: Boolean): Color {
     return lerp(base, zoneColor, t)
 }
 
+/** Steps at or after [currentStepIndex] reflect a live intensity change; earlier ones are
+ *  history and stay as originally ridden. */
+private fun displayWatts(rawWatts: Int, stepIndex: Int, currentStepIndex: Int, intensityPercent: Int): Int =
+    if (stepIndex >= currentStepIndex) (rawWatts * intensityPercent / 100f).roundToInt() else rawWatts
+
 @Composable
 private fun WorkoutProfileChart(
     steps: List<WorkoutStep>,
@@ -325,10 +333,16 @@ private fun WorkoutProfileChart(
     totalDurationSec: Int,
     samples: List<SamplePoint>,
     ftpWatts: Int,
+    intensityPercent: Int,
     modifier: Modifier = Modifier,
 ) {
-    val maxTargetWatts = remember(steps) {
-        steps.maxOfOrNull { max(it.startWatts, it.endWatts) }?.coerceAtLeast(1) ?: 1
+    val maxTargetWatts = remember(steps, currentStepIndex, intensityPercent) {
+        steps.withIndex().maxOfOrNull { (i, step) ->
+            max(
+                displayWatts(step.startWatts, i, currentStepIndex, intensityPercent),
+                displayWatts(step.endWatts, i, currentStepIndex, intensityPercent),
+            )
+        }?.coerceAtLeast(1) ?: 1
     }
     val maxSampleWatts = remember(samples) { samples.maxOfOrNull { it.watts } ?: 0 }
     // Divide by (1 - headroom) so the tallest bar/trace reaches only that fraction of the height,
@@ -384,8 +398,10 @@ private fun WorkoutProfileChart(
 
             val x0 = xAt(stepStart).coerceIn(0f, w)
             val x1 = xAt(stepEnd).coerceIn(0f, w)
-            val barHeight = h * (max(step.startWatts, step.endWatts).toFloat() / wattsScale).coerceIn(0.05f, 1f)
-            val zone = zoneFor(max(step.startWatts, step.endWatts), ftpWatts)
+            val dispStart = displayWatts(step.startWatts, index, currentStepIndex, intensityPercent)
+            val dispEnd = displayWatts(step.endWatts, index, currentStepIndex, intensityPercent)
+            val barHeight = h * (max(dispStart, dispEnd).toFloat() / wattsScale).coerceIn(0.05f, 1f)
+            val zone = zoneFor(max(dispStart, dispEnd), ftpWatts)
             val color = mutedZoneColor(zone.color, active = index == currentStepIndex)
             drawRect(color = color, topLeft = Offset(x0, h - barHeight), size = Size((x1 - x0).coerceAtLeast(1f), barHeight))
 

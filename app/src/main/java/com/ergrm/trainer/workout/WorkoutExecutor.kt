@@ -7,6 +7,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -21,6 +24,9 @@ data class WorkoutRunState(
     val isRunning: Boolean = false,
     val hasStarted: Boolean = false,
     val intensityPercent: Int = 100,
+    /** True when the last pause was triggered automatically (rider stopped pedaling), as
+     *  opposed to a manual tap — only an auto-pause resumes on its own when pedaling resumes. */
+    val autoPaused: Boolean = false,
 ) {
     val currentStep: WorkoutStep? get() = steps.getOrNull(currentStepIndex)
     val nextStep: WorkoutStep? get() = steps.getOrNull(currentStepIndex + 1)
@@ -37,10 +43,18 @@ data class SamplePoint(
 )
 
 private const val AUTO_EXTEND_SEC = 300
-private const val AUTO_EXTEND_LABEL = "Prolungamento"
+private const val AUTO_EXTEND_LABEL = "Extension"
 private const val MIN_INTENSITY_PERCENT = 10
 private const val INTENSITY_STEP_PERCENT = 5
 private const val MAX_SAMPLE_HISTORY = 6 * 3600
+
+// Auto start/stop: begin the workout as soon as the rider starts pedaling (power above this
+// small dead zone), and auto-pause as soon as they stop. Debounced in each direction so a
+// single noisy zero-power sample or a brief coast doesn't flip state — starting reacts almost
+// immediately, stopping waits a few seconds to ride out a coast or a gear shift.
+private const val AUTO_START_THRESHOLD_WATTS = 20
+private const val AUTO_START_DEBOUNCE_MS = 500L
+private const val AUTO_STOP_DEBOUNCE_MS = 3000L
 
 /**
  * Drives a structured workout in ERG mode: ticks once per second, computes the target
@@ -64,6 +78,27 @@ class WorkoutExecutor(
     private var tickerJob: Job? = null
     private var lastSentWatts: Int? = null
 
+    init {
+        scope.launch {
+            trainer.liveData
+                .map { (it.powerWatts ?: 0) > AUTO_START_THRESHOLD_WATTS }
+                .distinctUntilChanged()
+                .collectLatest { pedaling ->
+                    delay(if (pedaling) AUTO_START_DEBOUNCE_MS else AUTO_STOP_DEBOUNCE_MS)
+                    val s = _state.value
+                    if (pedaling) {
+                        // Auto-start from idle, or auto-resume from an auto-pause — but never
+                        // resume a workout the rider explicitly paused by hand.
+                        if (s.steps.isNotEmpty() && !s.isRunning && (!s.hasStarted || s.autoPaused)) {
+                            start()
+                        }
+                    } else if (s.isRunning) {
+                        autoPause()
+                    }
+                }
+        }
+    }
+
     fun load(steps: List<WorkoutStep>) {
         stop()
         _sampleHistory.value = emptyList()
@@ -86,7 +121,7 @@ class WorkoutExecutor(
 
     fun start() {
         if (_state.value.steps.isEmpty() || _state.value.isRunning) return
-        _state.value = _state.value.copy(isRunning = true, hasStarted = true)
+        _state.value = _state.value.copy(isRunning = true, hasStarted = true, autoPaused = false)
         tickerJob?.cancel()
         tickerJob = scope.launch {
             // Start/Resume must reach the trainer and be acknowledged before the first target
@@ -106,7 +141,17 @@ class WorkoutExecutor(
     fun pause() {
         tickerJob?.cancel()
         tickerJob = null
-        _state.value = _state.value.copy(isRunning = false)
+        _state.value = _state.value.copy(isRunning = false, autoPaused = false)
+        scope.launch { trainer.stop() }
+    }
+
+    /** Like [pause], but triggered by the rider stopping pedaling rather than an explicit tap —
+     *  pedaling again auto-resumes it, unlike a manual pause which only offers Stop. */
+    private fun autoPause() {
+        if (!_state.value.isRunning) return
+        tickerJob?.cancel()
+        tickerJob = null
+        _state.value = _state.value.copy(isRunning = false, autoPaused = true)
         scope.launch { trainer.stop() }
     }
 
@@ -151,7 +196,7 @@ class WorkoutExecutor(
         tickerJob?.cancel()
         tickerJob = null
         lastSentWatts = null
-        _state.value = _state.value.copy(isRunning = false)
+        _state.value = _state.value.copy(isRunning = false, autoPaused = false)
     }
 
     private fun tick() {
