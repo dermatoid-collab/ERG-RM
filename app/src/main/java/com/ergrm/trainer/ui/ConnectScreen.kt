@@ -20,6 +20,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -86,11 +87,20 @@ fun ConnectScreen(viewModel: MainViewModel) {
             style = MaterialTheme.typography.titleMedium,
         )
 
-        Button(
-            onClick = { permissionLauncher.launch(bluetoothPermissions) },
-            modifier = Modifier.padding(top = 16.dp),
-        ) {
-            Text(if (isScanning) "Ricerca in corso…" else "Cerca trainer")
+        if (connectionState is TrainerConnectionState.Ready) {
+            OutlinedButton(
+                onClick = { viewModel.disconnect() },
+                modifier = Modifier.padding(top = 16.dp),
+            ) {
+                Text("Disconnetti trainer")
+            }
+        } else {
+            Button(
+                onClick = { permissionLauncher.launch(bluetoothPermissions) },
+                modifier = Modifier.padding(top = 16.dp),
+            ) {
+                Text(if (isScanning) "Ricerca in corso…" else "Cerca trainer")
+            }
         }
 
         if (isScanning) {

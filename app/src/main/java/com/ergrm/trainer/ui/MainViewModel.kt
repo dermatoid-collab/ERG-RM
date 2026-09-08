@@ -67,6 +67,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val connectionState = trainerConnection.connectionState
     val liveData = trainerConnection.liveData
     val workoutState = workoutExecutor.state
+    val sampleHistory = workoutExecutor.sampleHistory
 
     val settings: StateFlow<AppSettings> = settingsRepository.settings
         .stateIn(viewModelScope, SharingStarted.Eagerly, AppSettings())
@@ -207,6 +208,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun skipStep() = workoutExecutor.skipToNextStep()
     fun exitWorkout() = workoutExecutor.exit()
     fun extendCurrentInterval() = workoutExecutor.extendCurrentStep()
+    fun increaseIntensity() = workoutExecutor.increaseIntensity()
+    fun decreaseIntensity() = workoutExecutor.decreaseIntensity()
 
     /** Called after the user picks a folder via ACTION_OPEN_DOCUMENT_TREE. */
     fun onLibraryFolderPicked(uri: Uri, displayName: String) {

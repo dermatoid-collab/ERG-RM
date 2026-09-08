@@ -18,19 +18,17 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -39,10 +37,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.PointMode
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -53,22 +57,28 @@ import com.ergrm.trainer.ui.theme.ErgAtTarget
 import com.ergrm.trainer.ui.theme.ErgBelowTarget
 import com.ergrm.trainer.ui.theme.ErgDivider
 import com.ergrm.trainer.ui.theme.ErgOnSurface
+import com.ergrm.trainer.ui.theme.ErgSurface
+import com.ergrm.trainer.ui.theme.ErgSurface2
 import com.ergrm.trainer.ui.theme.ErgWarn
+import com.ergrm.trainer.workout.SamplePoint
 import com.ergrm.trainer.workout.WorkoutRunState
 import com.ergrm.trainer.workout.WorkoutStep
 import kotlin.math.max
+import kotlin.math.roundToInt
 
 @Composable
 fun WorkoutScreen(viewModel: MainViewModel, isTrainerConnected: Boolean = true, onOpenLibrary: () -> Unit = {}) {
     val live by viewModel.liveData.collectAsState()
     val workoutState by viewModel.workoutState.collectAsState()
     val loadState by viewModel.workoutLoadState.collectAsState()
+    val samples by viewModel.sampleHistory.collectAsState()
     val settings by viewModel.settings.collectAsState()
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         val loaded = loadState
         WorkoutHeader(
@@ -85,39 +95,11 @@ fun WorkoutScreen(viewModel: MainViewModel, isTrainerConnected: Boolean = true, 
                 "Trainer non connesso — i target di potenza non verranno inviati",
                 style = MaterialTheme.typography.bodySmall,
                 color = ErgWarn,
-                modifier = Modifier.padding(top = 4.dp),
             )
         }
+        WorkoutStatusLine(loadState)
 
-        Spacer(modifier = Modifier.height(12.dp))
-        PowerReadout(live, workoutState.currentTargetWatts)
-
-        Spacer(modifier = Modifier.height(8.dp))
-        StatsRow(live, workoutState)
-
-        Spacer(modifier = Modifier.height(16.dp))
-        WorkoutProfileChart(
-            steps = workoutState.steps,
-            currentStepIndex = workoutState.currentStepIndex,
-            totalElapsedSec = workoutState.totalElapsedSec,
-            totalDurationSec = workoutState.totalDurationSec,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(160.dp), // +33% vs the original 120.dp
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-        WorkoutStatusLine(loadState, workoutState)
-
-        Spacer(modifier = Modifier.height(8.dp))
-        IntervalDetailsSection(
-            current = workoutState.currentStep,
-            currentRemainingSec = workoutState.remainingInStepSec,
-            next = workoutState.nextStep,
-            ftpWatts = settings.ftpWatts,
-        )
-
-        Spacer(modifier = Modifier.weight(1f))
+        StatTileGrid(live, workoutState, settings.ftpWatts)
 
         ControlsRow(
             hasWorkout = workoutState.steps.isNotEmpty(),
@@ -128,55 +110,122 @@ fun WorkoutScreen(viewModel: MainViewModel, isTrainerConnected: Boolean = true, 
             onExit = { viewModel.exitWorkout() },
             onExtend = { viewModel.extendCurrentInterval() },
             onSkip = { viewModel.skipStep() },
-            onDisconnect = { viewModel.disconnect() },
+        )
+
+        IntervalDetailsSection(
+            current = workoutState.currentStep,
+            currentRemainingSec = workoutState.remainingInStepSec,
+            next = workoutState.nextStep,
+            ftpWatts = settings.ftpWatts,
+            intensityPercent = workoutState.intensityPercent,
+        )
+
+        ChartCard(
+            steps = workoutState.steps,
+            currentStepIndex = workoutState.currentStepIndex,
+            totalElapsedSec = workoutState.totalElapsedSec,
+            totalDurationSec = workoutState.totalDurationSec,
+            samples = samples,
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+        )
+
+        IntensityRow(
+            intensityPercent = workoutState.intensityPercent,
+            enabled = workoutState.steps.isNotEmpty(),
+            onDecrease = { viewModel.decreaseIntensity() },
+            onIncrease = { viewModel.increaseIntensity() },
         )
     }
 }
 
 @Composable
-private fun PowerReadout(live: TrainerSample, targetWatts: Int) {
+private fun WorkoutStatusLine(loadState: WorkoutLoadState) {
+    val text = when (loadState) {
+        WorkoutLoadState.Loading -> "Caricamento allenamento…"
+        WorkoutLoadState.Empty -> "Nessun allenamento pianificato per oggi su Intervals.icu"
+        is WorkoutLoadState.Error -> "Errore: ${loadState.message}"
+        else -> null
+    }
+    if (text != null) {
+        Text(text, style = MaterialTheme.typography.bodySmall, color = ErgOnSurface)
+    }
+}
+
+@Composable
+private fun StatTileGrid(live: TrainerSample, workoutState: WorkoutRunState, ftpWatts: Int) {
     val actual = live.powerWatts ?: 0
-    val color = when {
-        targetWatts <= 0 -> ErgOnSurface
-        actual < targetWatts - 15 -> ErgBelowTarget
-        actual > targetWatts + 15 -> ErgAboveTarget
+    val target = workoutState.currentTargetWatts
+    val powerColor = when {
+        target <= 0 -> ErgOnSurface
+        actual < target - 15 -> ErgBelowTarget
+        actual > target + 15 -> ErgAboveTarget
         else -> ErgAtTarget
     }
-    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = "$actual",
-            fontSize = 96.sp,
-            color = color,
-        )
-        Text(text = "watt", style = MaterialTheme.typography.bodyMedium, color = ErgOnSurface)
-        if (targetWatts > 0) {
-            Text(
-                text = "target $targetWatts W",
-                style = MaterialTheme.typography.titleMedium,
-                color = ErgOnSurface,
+    val zone = zoneFor(target, ftpWatts)
+
+    Column(verticalArrangement = Arrangement.spacedBy(7.dp), modifier = Modifier.fillMaxWidth()) {
+        Row(horizontalArrangement = Arrangement.spacedBy(7.dp), modifier = Modifier.fillMaxWidth()) {
+            StatTile("Interval", formatTime(workoutState.remainingInStepSec), Modifier.weight(1f))
+            StatTile("Totale", formatTime(workoutState.totalElapsedSec), Modifier.weight(1f))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(7.dp), modifier = Modifier.fillMaxWidth()) {
+            StatTile("Cadenza", live.cadenceRpm?.let { "${it.toInt()}" } ?: "--", Modifier.weight(1f))
+            StatTile("FC", live.heartRateBpm?.let { "$it" } ?: "--", Modifier.weight(1f))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(7.dp), modifier = Modifier.fillMaxWidth()) {
+            StatTile(
+                label = "Target watt",
+                value = "$target",
+                modifier = Modifier.weight(1f),
+                zoneLabel = zone.label,
+                zoneColor = zone.color,
             )
+            StatTile("Watt", "$actual", Modifier.weight(1f), valueColor = powerColor)
         }
     }
 }
 
 @Composable
-private fun StatsRow(live: TrainerSample, workoutState: WorkoutRunState) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceEvenly,
+private fun StatTile(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier,
+    valueColor: Color = ErgOnSurface,
+    zoneLabel: String? = null,
+    zoneColor: Color = ErgOnSurface,
+) {
+    Column(
+        modifier = modifier
+            .background(ErgSurface, RoundedCornerShape(13.dp))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
     ) {
-        StatTile("Cadenza", live.cadenceRpm?.let { "${it.toInt()} rpm" } ?: "--")
-        StatTile("FC", live.heartRateBpm?.let { "$it bpm" } ?: "--")
-        StatTile("Trascorso", formatTime(workoutState.totalElapsedSec))
-        StatTile("Rimanente", formatTime(workoutState.totalRemainingSec))
-    }
-}
-
-@Composable
-private fun StatTile(label: String, value: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(value, style = MaterialTheme.typography.titleMedium)
-        Text(label, style = MaterialTheme.typography.labelSmall, color = ErgOnSurface)
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Text(
+                label.uppercase(),
+                style = MaterialTheme.typography.labelSmall,
+                color = ErgOnSurface.copy(alpha = 0.6f),
+            )
+            if (zoneLabel != null) {
+                Spacer(modifier = Modifier.weight(1f))
+                Text(
+                    zoneLabel,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.Black,
+                    modifier = Modifier
+                        .background(zoneColor, RoundedCornerShape(5.dp))
+                        .padding(horizontal = 5.dp, vertical = 1.dp),
+                )
+            }
+        }
+        Text(
+            value,
+            fontSize = 30.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = valueColor,
+            modifier = Modifier.padding(top = 2.dp),
+        )
     }
 }
 
@@ -194,16 +243,81 @@ private enum class ChartZoom(val windowSec: Int?) {
 }
 
 @Composable
+private fun ChartCard(
+    steps: List<WorkoutStep>,
+    currentStepIndex: Int,
+    totalElapsedSec: Int,
+    totalDurationSec: Int,
+    samples: List<SamplePoint>,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .background(ErgSurface, RoundedCornerShape(14.dp))
+            .padding(top = 10.dp, bottom = 6.dp, start = 4.dp, end = 4.dp),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            LegendKey(Color.White, "Potenza")
+            Spacer(Modifier.width(14.dp))
+            LegendKey(ErgAboveTarget, "FC")
+            Spacer(Modifier.width(14.dp))
+            LegendKey(ErgWarn, "Cadenza")
+            Spacer(Modifier.weight(1f))
+            Text(
+                "Tocca per zoom",
+                style = MaterialTheme.typography.labelSmall,
+                color = ErgOnSurface.copy(alpha = 0.5f),
+            )
+        }
+        WorkoutProfileChart(
+            steps = steps,
+            currentStepIndex = currentStepIndex,
+            totalElapsedSec = totalElapsedSec,
+            totalDurationSec = totalDurationSec,
+            samples = samples,
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+        )
+    }
+}
+
+@Composable
+private fun LegendKey(color: Color, label: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            modifier = Modifier
+                .width(14.dp)
+                .height(3.dp)
+                .background(color, RoundedCornerShape(2.dp)),
+        )
+        Spacer(Modifier.width(5.dp))
+        Text(label, style = MaterialTheme.typography.labelSmall, color = ErgOnSurface.copy(alpha = 0.7f))
+    }
+}
+
+@Composable
 private fun WorkoutProfileChart(
     steps: List<WorkoutStep>,
     currentStepIndex: Int,
     totalElapsedSec: Int,
     totalDurationSec: Int,
+    samples: List<SamplePoint>,
     modifier: Modifier = Modifier,
 ) {
-    val maxWatts = remember(steps) {
+    val maxTargetWatts = remember(steps) {
         steps.maxOfOrNull { max(it.startWatts, it.endWatts) }?.coerceAtLeast(1) ?: 1
     }
+    val maxSampleWatts = remember(samples) { samples.maxOfOrNull { it.watts } ?: 0 }
+    val wattsScale = max(maxTargetWatts, maxSampleWatts).coerceAtLeast(1)
+    val bpmScale = 200f
+    val cadScale = 160f
+
     val doneColor = Color(0xFF3A4048)
     val pendingColor = Color(0xFF232833)
     var zoom by remember { mutableStateOf(ChartZoom.FULL) }
@@ -240,6 +354,9 @@ private fun WorkoutProfileChart(
         }
         val windowLen = (windowEnd - windowStart).coerceAtLeast(1)
         fun xAt(t: Int): Float = w * (t - windowStart) / windowLen.toFloat()
+        fun yWatts(watts: Int): Float = h - h * (watts.toFloat() / wattsScale).coerceIn(0f, 1f)
+        fun yBpm(bpm: Int): Float = h - h * (bpm.toFloat() / bpmScale).coerceIn(0f, 1f)
+        fun yCad(rpm: Int): Float = h - h * (rpm.toFloat() / cadScale).coerceIn(0f, 1f)
 
         var acc = 0
         steps.forEachIndexed { index, step ->
@@ -250,7 +367,7 @@ private fun WorkoutProfileChart(
 
             val x0 = xAt(stepStart).coerceIn(0f, w)
             val x1 = xAt(stepEnd).coerceIn(0f, w)
-            val barHeight = h * (max(step.startWatts, step.endWatts).toFloat() / maxWatts).coerceIn(0.05f, 1f)
+            val barHeight = h * (max(step.startWatts, step.endWatts).toFloat() / wattsScale).coerceIn(0.05f, 1f)
             val color = when {
                 index < currentStepIndex -> doneColor
                 index == currentStepIndex -> ErgAccent
@@ -264,9 +381,46 @@ private fun WorkoutProfileChart(
             }
         }
 
+        // Live traces recorded during the workout: cadence (dashed) under HR under power.
+        val visibleSamples = samples.filter { it.tSec in windowStart..windowEnd }
+        if (visibleSamples.size >= 2) {
+            val cadPoints = visibleSamples.mapNotNull { s -> s.cadenceRpm?.let { Offset(xAt(s.tSec), yCad(it)) } }
+            val hrPoints = visibleSamples.mapNotNull { s -> s.hrBpm?.let { Offset(xAt(s.tSec), yBpm(it)) } }
+            val powerPoints = visibleSamples.map { Offset(xAt(it.tSec), yWatts(it.watts)) }
+
+            if (cadPoints.size >= 2) {
+                drawPoints(
+                    points = cadPoints,
+                    pointMode = PointMode.Polygon,
+                    color = ErgWarn,
+                    strokeWidth = 3f,
+                    cap = StrokeCap.Round,
+                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 8f)),
+                )
+            }
+            if (hrPoints.size >= 2) {
+                drawPoints(
+                    points = hrPoints,
+                    pointMode = PointMode.Polygon,
+                    color = ErgAboveTarget,
+                    strokeWidth = 3.5f,
+                    cap = StrokeCap.Round,
+                )
+            }
+            if (powerPoints.size >= 2) {
+                drawPoints(
+                    points = powerPoints,
+                    pointMode = PointMode.Polygon,
+                    color = Color.White,
+                    strokeWidth = 4f,
+                    cap = StrokeCap.Round,
+                )
+            }
+        }
+
         if (totalElapsedSec in windowStart..windowEnd) {
             val progressX = xAt(totalElapsedSec).coerceIn(0f, w)
-            drawLine(color = Color.White, start = Offset(progressX, 0f), end = Offset(progressX, h), strokeWidth = 3f)
+            drawLine(color = Color.White, start = Offset(progressX, 0f), end = Offset(progressX, h), strokeWidth = 2f, alpha = 0.55f)
         }
     }
 }
@@ -293,8 +447,8 @@ private fun zoneFor(watts: Int, ftpWatts: Int): PowerZone {
     return POWER_ZONES.firstOrNull { pct <= it.first }?.second ?: ZONE_MAX
 }
 
-private fun wattsLabel(step: WorkoutStep): String =
-    if (step.startWatts == step.endWatts) "${step.endWatts} W" else "${step.startWatts}–${step.endWatts} W"
+private fun wattsLabel(startWatts: Int, endWatts: Int): String =
+    if (startWatts == endWatts) "$endWatts W" else "$startWatts–$endWatts W"
 
 @Composable
 private fun IntervalDetailsSection(
@@ -302,10 +456,14 @@ private fun IntervalDetailsSection(
     currentRemainingSec: Int,
     next: WorkoutStep?,
     ftpWatts: Int,
+    intensityPercent: Int,
 ) {
     if (current == null) return
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(ErgSurface, RoundedCornerShape(12.dp))
+            .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IntervalDetailBlock(
@@ -313,6 +471,7 @@ private fun IntervalDetailsSection(
             step = current,
             remainingSec = currentRemainingSec,
             ftpWatts = ftpWatts,
+            intensityPercent = intensityPercent,
             modifier = Modifier.weight(1f),
         )
         if (next != null) {
@@ -327,6 +486,7 @@ private fun IntervalDetailsSection(
                 step = next,
                 remainingSec = next.durationSec,
                 ftpWatts = ftpWatts,
+                intensityPercent = intensityPercent,
                 modifier = Modifier.weight(1f),
             )
         }
@@ -339,9 +499,12 @@ private fun IntervalDetailBlock(
     step: WorkoutStep,
     remainingSec: Int,
     ftpWatts: Int,
+    intensityPercent: Int,
     modifier: Modifier = Modifier,
 ) {
-    val zone = zoneFor(step.endWatts, ftpWatts)
+    val scaledStart = (step.startWatts * intensityPercent / 100f).roundToInt()
+    val scaledEnd = (step.endWatts * intensityPercent / 100f).roundToInt()
+    val zone = zoneFor(scaledEnd, ftpWatts)
     Row(
         modifier = modifier.padding(horizontal = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -349,7 +512,7 @@ private fun IntervalDetailBlock(
     ) {
         Text(label, style = MaterialTheme.typography.labelSmall, color = ErgOnSurface)
         Text(formatTime(remainingSec), style = MaterialTheme.typography.bodyMedium)
-        Text(wattsLabel(step), style = MaterialTheme.typography.bodyMedium)
+        Text(wattsLabel(scaledStart, scaledEnd), style = MaterialTheme.typography.bodyMedium)
         Text(
             zone.label,
             style = MaterialTheme.typography.labelSmall,
@@ -359,18 +522,6 @@ private fun IntervalDetailBlock(
                 .padding(horizontal = 6.dp, vertical = 1.dp),
         )
     }
-}
-
-@Composable
-private fun WorkoutStatusLine(loadState: WorkoutLoadState, workoutState: WorkoutRunState) {
-    val text = when (loadState) {
-        WorkoutLoadState.Idle -> if (workoutState.steps.isEmpty()) "Nessun allenamento caricato" else workoutState.currentStep?.label.orEmpty()
-        WorkoutLoadState.Loading -> "Caricamento allenamento…"
-        is WorkoutLoadState.Loaded -> workoutState.currentStep?.label ?: loadState.name
-        WorkoutLoadState.Empty -> "Nessun allenamento pianificato per oggi su Intervals.icu"
-        is WorkoutLoadState.Error -> "Errore: ${loadState.message}"
-    }
-    Text(text, style = MaterialTheme.typography.bodyMedium, color = ErgOnSurface)
 }
 
 /**
@@ -387,40 +538,102 @@ private fun ControlsRow(
     onExit: () -> Unit,
     onExtend: () -> Unit,
     onSkip: () -> Unit,
-    onDisconnect: () -> Unit,
 ) {
     val isPaused = hasStarted && !isRunning
-    val mainLabel = when { isRunning -> "Pausa"; isPaused -> "Stop"; else -> "Avvia" }
     val mainIcon = when { isRunning -> Icons.Filled.Pause; isPaused -> Icons.Filled.Stop; else -> Icons.Filled.PlayArrow }
     val mainAction = when { isRunning -> onPause; isPaused -> onExit; else -> onPlay }
-    val mainColor = if (isPaused) ErgAboveTarget else ErgAccent
+    val mainDescription = when { isRunning -> "Pausa"; isPaused -> "Stop"; else -> "Avvia" }
+    val mainContainerColor = if (isPaused) ErgAboveTarget else ErgSurface2
 
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        PillIconButton(
+            icon = mainIcon,
+            contentDescription = mainDescription,
+            onClick = mainAction,
+            enabled = hasWorkout,
+            containerColor = mainContainerColor,
+            modifier = Modifier.weight(1f),
+        )
+        PillIconButton(
+            icon = Icons.Filled.Add,
+            contentDescription = "Aggiungi 5 minuti all'intervallo",
+            onClick = onExtend,
+            enabled = hasWorkout,
+            modifier = Modifier.width(60.dp),
+        )
+        PillIconButton(
+            icon = Icons.Filled.SkipNext,
+            contentDescription = "Salta step",
+            onClick = onSkip,
+            enabled = hasWorkout,
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+@Composable
+private fun PillIconButton(
+    icon: ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    containerColor: Color = ErgSurface2,
+    iconColor: Color = ErgOnSurface,
+) {
+    Box(
+        modifier = modifier
+            .height(48.dp)
+            .clip(RoundedCornerShape(50))
+            .background(if (enabled) containerColor else containerColor.copy(alpha = 0.4f))
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            icon,
+            contentDescription = contentDescription,
+            tint = if (enabled) iconColor else iconColor.copy(alpha = 0.4f),
+        )
+    }
+}
+
+@Composable
+private fun IntensityRow(
+    intensityPercent: Int,
+    enabled: Boolean,
+    onDecrease: () -> Unit,
+    onIncrease: () -> Unit,
+) {
+    val adjusted = intensityPercent != 100
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        PillIconButton(
+            icon = Icons.Filled.KeyboardArrowDown,
+            contentDescription = "Riduci intensità",
+            onClick = onDecrease,
+            enabled = enabled,
+            modifier = Modifier.width(50.dp),
+        )
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(48.dp)
+                .clip(RoundedCornerShape(50))
+                .background(if (adjusted) ErgAccent else ErgSurface2),
+            contentAlignment = Alignment.Center,
         ) {
-            Button(
-                onClick = mainAction,
-                enabled = hasWorkout,
-                modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.buttonColors(containerColor = mainColor),
-            ) {
-                Icon(mainIcon, contentDescription = null)
-                Text(mainLabel)
-            }
-            OutlinedButton(onClick = onExtend, enabled = hasWorkout, modifier = Modifier.weight(1f)) {
-                Icon(Icons.Filled.Add, contentDescription = null)
-                Text("5 min")
-            }
-            OutlinedButton(onClick = onSkip, enabled = hasWorkout, modifier = Modifier.weight(1f)) {
-                Icon(Icons.Filled.SkipNext, contentDescription = null)
-                Text("Salta")
-            }
+            Text(
+                "$intensityPercent%",
+                fontWeight = FontWeight.Bold,
+                color = if (adjusted) Color.Black else ErgOnSurface,
+            )
         }
-        TextButton(onClick = onDisconnect, modifier = Modifier.fillMaxWidth()) {
-            Text("Disconnetti trainer")
-        }
+        PillIconButton(
+            icon = Icons.Filled.KeyboardArrowUp,
+            contentDescription = "Aumenta intensità",
+            onClick = onIncrease,
+            enabled = enabled,
+            modifier = Modifier.width(50.dp),
+        )
     }
 }
 

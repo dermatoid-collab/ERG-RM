@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.Color
 // green/gray/red to signal below/at/above target power.
 val ErgBackground = Color(0xFF0F1216)
 val ErgSurface = Color(0xFF1B1F26)
+val ErgSurface2 = Color(0xFF20252D)
 val ErgOnSurface = Color(0xFFE8EAED)
 val ErgAccent = Color(0xFF3DDC84)
 val ErgBelowTarget = Color(0xFF5AA9E6)

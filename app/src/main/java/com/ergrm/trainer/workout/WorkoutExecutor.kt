@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 data class WorkoutRunState(
     val steps: List<WorkoutStep> = emptyList(),
@@ -19,6 +20,7 @@ data class WorkoutRunState(
     val currentTargetWatts: Int = 0,
     val isRunning: Boolean = false,
     val hasStarted: Boolean = false,
+    val intensityPercent: Int = 100,
 ) {
     val currentStep: WorkoutStep? get() = steps.getOrNull(currentStepIndex)
     val nextStep: WorkoutStep? get() = steps.getOrNull(currentStepIndex + 1)
@@ -26,8 +28,20 @@ data class WorkoutRunState(
     val totalRemainingSec: Int get() = (totalDurationSec - totalElapsedSec).coerceAtLeast(0)
 }
 
+/** One second of recorded live data during a running workout, used to trace power/HR/cadence on the chart. */
+data class SamplePoint(
+    val tSec: Int,
+    val watts: Int,
+    val hrBpm: Int?,
+    val cadenceRpm: Int?,
+)
+
 private const val AUTO_EXTEND_SEC = 300
 private const val AUTO_EXTEND_LABEL = "Prolungamento"
+private const val MIN_INTENSITY_PERCENT = 70
+private const val MAX_INTENSITY_PERCENT = 115
+private const val INTENSITY_STEP_PERCENT = 5
+private const val MAX_SAMPLE_HISTORY = 6 * 3600
 
 /**
  * Drives a structured workout in ERG mode: ticks once per second, computes the target
@@ -45,16 +59,31 @@ class WorkoutExecutor(
     private val _state = MutableStateFlow(WorkoutRunState())
     val state: StateFlow<WorkoutRunState> = _state.asStateFlow()
 
+    private val _sampleHistory = MutableStateFlow<List<SamplePoint>>(emptyList())
+    val sampleHistory: StateFlow<List<SamplePoint>> = _sampleHistory.asStateFlow()
+
     private var tickerJob: Job? = null
     private var lastSentWatts: Int? = null
 
     fun load(steps: List<WorkoutStep>) {
         stop()
+        _sampleHistory.value = emptyList()
         _state.value = WorkoutRunState(
             steps = steps,
             totalDurationSec = steps.sumOf { it.durationSec },
         )
     }
+
+    /** Scales every target power (current step and beyond) by this %FTP-style multiplier. */
+    fun setIntensity(percent: Int) {
+        _state.value = _state.value.copy(
+            intensityPercent = percent.coerceIn(MIN_INTENSITY_PERCENT, MAX_INTENSITY_PERCENT),
+        )
+        pushTargetForCurrentStep()
+    }
+
+    fun increaseIntensity() = setIntensity(_state.value.intensityPercent + INTENSITY_STEP_PERCENT)
+    fun decreaseIntensity() = setIntensity(_state.value.intensityPercent - INTENSITY_STEP_PERCENT)
 
     fun start() {
         if (_state.value.steps.isEmpty() || _state.value.isRunning) return
@@ -83,6 +112,7 @@ class WorkoutExecutor(
         tickerJob = null
         lastSentWatts = null
         _state.value = WorkoutRunState()
+        _sampleHistory.value = emptyList()
         scope.launch { trainer.stop() }
     }
 
@@ -161,11 +191,25 @@ class WorkoutExecutor(
     private fun pushTargetForCurrentStep() {
         val s = _state.value
         val step = s.currentStep ?: return
-        val target = step.targetWattsAt(s.elapsedInStepSec)
+        val raw = step.targetWattsAt(s.elapsedInStepSec)
+        val target = (raw * s.intensityPercent / 100f).roundToInt()
         _state.value = _state.value.copy(currentTargetWatts = target)
         if (target != lastSentWatts) {
             lastSentWatts = target
             scope.launch { trainer.setTargetPowerWatts(target) }
         }
+        recordSample()
+    }
+
+    private fun recordSample() {
+        if (!_state.value.isRunning) return
+        val live = trainer.liveData.value
+        val sample = SamplePoint(
+            tSec = _state.value.totalElapsedSec,
+            watts = live.powerWatts ?: 0,
+            hrBpm = live.heartRateBpm,
+            cadenceRpm = live.cadenceRpm?.toInt(),
+        )
+        _sampleHistory.value = (_sampleHistory.value + sample).takeLast(MAX_SAMPLE_HISTORY)
     }
 }
