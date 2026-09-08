@@ -64,7 +64,10 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
                             onClose = { overlay = Overlay.NONE },
                         )
                         overlay == Overlay.LIBRARY -> LibraryScreen(viewModel, onImported = { overlay = Overlay.NONE })
-                        connectionState is TrainerConnectionState.Ready -> WorkoutScreen(viewModel)
+                        connectionState is TrainerConnectionState.Ready -> WorkoutScreen(
+                            viewModel,
+                            onOpenLibrary = { overlay = Overlay.LIBRARY },
+                        )
                         else -> ConnectScreen(viewModel)
                     }
                 }

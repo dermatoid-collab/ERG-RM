@@ -2,6 +2,7 @@ package com.ergrm.trainer.ui
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -15,6 +16,8 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -23,7 +26,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -42,7 +47,7 @@ import com.ergrm.trainer.workout.WorkoutStep
 import kotlin.math.max
 
 @Composable
-fun WorkoutScreen(viewModel: MainViewModel) {
+fun WorkoutScreen(viewModel: MainViewModel, onOpenLibrary: () -> Unit = {}) {
     val live by viewModel.liveData.collectAsState()
     val workoutState by viewModel.workoutState.collectAsState()
     val loadState by viewModel.workoutLoadState.collectAsState()
@@ -76,7 +81,8 @@ fun WorkoutScreen(viewModel: MainViewModel) {
         ControlsRow(
             hasWorkout = workoutState.steps.isNotEmpty(),
             isRunning = workoutState.isRunning,
-            onFetchWorkout = { viewModel.fetchTodayWorkout() },
+            onPickFromToday = { viewModel.fetchTodayWorkout() },
+            onPickFromLibrary = onOpenLibrary,
             onPlayPause = {
                 if (workoutState.isRunning) viewModel.pauseWorkout() else viewModel.startWorkout()
             },
@@ -171,10 +177,10 @@ private fun WorkoutProfileChart(
 @Composable
 private fun WorkoutStatusLine(loadState: WorkoutLoadState, workoutState: WorkoutRunState) {
     val text = when (loadState) {
-        WorkoutLoadState.Idle -> if (workoutState.steps.isEmpty()) "Nessun workout caricato" else workoutState.currentStep?.label.orEmpty()
-        WorkoutLoadState.Loading -> "Caricamento workout da Intervals.icu…"
+        WorkoutLoadState.Idle -> if (workoutState.steps.isEmpty()) "Nessun allenamento caricato" else workoutState.currentStep?.label.orEmpty()
+        WorkoutLoadState.Loading -> "Caricamento allenamento…"
         is WorkoutLoadState.Loaded -> workoutState.currentStep?.label ?: loadState.name
-        WorkoutLoadState.Empty -> "Nessun workout pianificato per oggi"
+        WorkoutLoadState.Empty -> "Nessun allenamento pianificato per oggi su Intervals.icu"
         is WorkoutLoadState.Error -> "Errore: ${loadState.message}"
     }
     Text(text, style = MaterialTheme.typography.bodyMedium, color = ErgOnSurface)
@@ -184,7 +190,8 @@ private fun WorkoutStatusLine(loadState: WorkoutLoadState, workoutState: Workout
 private fun ControlsRow(
     hasWorkout: Boolean,
     isRunning: Boolean,
-    onFetchWorkout: () -> Unit,
+    onPickFromToday: () -> Unit,
+    onPickFromLibrary: () -> Unit,
     onPlayPause: () -> Unit,
     onSkip: () -> Unit,
     onDisconnect: () -> Unit,
@@ -194,9 +201,11 @@ private fun ControlsRow(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            OutlinedButton(onClick = onFetchWorkout, modifier = Modifier.weight(1f)) {
-                Text("Workout di oggi")
-            }
+            WorkoutSourceButton(
+                onPickFromToday = onPickFromToday,
+                onPickFromLibrary = onPickFromLibrary,
+                modifier = Modifier.weight(1f),
+            )
             Button(
                 onClick = onPlayPause,
                 enabled = hasWorkout,
@@ -213,6 +222,37 @@ private fun ControlsRow(
         }
         TextButton(onClick = onDisconnect, modifier = Modifier.fillMaxWidth()) {
             Text("Disconnetti trainer")
+        }
+    }
+}
+
+/** Lets the rider choose whether to load today's plan from Intervals.icu or a workout from the local library. */
+@Composable
+private fun WorkoutSourceButton(
+    onPickFromToday: () -> Unit,
+    onPickFromLibrary: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box(modifier = modifier) {
+        OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
+            Text("Carica allenamento")
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(
+                text = { Text("Oggi (Intervals.icu)") },
+                onClick = {
+                    expanded = false
+                    onPickFromToday()
+                },
+            )
+            DropdownMenuItem(
+                text = { Text("Dalla libreria") },
+                onClick = {
+                    expanded = false
+                    onPickFromLibrary()
+                },
+            )
         }
     }
 }

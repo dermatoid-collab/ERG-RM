@@ -32,7 +32,7 @@ interface IntervalsApi {
         @Query("newest") newest: String,
     ): List<IcuEventDto>
 
-    /** Structured workout for a planned event, in Zwift's .zwo XML format. */
+    /** Structured workout for a planned event, in .zwo XML format. */
     @GET("api/v1/athlete/{athleteId}/events/{eventId}/downloads/zwo")
     suspend fun getWorkoutZwo(
         @Path("athleteId") athleteId: String,

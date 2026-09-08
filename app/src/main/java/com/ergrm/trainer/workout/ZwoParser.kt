@@ -6,10 +6,10 @@ import java.io.StringReader
 import kotlin.math.roundToInt
 
 /**
- * Parses a Zwift workout (.zwo) XML document — the format intervals.icu exposes for
- * downloading a planned workout's structure — into a flat list of [WorkoutStep]s.
- * Power attributes in .zwo are fractions of FTP (e.g. 0.65 == 65% FTP) and are converted
- * to absolute watts using [ftpWatts].
+ * Parses a structured workout in .zwo XML format — the format intervals.icu exposes for
+ * downloading a planned workout's structure, also commonly used for local workout files —
+ * into a flat list of [WorkoutStep]s. Power attributes are fractions of FTP (e.g. 0.65 ==
+ * 65% FTP) and are converted to absolute watts using [ftpWatts].
  */
 object ZwoParser {
 
