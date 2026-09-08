@@ -11,18 +11,23 @@ import android.os.ParcelUuid
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import java.util.UUID
 
-data class DiscoveredTrainer(
+data class DiscoveredDevice(
     val device: BluetoothDevice,
     val name: String,
     val rssi: Int,
 )
 
-/** Scans for nearby BLE devices advertising the FTMS (Fitness Machine) service. */
+/** Kept as an alias: the trainer-scan call sites predate heart-rate sensor scanning, when
+ *  results were always trainers specifically. */
+typealias DiscoveredTrainer = DiscoveredDevice
+
+/** Scans for nearby BLE devices advertising a given GATT service UUID (e.g. FTMS or Heart Rate). */
 class BleScanner(private val adapter: BluetoothAdapter) {
 
     @SuppressLint("MissingPermission")
-    fun scan(): Flow<DiscoveredTrainer> = callbackFlow {
+    fun scan(serviceUuid: UUID): Flow<DiscoveredDevice> = callbackFlow {
         val scanner = adapter.bluetoothLeScanner
         if (scanner == null) {
             close(IllegalStateException("Bluetooth adapter unavailable or disabled"))
@@ -33,9 +38,9 @@ class BleScanner(private val adapter: BluetoothAdapter) {
         val callback = object : ScanCallback() {
             override fun onScanResult(callbackType: Int, result: ScanResult) {
                 val device = result.device
-                val name = result.scanRecord?.deviceName ?: device.name ?: "Unknown trainer"
+                val name = result.scanRecord?.deviceName ?: device.name ?: "Unknown device"
                 if (seen.add(device.address)) {
-                    trySend(DiscoveredTrainer(device, name, result.rssi))
+                    trySend(DiscoveredDevice(device, name, result.rssi))
                 }
             }
 
@@ -46,7 +51,7 @@ class BleScanner(private val adapter: BluetoothAdapter) {
 
         val filters = listOf(
             ScanFilter.Builder()
-                .setServiceUuid(ParcelUuid(Ftms.SERVICE_FITNESS_MACHINE))
+                .setServiceUuid(ParcelUuid(serviceUuid))
                 .build()
         )
         val settings = ScanSettings.Builder()

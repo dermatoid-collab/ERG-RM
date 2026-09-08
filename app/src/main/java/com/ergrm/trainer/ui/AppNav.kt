@@ -52,24 +52,24 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
                         title = { Text("ERG-RM") },
                         actions = {
                             IconButton(onClick = { screen = Screen.WORKOUT }) {
-                                Icon(Icons.Filled.FitnessCenter, contentDescription = "Allenamento")
+                                Icon(Icons.Filled.FitnessCenter, contentDescription = "Workout")
                             }
                             IconButton(onClick = { screen = Screen.CONNECT }) {
                                 Icon(
                                     Icons.Filled.Bluetooth,
-                                    contentDescription = "Trainer",
+                                    contentDescription = "Devices",
                                     tint = if (isConnected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                                 )
                             }
                             IconButton(onClick = {
                                 overlay = if (overlay == Overlay.LIBRARY) Overlay.NONE else Overlay.LIBRARY
                             }) {
-                                Icon(Icons.Filled.FolderOpen, contentDescription = "Libreria workout")
+                                Icon(Icons.Filled.FolderOpen, contentDescription = "Workout library")
                             }
                             IconButton(onClick = {
                                 overlay = if (overlay == Overlay.SETTINGS) Overlay.NONE else Overlay.SETTINGS
                             }) {
-                                Icon(Icons.Filled.Settings, contentDescription = "Impostazioni")
+                                Icon(Icons.Filled.Settings, contentDescription = "Settings")
                             }
                         },
                         colors = TopAppBarDefaults.topAppBarColors(

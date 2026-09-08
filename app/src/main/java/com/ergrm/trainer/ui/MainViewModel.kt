@@ -13,9 +13,14 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.ergrm.trainer.ble.BleScanner
+import com.ergrm.trainer.ble.DiscoveredDevice
 import com.ergrm.trainer.ble.DiscoveredTrainer
+import com.ergrm.trainer.ble.Ftms
+import com.ergrm.trainer.ble.HeartRateConnection
+import com.ergrm.trainer.ble.HeartRateProfile
 import com.ergrm.trainer.ble.TrainerConnection
 import com.ergrm.trainer.ble.TrainerConnectionState
+import com.ergrm.trainer.ble.TrainerSample
 import com.ergrm.trainer.data.AppSettings
 import com.ergrm.trainer.data.SettingsRepository
 import com.ergrm.trainer.intervals.FetchResult
@@ -62,10 +67,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         (application.getSystemService(BluetoothManager::class.java))?.adapter
 
     val trainerConnection = TrainerConnection(application, viewModelScope)
+    val heartRateConnection = HeartRateConnection(application)
     val workoutExecutor = WorkoutExecutor(trainerConnection, viewModelScope)
 
     val connectionState = trainerConnection.connectionState
-    val liveData = trainerConnection.liveData
+    val hrConnectionState = heartRateConnection.connectionState
+
+    // A standalone HR sensor's reading takes priority over whatever heart rate the trainer
+    // itself might be forwarding (some trainers bridge an ANT+ strap over FTMS).
+    val liveData = combine(trainerConnection.liveData, heartRateConnection.heartRateBpm) { sample, hrOverride ->
+        if (hrOverride != null) sample.copy(heartRateBpm = hrOverride) else sample
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, TrainerSample())
+
     val workoutState = workoutExecutor.state
     val sampleHistory = workoutExecutor.sampleHistory
 
@@ -77,6 +90,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _isScanning = MutableStateFlow(false)
     val isScanning: StateFlow<Boolean> = _isScanning.asStateFlow()
+
+    private val _hrScanResults = MutableStateFlow<List<DiscoveredDevice>>(emptyList())
+    val hrScanResults: StateFlow<List<DiscoveredDevice>> = _hrScanResults.asStateFlow()
+
+    private val _isHrScanning = MutableStateFlow(false)
+    val isHrScanning: StateFlow<Boolean> = _isHrScanning.asStateFlow()
+
+    private var hrScanJob: Job? = null
 
     private val _workoutLoadState = MutableStateFlow<WorkoutLoadState>(WorkoutLoadState.Idle)
     val workoutLoadState: StateFlow<WorkoutLoadState> = _workoutLoadState.asStateFlow()
@@ -110,10 +131,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             combine(connectionState, workoutState) { conn, workout -> conn to workout }
                 .collect { (conn, workout) ->
                     val title = when (conn) {
-                        is TrainerConnectionState.Ready -> "Connesso al trainer"
-                        is TrainerConnectionState.Failed -> "Errore di connessione"
-                        is TrainerConnectionState.Disconnected -> "Trainer disconnesso"
-                        else -> "Connessione in corso…"
+                        is TrainerConnectionState.Ready -> "Connected to trainer"
+                        is TrainerConnectionState.Failed -> "Connection error"
+                        is TrainerConnectionState.Disconnected -> "Trainer disconnected"
+                        else -> "Connecting…"
                     }
                     val target = workout.currentTargetWatts.takeIf { workout.isRunning }
                     trainerService?.updateStatus(title, target)
@@ -148,7 +169,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _isScanning.value = true
         scanJob?.cancel()
         scanJob = viewModelScope.launch {
-            BleScanner(adapter).scan()
+            BleScanner(adapter).scan(Ftms.SERVICE_FITNESS_MACHINE)
                 .catch { _isScanning.value = false }
                 .collect { found ->
                     _scanResults.value = (_scanResults.value + found).distinctBy { it.device.address }
@@ -177,6 +198,36 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         stopTrainerService()
     }
 
+    fun startHrScan() {
+        val adapter = bluetoothAdapter ?: return
+        if (!adapter.isEnabled) return
+        _hrScanResults.value = emptyList()
+        _isHrScanning.value = true
+        hrScanJob?.cancel()
+        hrScanJob = viewModelScope.launch {
+            BleScanner(adapter).scan(HeartRateProfile.SERVICE_HEART_RATE)
+                .catch { _isHrScanning.value = false }
+                .collect { found ->
+                    _hrScanResults.value = (_hrScanResults.value + found).distinctBy { it.device.address }
+                }
+        }
+    }
+
+    fun stopHrScan() {
+        hrScanJob?.cancel()
+        hrScanJob = null
+        _isHrScanning.value = false
+    }
+
+    fun connectHrSensor(discovered: DiscoveredDevice) {
+        stopHrScan()
+        heartRateConnection.connect(discovered.device)
+    }
+
+    fun disconnectHrSensor() {
+        heartRateConnection.disconnect()
+    }
+
     fun saveIntervalsSettings(apiKey: String, athleteId: String, ftpWatts: Int) {
         viewModelScope.launch {
             settingsRepository.updateIntervalsCredentials(apiKey, athleteId)
@@ -187,7 +238,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun fetchTodayWorkout() {
         val s = settings.value
         if (!s.intervalsConfigured) {
-            _workoutLoadState.value = WorkoutLoadState.Error("Configura API key e athlete ID di Intervals.icu")
+            _workoutLoadState.value = WorkoutLoadState.Error("Set your Intervals.icu API key and athlete ID first")
             return
         }
         _workoutLoadState.value = WorkoutLoadState.Loading
@@ -257,7 +308,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     override fun onCleared() {
         stopScan()
+        stopHrScan()
         trainerConnection.disconnect()
+        heartRateConnection.disconnect()
         stopTrainerService()
         super.onCleared()
     }

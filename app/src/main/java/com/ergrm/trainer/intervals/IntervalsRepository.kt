@@ -60,7 +60,7 @@ class IntervalsRepository {
                 val events = try {
                     api.getEvents(athleteId, oldest = today, newest = today)
                 } catch (t: Exception) {
-                    return@withContext FetchResult.Error("Impossibile leggere il calendario: ${describeError(t)}")
+                    return@withContext FetchResult.Error("Couldn't read the calendar: ${describeError(t)}")
                 }
 
                 val candidate = events.firstOrNull { it.category == "WORKOUT" && (it.type == null || it.type in BIKE_TYPES) }
@@ -70,14 +70,14 @@ class IntervalsRepository {
                 val zwoBody = try {
                     api.getWorkoutZwo(athleteId, candidate.id).string()
                 } catch (t: Exception) {
-                    return@withContext FetchResult.Error("Impossibile scaricare l'allenamento: ${describeError(t)}")
+                    return@withContext FetchResult.Error("Couldn't download the workout: ${describeError(t)}")
                 }
                 if (!zwoBody.contains("<workout", ignoreCase = true)) {
                     // Not actual ZWO content — most likely an error page or unexpected response
                     // body, not a workout that's genuinely empty. Surface it instead of silently
                     // reporting "no workout today".
                     return@withContext FetchResult.Error(
-                        "Risposta inattesa da Intervals.icu per l'evento ${candidate.id}: ${zwoBody.take(120)}",
+                        "Unexpected response from Intervals.icu for event ${candidate.id}: ${zwoBody.take(120)}",
                     )
                 }
                 val steps = ZwoParser.parse(zwoBody, ftpWatts)

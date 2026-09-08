@@ -33,7 +33,7 @@ class TrainerForegroundService : Service() {
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
-        startForeground(NOTIFICATION_ID, buildNotification("Connessione al trainer…", null))
+        startForeground(NOTIFICATION_ID, buildNotification("Connecting to trainer…", null))
     }
 
     override fun onBind(intent: Intent): IBinder = binder
@@ -53,7 +53,7 @@ class TrainerForegroundService : Service() {
             Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE,
         )
-        val text = if (targetWatts != null) "Target ERG: $targetWatts W" else "In attesa di un allenamento"
+        val text = if (targetWatts != null) "ERG target: $targetWatts W" else "Waiting for a workout"
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(title)
             .setContentText(text)
@@ -68,7 +68,7 @@ class TrainerForegroundService : Service() {
     private fun createNotificationChannel() {
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "Connessione trainer",
+            "Trainer connection",
             NotificationManager.IMPORTANCE_LOW,
         )
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)

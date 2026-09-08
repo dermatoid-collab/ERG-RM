@@ -43,14 +43,14 @@ class LibraryRepository(private val context: Context) {
     suspend fun importWorkout(fileUri: Uri, fileName: String, ftpWatts: Int): LibraryImportResult = withContext(Dispatchers.IO) {
         try {
             val content = context.contentResolver.openInputStream(fileUri)?.use { it.reader().readText() }
-                ?: return@withContext LibraryImportResult.Error("Impossibile leggere il file")
+                ?: return@withContext LibraryImportResult.Error("Couldn't read the file")
             val steps = if (fileName.endsWith(".erg", ignoreCase = true) || fileName.endsWith(".mrc", ignoreCase = true)) {
                 ErgParser.parse(content, ftpWatts)
             } else {
                 ZwoParser.parse(content, ftpWatts)
             }
             if (steps.isEmpty()) {
-                LibraryImportResult.Error("Nessuno step trovato nel file")
+                LibraryImportResult.Error("No steps found in the file")
             } else {
                 LibraryImportResult.Success(steps)
             }

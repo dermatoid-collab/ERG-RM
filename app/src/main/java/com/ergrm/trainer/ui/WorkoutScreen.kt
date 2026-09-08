@@ -85,7 +85,7 @@ fun WorkoutScreen(viewModel: MainViewModel, isTrainerConnected: Boolean = true, 
         WorkoutHeader(
             title = when (loaded) {
                 is WorkoutLoadState.Loaded -> loaded.name
-                else -> if (workoutState.steps.isNotEmpty()) "Allenamento" else "Nessun allenamento"
+                else -> if (workoutState.steps.isNotEmpty()) "Workout" else "No workout loaded"
             },
             onPickFromToday = { viewModel.fetchTodayWorkout() },
             onPickFromLibrary = onOpenLibrary,
@@ -93,7 +93,7 @@ fun WorkoutScreen(viewModel: MainViewModel, isTrainerConnected: Boolean = true, 
 
         if (!isTrainerConnected) {
             Text(
-                "Trainer non connesso — i target di potenza non verranno inviati",
+                "Trainer not connected — power targets won't be sent",
                 style = MaterialTheme.typography.bodySmall,
                 color = ErgWarn,
             )
@@ -145,9 +145,9 @@ fun WorkoutScreen(viewModel: MainViewModel, isTrainerConnected: Boolean = true, 
 @Composable
 private fun WorkoutStatusLine(loadState: WorkoutLoadState) {
     val text = when (loadState) {
-        WorkoutLoadState.Loading -> "Caricamento allenamento…"
-        WorkoutLoadState.Empty -> "Nessun allenamento pianificato per oggi su Intervals.icu"
-        is WorkoutLoadState.Error -> "Errore: ${loadState.message}"
+        WorkoutLoadState.Loading -> "Loading workout…"
+        WorkoutLoadState.Empty -> "No workout planned for today on Intervals.icu"
+        is WorkoutLoadState.Error -> "Error: ${loadState.message}"
         else -> null
     }
     if (text != null) {
@@ -171,21 +171,21 @@ private fun StatTileGrid(live: TrainerSample, workoutState: WorkoutRunState, ftp
     Column(verticalArrangement = Arrangement.spacedBy(7.dp), modifier = Modifier.fillMaxWidth()) {
         Row(horizontalArrangement = Arrangement.spacedBy(7.dp), modifier = Modifier.fillMaxWidth()) {
             StatTile("Interval", formatTime(workoutState.remainingInStepSec), Modifier.weight(1f))
-            StatTile("Totale", formatTime(workoutState.totalElapsedSec), Modifier.weight(1f))
+            StatTile("Total", formatTime(workoutState.totalElapsedSec), Modifier.weight(1f))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(7.dp), modifier = Modifier.fillMaxWidth()) {
-            StatTile("Cadenza", live.cadenceRpm?.let { "${it.toInt()}" } ?: "--", Modifier.weight(1f))
-            StatTile("FC", live.heartRateBpm?.let { "$it" } ?: "--", Modifier.weight(1f))
+            StatTile("Cadence", live.cadenceRpm?.let { "${it.toInt()}" } ?: "--", Modifier.weight(1f))
+            StatTile("HR", live.heartRateBpm?.let { "$it" } ?: "--", Modifier.weight(1f))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(7.dp), modifier = Modifier.fillMaxWidth()) {
             StatTile(
-                label = "Target watt",
+                label = "Target watts",
                 value = "$target",
                 modifier = Modifier.weight(1f),
                 zoneLabel = zone.label,
                 zoneColor = zone.color,
             )
-            StatTile("Watt", "$actual", Modifier.weight(1f), valueColor = powerColor)
+            StatTile("Watts", "$actual", Modifier.weight(1f), valueColor = powerColor)
         }
     }
 }
@@ -266,14 +266,14 @@ private fun ChartCard(
                 .padding(horizontal = 10.dp, vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            LegendKey(Color.White, "Potenza")
+            LegendKey(Color.White, "Power")
             Spacer(Modifier.width(14.dp))
-            LegendKey(ErgAboveTarget, "FC")
+            LegendKey(ErgAboveTarget, "HR")
             Spacer(Modifier.width(14.dp))
-            LegendKey(ErgWarn, "Cadenza")
+            LegendKey(ErgWarn, "Cadence")
             Spacer(Modifier.weight(1f))
             Text(
-                "Tocca per zoom",
+                "Tap to zoom",
                 style = MaterialTheme.typography.labelSmall,
                 color = ErgOnSurface.copy(alpha = 0.5f),
             )
@@ -481,7 +481,7 @@ private fun IntervalDetailsSection(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IntervalDetailBlock(
-            label = "Ora",
+            label = "Now",
             step = current,
             remainingSec = currentRemainingSec,
             ftpWatts = ftpWatts,
@@ -496,7 +496,7 @@ private fun IntervalDetailsSection(
                     .background(ErgOnSurface.copy(alpha = 0.15f)),
             )
             IntervalDetailBlock(
-                label = "Poi",
+                label = "Next",
                 step = next,
                 remainingSec = next.durationSec,
                 ftpWatts = ftpWatts,
@@ -539,7 +539,7 @@ private fun IntervalDetailBlock(
 }
 
 /**
- * Main action button cycles Avvia -> Pausa -> Stop: pausing a started workout doesn't offer a
+ * Main action button cycles Start -> Pause -> Stop: pausing a started workout doesn't offer a
  * resume, only a Stop that exits it (via [onExit]) — matches how the rider actually uses it.
  */
 @Composable
@@ -556,7 +556,7 @@ private fun ControlsRow(
     val isPaused = hasStarted && !isRunning
     val mainIcon = when { isRunning -> Icons.Filled.Pause; isPaused -> Icons.Filled.Stop; else -> Icons.Filled.PlayArrow }
     val mainAction = when { isRunning -> onPause; isPaused -> onExit; else -> onPlay }
-    val mainDescription = when { isRunning -> "Pausa"; isPaused -> "Stop"; else -> "Avvia" }
+    val mainDescription = when { isRunning -> "Pause"; isPaused -> "Stop"; else -> "Start" }
     val mainContainerColor = if (isPaused) ErgAboveTarget else ErgSurface2
 
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -570,14 +570,14 @@ private fun ControlsRow(
         )
         PillIconButton(
             icon = Icons.Filled.Add,
-            contentDescription = "Aggiungi 5 minuti all'intervallo",
+            contentDescription = "Add 5 minutes to the interval",
             onClick = onExtend,
             enabled = hasWorkout,
             modifier = Modifier.width(60.dp),
         )
         PillIconButton(
             icon = Icons.Filled.SkipNext,
-            contentDescription = "Salta step",
+            contentDescription = "Skip step",
             onClick = onSkip,
             enabled = hasWorkout,
             modifier = Modifier.weight(1f),
@@ -622,7 +622,7 @@ private fun IntensityRow(
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         PillIconButton(
             icon = Icons.Filled.KeyboardArrowDown,
-            contentDescription = "Riduci intensità",
+            contentDescription = "Decrease intensity",
             onClick = onDecrease,
             enabled = enabled,
             modifier = Modifier.width(50.dp),
@@ -643,7 +643,7 @@ private fun IntensityRow(
         }
         PillIconButton(
             icon = Icons.Filled.KeyboardArrowUp,
-            contentDescription = "Aumenta intensità",
+            contentDescription = "Increase intensity",
             onClick = onIncrease,
             enabled = enabled,
             modifier = Modifier.width(50.dp),
@@ -670,18 +670,18 @@ private fun WorkoutHeader(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            Icon(Icons.Filled.ArrowDropDown, contentDescription = "Scegli allenamento")
+            Icon(Icons.Filled.ArrowDropDown, contentDescription = "Choose workout")
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             DropdownMenuItem(
-                text = { Text("Oggi (Intervals.icu)") },
+                text = { Text("Today (Intervals.icu)") },
                 onClick = {
                     expanded = false
                     onPickFromToday()
                 },
             )
             DropdownMenuItem(
-                text = { Text("Dalla libreria") },
+                text = { Text("From library") },
                 onClick = {
                     expanded = false
                     onPickFromLibrary()

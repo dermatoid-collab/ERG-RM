@@ -39,7 +39,7 @@ fun SettingsScreen(
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
     ) {
-        Text("Impostazioni", style = MaterialTheme.typography.titleLarge)
+        Text("Settings", style = MaterialTheme.typography.titleLarge)
 
         Text(
             "Intervals.icu",
@@ -57,7 +57,7 @@ fun SettingsScreen(
         OutlinedTextField(
             value = athleteId,
             onValueChange = { athleteId = it },
-            label = { Text("Athlete ID (es. i123456)") },
+            label = { Text("Athlete ID (e.g. i123456)") },
             singleLine = true,
             modifier = Modifier
                 .fillMaxWidth()
@@ -75,8 +75,8 @@ fun SettingsScreen(
         )
 
         Text(
-            "La API key si trova in Intervals.icu → Settings → Developer Settings. " +
-                "L'FTP viene usato per convertire i target del workout (% FTP) in watt assoluti da inviare al trainer.",
+            "You'll find the API key in Intervals.icu → Settings → Developer Settings. " +
+                "FTP is used to convert the workout's targets (% FTP) into absolute watts sent to the trainer.",
             style = MaterialTheme.typography.bodySmall,
             modifier = Modifier.padding(top = 8.dp, bottom = 16.dp),
         )
@@ -87,10 +87,10 @@ fun SettingsScreen(
                 onClose()
             },
             modifier = Modifier.fillMaxWidth(),
-        ) { Text("Salva") }
+        ) { Text("Save") }
 
         TextButton(onClick = onClose, modifier = Modifier.padding(top = 8.dp)) {
-            Text("Annulla")
+            Text("Cancel")
         }
     }
 }

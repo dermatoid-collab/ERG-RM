@@ -1,68 +1,72 @@
 # ERG-RM
 
-App Android minimale che si connette a un rullo smart compatibile FTMS (es. **Elite Direto**)
-via Bluetooth LE, e invia i target di potenza in **modalità ERG**, con UI ispirata a TrainerDay.
-Il workout del giorno viene recuperato automaticamente da **Intervals.icu**.
+Minimal Android app that connects to an FTMS-compatible smart trainer (e.g. **Elite Direto**)
+over Bluetooth LE and sends power targets in **ERG mode**, with a TrainerDay-inspired UI.
+Today's workout is fetched automatically from **Intervals.icu**.
 
-## Funzionalità
+## Features
 
-- Scansione e connessione BLE al trainer tramite Fitness Machine Service (FTMS, UUID `0x1826`).
-- Modalità ERG: richiesta controllo, avvio e invio target di potenza (`Set Target Power`, op code `0x05`).
-- Lettura dati live (potenza, cadenza, frequenza cardiaca) da Indoor Bike Data (`0x2AD2`).
-- Fetch del workout pianificato per oggi da Intervals.icu (formato `.zwo`) e conversione
-  automatica dei target da %FTP a watt assoluti.
-- Libreria workout locale: import su richiesta di file `.zwo`, `.erg` o `.mrc` da una cartella
-  scelta con il picker di sistema (funziona anche con una cartella sincronizzata da Google Drive,
-  se l'app Drive è installata — nessuna configurazione OAuth necessaria).
-- Esecuzione del workout: avanzamento step, rampe interpolate, grafico del profilo di potenza
-  (zoom on-tap, zone di potenza secondo Coggan), prolungamento automatico indefinito a fine piano,
-  aggiunta manuale di 5 minuti all'intervallo in corso, controllo Avvia/Pausa/Stop.
-- Connessione BLE mantenuta da un **foreground service** (con notifica persistente) per non
-  perdere il collegamento quando l'app va in background durante l'allenamento; lo schermo resta
-  acceso per tutta la sessione (`FLAG_KEEP_SCREEN_ON`).
+- BLE scanning and connection to the trainer via Fitness Machine Service (FTMS, UUID `0x1826`).
+- ERG mode: request control, start, and send power targets (`Set Target Power`, op code `0x05`).
+- Live data (power, cadence, heart rate) from Indoor Bike Data (`0x2AD2`).
+- Optional standalone heart rate sensor: scan and connect to any standard BLE Heart Rate Service
+  (`0x180D`) chest strap or arm band, independent of the trainer — its reading takes priority over
+  whatever HR the trainer itself might forward.
+- Fetch today's planned workout from Intervals.icu (`.zwo` format) and automatic conversion of
+  targets from %FTP to absolute watts.
+- Local workout library: on-request import of `.zwo`, `.erg` or `.mrc` files from a folder chosen
+  with the system picker (also works with a folder synced by Google Drive, if the Drive app is
+  installed — no OAuth setup needed).
+- Workout execution: step progression, interpolated ramps, power profile chart with live
+  power/HR/cadence traces (tap-to-zoom, Coggan power zones, zone-colored interval bars),
+  indefinite auto-extension at the end of the plan, manual +5 minutes on the current interval,
+  Start/Pause/Stop control, and a live intensity (%FTP) adjustment.
+- BLE connection kept alive by a **foreground service** (with a persistent notification) so it
+  isn't lost when the app goes to the background mid-ride; the screen stays on for the whole
+  session (`FLAG_KEEP_SCREEN_ON`).
 
-## Struttura del progetto
+## Project structure
 
 ```
 app/src/main/java/com/ergrm/trainer/
-├── ble/          # BLE scanner + gestione connessione FTMS/ERG
-├── intervals/    # Client REST Intervals.icu + parsing eventi
-├── library/      # Libreria workout locale (import .zwo via Storage Access Framework)
-├── workout/      # Modello workout, parser .zwo, motore di esecuzione
-├── data/         # Persistenza impostazioni (DataStore)
-├── service/      # Foreground service che mantiene viva la connessione BLE in background
-└── ui/           # ViewModel + schermate Jetpack Compose
+├── ble/          # BLE scanner + FTMS/ERG and heart rate connection handling
+├── intervals/    # Intervals.icu REST client + event parsing
+├── library/      # Local workout library (.zwo/.erg/.mrc import via Storage Access Framework)
+├── workout/      # Workout model, .zwo/.erg parsers, execution engine
+├── data/         # Settings persistence (DataStore)
+├── service/      # Foreground service that keeps the BLE connection alive in the background
+└── ui/           # ViewModel + Jetpack Compose screens
 ```
 
-## Configurazione
+## Setup
 
-Al primo avvio, apri le **Impostazioni** (icona in alto a destra) e inserisci:
+On first launch, open **Settings** (top-right icon) and enter:
 
-- **API key** di Intervals.icu (Settings → Developer Settings sul sito).
-- **Athlete ID** (es. `i123456`).
-- **FTP** in watt, usato per convertire i target del workout (%FTP) in watt assoluti.
+- Your Intervals.icu **API key** (Settings → Developer Settings on the site).
+- Your **Athlete ID** (e.g. `i123456`).
+- Your **FTP** in watts, used to convert the workout's targets (%FTP) into absolute watts.
 
-Poi, dalla schermata principale, tocca **Cerca trainer** per la scansione BLE e connettiti
-al tuo Elite Direto (o altro trainer FTMS-compatibile).
+Then, from the main screen, tap the devices icon to scan for and connect your Elite Direto (or
+any other FTMS-compatible trainer), and optionally a standalone BLE heart rate sensor.
 
 ## Build
 
-Il progetto usa Gradle con l'Android Gradle Plugin; apri la cartella in Android Studio
-(Giraffe o successivo) e sincronizza, oppure da terminale con l'Android SDK configurato:
+The project uses Gradle with the Android Gradle Plugin; open the folder in Android Studio
+(Giraffe or later) and sync, or from a terminal with the Android SDK configured:
 
 ```
 ./gradlew assembleDebug
 ```
 
-> Nota: in questo ambiente di sviluppo remoto non è disponibile un Android SDK né accesso a
-> `dl.google.com`, quindi il build non è stato eseguito qui — va verificato in Android Studio
-> o in una CI con accesso completo.
+A GitHub Actions workflow (`.github/workflows/build-apk.yml`) also builds a debug APK on every
+push to this branch and uploads it as a workflow artifact — useful in environments without a
+local Android SDK.
 
-## Requisiti runtime
+## Runtime requirements
 
-- Android 8.0 (API 26) o superiore.
-- Bluetooth LE e permessi di localizzazione/Bluetooth concessi a runtime.
-- Permesso di notifiche (Android 13+) per vedere lo stato della connessione nella notifica
-  persistente del foreground service — se negato, la connessione resta comunque protetta,
-  semplicemente la notifica non è visibile.
-- Connessione Internet per il fetch del workout da Intervals.icu.
+- Android 8.0 (API 26) or later.
+- Bluetooth LE and location/Bluetooth permissions granted at runtime.
+- Notification permission (Android 13+) to see the connection status in the foreground service's
+  persistent notification — if denied, the connection is still protected, the notification is
+  just not visible.
+- Internet connection to fetch the workout from Intervals.icu.

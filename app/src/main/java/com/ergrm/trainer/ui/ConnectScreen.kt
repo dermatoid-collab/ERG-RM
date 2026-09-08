@@ -11,10 +11,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bluetooth
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
@@ -28,7 +29,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.ergrm.trainer.ble.DiscoveredTrainer
+import com.ergrm.trainer.ble.DiscoveredDevice
+import com.ergrm.trainer.ble.HrConnectionState
 import com.ergrm.trainer.ble.TrainerConnectionState
 
 private val requiredBluetoothPermissions: Array<String> =
@@ -53,6 +55,10 @@ fun ConnectScreen(viewModel: MainViewModel) {
     val scanResults by viewModel.scanResults.collectAsState()
     val isScanning by viewModel.isScanning.collectAsState()
 
+    val hrConnectionState by viewModel.hrConnectionState.collectAsState()
+    val hrScanResults by viewModel.hrScanResults.collectAsState()
+    val isHrScanning by viewModel.isHrScanning.collectAsState()
+
     val enableBtLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { viewModel.startScan() }
@@ -70,9 +76,19 @@ fun ConnectScreen(viewModel: MainViewModel) {
         }
     }
 
+    val hrPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { grants ->
+        val requiredGranted = requiredBluetoothPermissions.all { grants[it] == true }
+        if (requiredGranted) {
+            viewModel.startHrScan()
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -92,14 +108,14 @@ fun ConnectScreen(viewModel: MainViewModel) {
                 onClick = { viewModel.disconnect() },
                 modifier = Modifier.padding(top = 16.dp),
             ) {
-                Text("Disconnetti trainer")
+                Text("Disconnect trainer")
             }
         } else {
             Button(
                 onClick = { permissionLauncher.launch(bluetoothPermissions) },
                 modifier = Modifier.padding(top = 16.dp),
             ) {
-                Text(if (isScanning) "Ricerca in corso…" else "Cerca trainer")
+                Text(if (isScanning) "Scanning…" else "Search for trainer")
             }
         }
 
@@ -107,21 +123,63 @@ fun ConnectScreen(viewModel: MainViewModel) {
             CircularProgressIndicator(modifier = Modifier.padding(top = 16.dp))
         }
 
-        LazyColumn(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            items(scanResults, key = { it.device.address }) { result ->
-                TrainerRow(result) { viewModel.connectToDevice(result) }
+            scanResults.forEach { result ->
+                DeviceRow(result) { viewModel.connectToDevice(result) }
+            }
+        }
+
+        Icon(
+            imageVector = Icons.Filled.Favorite,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(top = 32.dp, bottom = 8.dp),
+        )
+        Text(
+            text = hrConnectionLabel(hrConnectionState),
+            style = MaterialTheme.typography.titleMedium,
+        )
+
+        if (hrConnectionState is HrConnectionState.Ready) {
+            OutlinedButton(
+                onClick = { viewModel.disconnectHrSensor() },
+                modifier = Modifier.padding(top = 16.dp),
+            ) {
+                Text("Disconnect heart rate sensor")
+            }
+        } else {
+            Button(
+                onClick = { hrPermissionLauncher.launch(bluetoothPermissions) },
+                modifier = Modifier.padding(top = 16.dp),
+            ) {
+                Text(if (isHrScanning) "Scanning…" else "Search for heart rate sensor")
+            }
+        }
+
+        if (isHrScanning) {
+            CircularProgressIndicator(modifier = Modifier.padding(top = 16.dp))
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 16.dp, bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            hrScanResults.forEach { result ->
+                DeviceRow(result) { viewModel.connectHrSensor(result) }
             }
         }
     }
 }
 
 @Composable
-private fun TrainerRow(result: DiscoveredTrainer, onConnect: () -> Unit) {
+private fun DeviceRow(result: DiscoveredDevice, onConnect: () -> Unit) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
@@ -133,16 +191,24 @@ private fun TrainerRow(result: DiscoveredTrainer, onConnect: () -> Unit) {
                 Text(result.name, style = MaterialTheme.typography.bodyLarge)
                 Text(result.device.address, style = MaterialTheme.typography.bodySmall)
             }
-            Button(onClick = onConnect) { Text("Connetti") }
+            Button(onClick = onConnect) { Text("Connect") }
         }
     }
 }
 
 private fun connectionLabel(state: TrainerConnectionState): String = when (state) {
-    is TrainerConnectionState.Disconnected -> "Nessun trainer connesso"
-    is TrainerConnectionState.Connecting -> "Connessione in corso…"
-    is TrainerConnectionState.DiscoveringServices -> "Rilevamento servizi FTMS…"
-    is TrainerConnectionState.RequestingControl -> "Richiesta controllo ERG…"
-    is TrainerConnectionState.Ready -> "Connesso"
-    is TrainerConnectionState.Failed -> "Errore: ${state.message}"
+    is TrainerConnectionState.Disconnected -> "No trainer connected"
+    is TrainerConnectionState.Connecting -> "Connecting…"
+    is TrainerConnectionState.DiscoveringServices -> "Discovering FTMS services…"
+    is TrainerConnectionState.RequestingControl -> "Requesting ERG control…"
+    is TrainerConnectionState.Ready -> "Connected"
+    is TrainerConnectionState.Failed -> "Error: ${state.message}"
+}
+
+private fun hrConnectionLabel(state: HrConnectionState): String = when (state) {
+    is HrConnectionState.Disconnected -> "No heart rate sensor connected"
+    is HrConnectionState.Connecting -> "Connecting…"
+    is HrConnectionState.DiscoveringServices -> "Discovering heart rate service…"
+    is HrConnectionState.Ready -> "Connected"
+    is HrConnectionState.Failed -> "Error: ${state.message}"
 }

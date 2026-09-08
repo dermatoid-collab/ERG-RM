@@ -49,7 +49,7 @@ fun LibraryScreen(
         ActivityResultContracts.OpenDocumentTree()
     ) { uri ->
         if (uri != null) {
-            val name = uri.lastPathSegment?.substringAfterLast(':') ?: "Cartella"
+            val name = uri.lastPathSegment?.substringAfterLast(':') ?: "Folder"
             viewModel.onLibraryFolderPicked(uri, name)
         }
     }
@@ -64,13 +64,13 @@ fun LibraryScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("Libreria workout", style = MaterialTheme.typography.titleLarge)
+            Text("Workout library", style = MaterialTheme.typography.titleLarge)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = onPickToday) {
-                    Text("Oggi (Intervals.icu)")
+                    Text("Today (Intervals.icu)")
                 }
                 IconButton(onClick = { viewModel.refreshLibrary() }) {
-                    Icon(Icons.Filled.Refresh, contentDescription = "Sincronizza")
+                    Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
                 }
             }
         }
@@ -82,14 +82,14 @@ fun LibraryScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Filled.Folder, contentDescription = null, tint = ErgOnSurface)
                     Text(
-                        text = settings.libraryFolderName ?: "Nessuna cartella selezionata",
+                        text = settings.libraryFolderName ?: "No folder selected",
                         style = MaterialTheme.typography.bodyLarge,
                         modifier = Modifier.padding(start = 8.dp),
                     )
                 }
                 Text(
-                    "Scegli una cartella (es. sincronizzata con Google Drive tramite l'app Drive) " +
-                        "contenente file .zwo, .erg o .mrc. L'import avviene su richiesta, non in background.",
+                    "Choose a folder (e.g. synced with Google Drive via the Drive app) " +
+                        "containing .zwo, .erg or .mrc files. Import happens on request, not in the background.",
                     style = MaterialTheme.typography.bodySmall,
                     color = ErgOnSurface,
                     modifier = Modifier.padding(top = 6.dp, bottom = 10.dp),
@@ -98,7 +98,7 @@ fun LibraryScreen(
                     onClick = { folderPicker.launch(null) },
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text(if (settings.libraryFolderUri == null) "Scegli cartella" else "Cambia cartella")
+                    Text(if (settings.libraryFolderUri == null) "Choose folder" else "Change folder")
                 }
             }
         }
@@ -112,7 +112,7 @@ fun LibraryScreen(
             }
             is LibraryUiState.Error -> {
                 Text(
-                    "Errore: ${state.message}",
+                    "Error: ${state.message}",
                     color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.padding(top = 16.dp),
                 )
@@ -120,7 +120,7 @@ fun LibraryScreen(
             is LibraryUiState.Loaded -> {
                 if (state.files.isEmpty()) {
                     Text(
-                        "Nessun file .zwo, .erg o .mrc trovato in questa cartella.",
+                        "No .zwo, .erg or .mrc file found in this folder.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = ErgOnSurface,
                         modifier = Modifier.padding(top = 16.dp),
@@ -163,7 +163,7 @@ private fun LibraryFileRow(file: LibraryWorkoutFile, onImport: () -> Unit) {
                     color = ErgOnSurface,
                 )
             }
-            Button(onClick = onImport) { Text("Importa") }
+            Button(onClick = onImport) { Text("Import") }
         }
     }
 }
