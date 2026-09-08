@@ -63,7 +63,14 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
                             onSave = viewModel::saveIntervalsSettings,
                             onClose = { overlay = Overlay.NONE },
                         )
-                        overlay == Overlay.LIBRARY -> LibraryScreen(viewModel, onImported = { overlay = Overlay.NONE })
+                        overlay == Overlay.LIBRARY -> LibraryScreen(
+                            viewModel,
+                            onImported = { overlay = Overlay.NONE },
+                            onPickToday = {
+                                viewModel.fetchTodayWorkout()
+                                overlay = Overlay.NONE
+                            },
+                        )
                         connectionState is TrainerConnectionState.Ready -> WorkoutScreen(
                             viewModel,
                             onOpenLibrary = { overlay = Overlay.LIBRARY },

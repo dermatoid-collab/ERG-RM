@@ -21,6 +21,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -36,7 +37,11 @@ import java.time.format.DateTimeFormatter
 private val dateFormatter = DateTimeFormatter.ofPattern("d MMM, HH:mm")
 
 @Composable
-fun LibraryScreen(viewModel: MainViewModel, onImported: () -> Unit = {}) {
+fun LibraryScreen(
+    viewModel: MainViewModel,
+    onImported: () -> Unit = {},
+    onPickToday: () -> Unit = {},
+) {
     val settings by viewModel.settings.collectAsState()
     val libraryState by viewModel.libraryState.collectAsState()
 
@@ -60,8 +65,13 @@ fun LibraryScreen(viewModel: MainViewModel, onImported: () -> Unit = {}) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text("Libreria workout", style = MaterialTheme.typography.titleLarge)
-            IconButton(onClick = { viewModel.refreshLibrary() }) {
-                Icon(Icons.Filled.Refresh, contentDescription = "Sincronizza")
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = onPickToday) {
+                    Text("Oggi (Intervals.icu)")
+                }
+                IconButton(onClick = { viewModel.refreshLibrary() }) {
+                    Icon(Icons.Filled.Refresh, contentDescription = "Sincronizza")
+                }
             }
         }
 
