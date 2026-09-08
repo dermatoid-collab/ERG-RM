@@ -3,12 +3,15 @@ package com.ergrm.trainer.library
 import android.content.Context
 import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
+import com.ergrm.trainer.workout.ErgParser
 import com.ergrm.trainer.workout.WorkoutStep
 import com.ergrm.trainer.workout.ZwoParser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-/** A single .zwo workout file found in the user's chosen library folder (e.g. a synced Google Drive folder). */
+private val SUPPORTED_EXTENSIONS = listOf(".zwo", ".erg", ".mrc")
+
+/** A single workout file (.zwo, .erg or .mrc) found in the user's chosen library folder (e.g. a synced Google Drive folder). */
 data class LibraryWorkoutFile(
     val uri: Uri,
     val name: String,
@@ -32,18 +35,22 @@ class LibraryRepository(private val context: Context) {
     suspend fun listWorkouts(folderUri: Uri): List<LibraryWorkoutFile> = withContext(Dispatchers.IO) {
         val folder = DocumentFile.fromTreeUri(context, folderUri) ?: return@withContext emptyList()
         folder.listFiles()
-            .filter { it.isFile && it.name?.endsWith(".zwo", ignoreCase = true) == true }
+            .filter { file -> file.isFile && SUPPORTED_EXTENSIONS.any { file.name?.endsWith(it, ignoreCase = true) == true } }
             .map { LibraryWorkoutFile(it.uri, it.name ?: "workout.zwo", it.length(), it.lastModified()) }
             .sortedByDescending { it.lastModifiedMillis }
     }
 
-    suspend fun importWorkout(fileUri: Uri, ftpWatts: Int): LibraryImportResult = withContext(Dispatchers.IO) {
+    suspend fun importWorkout(fileUri: Uri, fileName: String, ftpWatts: Int): LibraryImportResult = withContext(Dispatchers.IO) {
         try {
-            val xml = context.contentResolver.openInputStream(fileUri)?.use { it.reader().readText() }
+            val content = context.contentResolver.openInputStream(fileUri)?.use { it.reader().readText() }
                 ?: return@withContext LibraryImportResult.Error("Impossibile leggere il file")
-            val steps = ZwoParser.parse(xml, ftpWatts)
+            val steps = if (fileName.endsWith(".erg", ignoreCase = true) || fileName.endsWith(".mrc", ignoreCase = true)) {
+                ErgParser.parse(content, ftpWatts)
+            } else {
+                ZwoParser.parse(content, ftpWatts)
+            }
             if (steps.isEmpty()) {
-                LibraryImportResult.Error("Nessuno step trovato nel file .zwo")
+                LibraryImportResult.Error("Nessuno step trovato nel file")
             } else {
                 LibraryImportResult.Success(steps)
             }

@@ -89,7 +89,7 @@ fun LibraryScreen(
                 }
                 Text(
                     "Scegli una cartella (es. sincronizzata con Google Drive tramite l'app Drive) " +
-                        "contenente file .zwo. L'import avviene su richiesta, non in background.",
+                        "contenente file .zwo, .erg o .mrc. L'import avviene su richiesta, non in background.",
                     style = MaterialTheme.typography.bodySmall,
                     color = ErgOnSurface,
                     modifier = Modifier.padding(top = 6.dp, bottom = 10.dp),
@@ -120,7 +120,7 @@ fun LibraryScreen(
             is LibraryUiState.Loaded -> {
                 if (state.files.isEmpty()) {
                     Text(
-                        "Nessun file .zwo trovato in questa cartella.",
+                        "Nessun file .zwo, .erg o .mrc trovato in questa cartella.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = ErgOnSurface,
                         modifier = Modifier.padding(top = 16.dp),
@@ -156,7 +156,7 @@ private fun LibraryFileRow(file: LibraryWorkoutFile, onImport: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column {
-                Text(file.name.removeSuffix(".zwo"), style = MaterialTheme.typography.bodyLarge)
+                Text(file.name.substringBeforeLast(".", file.name), style = MaterialTheme.typography.bodyLarge)
                 Text(
                     formatMeta(file),
                     style = MaterialTheme.typography.bodySmall,

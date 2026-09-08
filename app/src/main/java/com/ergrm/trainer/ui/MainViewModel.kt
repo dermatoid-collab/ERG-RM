@@ -240,10 +240,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun importLibraryWorkout(file: LibraryWorkoutFile) {
         _workoutLoadState.value = WorkoutLoadState.Loading
         viewModelScope.launch {
-            when (val result = libraryRepository.importWorkout(file.uri, settings.value.ftpWatts)) {
+            when (val result = libraryRepository.importWorkout(file.uri, file.name, settings.value.ftpWatts)) {
                 is LibraryImportResult.Success -> {
                     workoutExecutor.load(result.steps)
-                    _workoutLoadState.value = WorkoutLoadState.Loaded(file.name.removeSuffix(".zwo"))
+                    _workoutLoadState.value = WorkoutLoadState.Loaded(
+                        file.name.substringBeforeLast(".", file.name),
+                    )
                 }
                 is LibraryImportResult.Error -> _workoutLoadState.value = WorkoutLoadState.Error(result.message)
             }

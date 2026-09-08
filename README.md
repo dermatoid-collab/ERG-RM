@@ -11,9 +11,9 @@ Il workout del giorno viene recuperato automaticamente da **Intervals.icu**.
 - Lettura dati live (potenza, cadenza, frequenza cardiaca) da Indoor Bike Data (`0x2AD2`).
 - Fetch del workout pianificato per oggi da Intervals.icu (formato `.zwo`) e conversione
   automatica dei target da %FTP a watt assoluti.
-- Libreria workout locale: import su richiesta di file `.zwo` da una cartella scelta con il
-  picker di sistema (funziona anche con una cartella sincronizzata da Google Drive, se l'app
-  Drive è installata — nessuna configurazione OAuth necessaria).
+- Libreria workout locale: import su richiesta di file `.zwo`, `.erg` o `.mrc` da una cartella
+  scelta con il picker di sistema (funziona anche con una cartella sincronizzata da Google Drive,
+  se l'app Drive è installata — nessuna configurazione OAuth necessaria).
 - Esecuzione del workout: avanzamento step, rampe interpolate, grafico del profilo di potenza
   (zoom on-tap, zone di potenza secondo Coggan), prolungamento automatico indefinito a fine piano,
   aggiunta manuale di 5 minuti all'intervallo in corso, controllo Avvia/Pausa/Stop.
