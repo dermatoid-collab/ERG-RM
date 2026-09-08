@@ -87,10 +87,15 @@ class WorkoutExecutor(
     fun start() {
         if (_state.value.steps.isEmpty() || _state.value.isRunning) return
         _state.value = _state.value.copy(isRunning = true, hasStarted = true)
-        pushTargetForCurrentStep()
         tickerJob?.cancel()
         tickerJob = scope.launch {
-            scope.launch { trainer.startOrResume() }
+            // Start/Resume must reach the trainer and be acknowledged before the first target
+            // power write — some trainers (Elite Direto included, per user reports) ignore or
+            // silently drop a Set Target Power command sent while not yet in the started state,
+            // which reads as "ERG mode not responding". A nested, unawaited launch here used to
+            // race the two writes with no guaranteed order.
+            trainer.startOrResume()
+            pushTargetForCurrentStep()
             while (isActive && _state.value.isRunning) {
                 tick()
                 delay(1000)

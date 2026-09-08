@@ -173,7 +173,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun disconnect() {
         workoutExecutor.stop()
-        trainerConnection.disconnect()
+        viewModelScope.launch { trainerConnection.stopAndDisconnect() }
         stopTrainerService()
     }
 

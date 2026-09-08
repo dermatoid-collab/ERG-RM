@@ -69,6 +69,18 @@ class TrainerConnection(
         _connectionState.value = TrainerConnectionState.Disconnected
     }
 
+    /**
+     * Sends an explicit Stop command and waits for it (best-effort, bounded by [stop]'s own
+     * timeout) before closing the BLE link, instead of just dropping the connection while the
+     * trainer may still be holding an ERG target. FTMS-compliant trainers are required to fall
+     * back to a safe state on their own once the control connection is lost, but a clean stop
+     * first avoids relying on that fallback's timeout.
+     */
+    suspend fun stopAndDisconnect() {
+        stop()
+        disconnect()
+    }
+
     /** Sets the ERG-mode target power. Op code 0x05 + sint16 LE watts. */
     suspend fun setTargetPowerWatts(watts: Int) {
         val cp = controlPoint ?: return
