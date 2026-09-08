@@ -149,7 +149,8 @@ private fun WorkoutStatusLine(loadState: WorkoutLoadState) {
         else -> null
     }
     if (text != null) {
-        Text(text, style = MaterialTheme.typography.bodySmall, color = ErgOnSurface)
+        val color = if (loadState is WorkoutLoadState.Error) ErgAboveTarget else ErgOnSurface
+        Text(text, style = MaterialTheme.typography.bodySmall, color = color)
     }
 }
 

@@ -57,13 +57,29 @@ class IntervalsRepository {
             try {
                 val api = buildApi(apiKey)
                 val today = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)
-                val events = api.getEvents(athleteId, oldest = today, newest = today)
+                val events = try {
+                    api.getEvents(athleteId, oldest = today, newest = today)
+                } catch (t: Exception) {
+                    return@withContext FetchResult.Error("Impossibile leggere il calendario: ${describeError(t)}")
+                }
 
                 val candidate = events.firstOrNull { it.category == "WORKOUT" && (it.type == null || it.type in BIKE_TYPES) }
                     ?: events.firstOrNull { it.category == "WORKOUT" }
                     ?: return@withContext FetchResult.NoWorkoutToday
 
-                val zwoBody = api.getWorkoutZwo(athleteId, candidate.id).string()
+                val zwoBody = try {
+                    api.getWorkoutZwo(athleteId, candidate.id).string()
+                } catch (t: Exception) {
+                    return@withContext FetchResult.Error("Impossibile scaricare l'allenamento: ${describeError(t)}")
+                }
+                if (!zwoBody.contains("<workout", ignoreCase = true)) {
+                    // Not actual ZWO content — most likely an error page or unexpected response
+                    // body, not a workout that's genuinely empty. Surface it instead of silently
+                    // reporting "no workout today".
+                    return@withContext FetchResult.Error(
+                        "Risposta inattesa da Intervals.icu per l'evento ${candidate.id}: ${zwoBody.take(120)}",
+                    )
+                }
                 val steps = ZwoParser.parse(zwoBody, ftpWatts)
                 if (steps.isEmpty()) return@withContext FetchResult.NoWorkoutToday
 
@@ -71,7 +87,15 @@ class IntervalsRepository {
                     TodayWorkout(eventId = candidate.id, name = candidate.name ?: "Workout", steps = steps)
                 )
             } catch (t: Exception) {
-                FetchResult.Error(t.message ?: t.javaClass.simpleName)
+                FetchResult.Error(describeError(t))
             }
         }
+
+    private fun describeError(t: Throwable): String = when (t) {
+        is retrofit2.HttpException -> {
+            val body = t.response()?.errorBody()?.string()?.take(200)
+            "HTTP ${t.code()}" + if (!body.isNullOrBlank()) " — $body" else ""
+        }
+        else -> t.message ?: t.javaClass.simpleName
+    }
 }
