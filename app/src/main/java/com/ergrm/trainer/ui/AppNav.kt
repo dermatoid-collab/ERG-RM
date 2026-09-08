@@ -3,6 +3,8 @@ package com.ergrm.trainer.ui
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bluetooth
+import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
@@ -14,6 +16,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -24,6 +27,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ergrm.trainer.ble.TrainerConnectionState
 import com.ergrm.trainer.ui.theme.ErgRmTheme
 
+private enum class Screen { CONNECT, WORKOUT }
 private enum class Overlay { NONE, SETTINGS, LIBRARY }
 
 @Composable
@@ -31,14 +35,32 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
     ErgRmTheme {
         Surface(color = MaterialTheme.colorScheme.background) {
             var overlay by remember { mutableStateOf(Overlay.NONE) }
+            var screen by remember { mutableStateOf(Screen.CONNECT) }
             val connectionState by viewModel.connectionState.collectAsState()
             val settings by viewModel.settings.collectAsState()
+            val isConnected = connectionState is TrainerConnectionState.Ready
+
+            // Jump to the workout screen automatically once the trainer connects,
+            // but the user can also navigate there manually beforehand.
+            LaunchedEffect(isConnected) {
+                if (isConnected) screen = Screen.WORKOUT
+            }
 
             Scaffold(
                 topBar = {
                     TopAppBar(
                         title = { Text("ERG-RM") },
                         actions = {
+                            IconButton(onClick = { screen = Screen.WORKOUT }) {
+                                Icon(Icons.Filled.FitnessCenter, contentDescription = "Allenamento")
+                            }
+                            IconButton(onClick = { screen = Screen.CONNECT }) {
+                                Icon(
+                                    Icons.Filled.Bluetooth,
+                                    contentDescription = "Trainer",
+                                    tint = if (isConnected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                )
+                            }
                             IconButton(onClick = {
                                 overlay = if (overlay == Overlay.LIBRARY) Overlay.NONE else Overlay.LIBRARY
                             }) {
@@ -71,8 +93,9 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
                                 overlay = Overlay.NONE
                             },
                         )
-                        connectionState is TrainerConnectionState.Ready -> WorkoutScreen(
+                        screen == Screen.WORKOUT -> WorkoutScreen(
                             viewModel,
+                            isTrainerConnected = isConnected,
                             onOpenLibrary = { overlay = Overlay.LIBRARY },
                         )
                         else -> ConnectScreen(viewModel)

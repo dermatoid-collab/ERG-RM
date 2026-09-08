@@ -53,12 +53,13 @@ import com.ergrm.trainer.ui.theme.ErgAtTarget
 import com.ergrm.trainer.ui.theme.ErgBelowTarget
 import com.ergrm.trainer.ui.theme.ErgDivider
 import com.ergrm.trainer.ui.theme.ErgOnSurface
+import com.ergrm.trainer.ui.theme.ErgWarn
 import com.ergrm.trainer.workout.WorkoutRunState
 import com.ergrm.trainer.workout.WorkoutStep
 import kotlin.math.max
 
 @Composable
-fun WorkoutScreen(viewModel: MainViewModel, onOpenLibrary: () -> Unit = {}) {
+fun WorkoutScreen(viewModel: MainViewModel, isTrainerConnected: Boolean = true, onOpenLibrary: () -> Unit = {}) {
     val live by viewModel.liveData.collectAsState()
     val workoutState by viewModel.workoutState.collectAsState()
     val loadState by viewModel.workoutLoadState.collectAsState()
@@ -78,6 +79,15 @@ fun WorkoutScreen(viewModel: MainViewModel, onOpenLibrary: () -> Unit = {}) {
             onPickFromToday = { viewModel.fetchTodayWorkout() },
             onPickFromLibrary = onOpenLibrary,
         )
+
+        if (!isTrainerConnected) {
+            Text(
+                "Trainer non connesso — i target di potenza non verranno inviati",
+                style = MaterialTheme.typography.bodySmall,
+                color = ErgWarn,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
 
         Spacer(modifier = Modifier.height(12.dp))
         PowerReadout(live, workoutState.currentTargetWatts)
