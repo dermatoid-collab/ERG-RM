@@ -30,11 +30,20 @@ import androidx.compose.ui.unit.dp
 import com.ergrm.trainer.ble.DiscoveredTrainer
 import com.ergrm.trainer.ble.TrainerConnectionState
 
-private val bluetoothPermissions: Array<String> =
+private val requiredBluetoothPermissions: Array<String> =
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
     } else {
         arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
+    }
+
+// Requested alongside the required ones, but optional: without it the foreground-service
+// notification just stays invisible, scanning and ERG control still work fine.
+private val bluetoothPermissions: Array<String> =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        requiredBluetoothPermissions + Manifest.permission.POST_NOTIFICATIONS
+    } else {
+        requiredBluetoothPermissions
     }
 
 @Composable
@@ -50,7 +59,8 @@ fun ConnectScreen(viewModel: MainViewModel) {
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { grants ->
-        if (grants.values.all { it }) {
+        val requiredGranted = requiredBluetoothPermissions.all { grants[it] == true }
+        if (requiredGranted) {
             if (BluetoothAdapter.getDefaultAdapter()?.isEnabled == false) {
                 enableBtLauncher.launch(android.content.Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
             } else {

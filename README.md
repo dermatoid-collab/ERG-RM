@@ -14,8 +14,12 @@ Il workout del giorno viene recuperato automaticamente da **Intervals.icu**.
 - Libreria workout locale: import su richiesta di file `.zwo` da una cartella scelta con il
   picker di sistema (funziona anche con una cartella sincronizzata da Google Drive, se l'app
   Drive è installata — nessuna configurazione OAuth necessaria).
-- Esecuzione del workout: avanzamento step, rampe interpolate, grafico del profilo di potenza,
-  play/pausa/salto step.
+- Esecuzione del workout: avanzamento step, rampe interpolate, grafico del profilo di potenza
+  (zoom on-tap, zone di potenza secondo Coggan), prolungamento automatico indefinito a fine piano,
+  aggiunta manuale di 5 minuti all'intervallo in corso, controllo Avvia/Pausa/Stop.
+- Connessione BLE mantenuta da un **foreground service** (con notifica persistente) per non
+  perdere il collegamento quando l'app va in background durante l'allenamento; lo schermo resta
+  acceso per tutta la sessione (`FLAG_KEEP_SCREEN_ON`).
 
 ## Struttura del progetto
 
@@ -26,6 +30,7 @@ app/src/main/java/com/ergrm/trainer/
 ├── library/      # Libreria workout locale (import .zwo via Storage Access Framework)
 ├── workout/      # Modello workout, parser .zwo, motore di esecuzione
 ├── data/         # Persistenza impostazioni (DataStore)
+├── service/      # Foreground service che mantiene viva la connessione BLE in background
 └── ui/           # ViewModel + schermate Jetpack Compose
 ```
 
@@ -57,4 +62,7 @@ Il progetto usa Gradle con l'Android Gradle Plugin; apri la cartella in Android 
 
 - Android 8.0 (API 26) o superiore.
 - Bluetooth LE e permessi di localizzazione/Bluetooth concessi a runtime.
+- Permesso di notifiche (Android 13+) per vedere lo stato della connessione nella notifica
+  persistente del foreground service — se negato, la connessione resta comunque protetta,
+  semplicemente la notifica non è visibile.
 - Connessione Internet per il fetch del workout da Intervals.icu.

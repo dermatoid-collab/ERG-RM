@@ -3,13 +3,19 @@ package com.ergrm.trainer.ui
 import android.app.Application
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
+import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
+import android.content.ServiceConnection
 import android.net.Uri
+import android.os.IBinder
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.ergrm.trainer.ble.BleScanner
 import com.ergrm.trainer.ble.DiscoveredTrainer
 import com.ergrm.trainer.ble.TrainerConnection
+import com.ergrm.trainer.ble.TrainerConnectionState
 import com.ergrm.trainer.data.AppSettings
 import com.ergrm.trainer.data.SettingsRepository
 import com.ergrm.trainer.intervals.FetchResult
@@ -17,12 +23,14 @@ import com.ergrm.trainer.intervals.IntervalsRepository
 import com.ergrm.trainer.library.LibraryImportResult
 import com.ergrm.trainer.library.LibraryRepository
 import com.ergrm.trainer.library.LibraryWorkoutFile
+import com.ergrm.trainer.service.TrainerForegroundService
 import com.ergrm.trainer.workout.WorkoutExecutor
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -77,11 +85,59 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private var scanJob: Job? = null
 
+    // Foreground service: keeps the process alive at high priority (with a status notification)
+    // for as long as a trainer is connected, so Android doesn't reclaim it — and the BLE
+    // connection along with it — while the app is backgrounded mid-ride.
+    private var trainerService: TrainerForegroundService? = null
+    private var serviceBound = false
+    private val serviceConnection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
+            trainerService = (binder as TrainerForegroundService.LocalBinder).getService()
+        }
+
+        override fun onServiceDisconnected(name: ComponentName?) {
+            trainerService = null
+        }
+    }
+
     init {
         viewModelScope.launch {
             val folder = settingsRepository.settings.map { it.libraryFolderUri }.first()
             if (folder != null) refreshLibrary()
         }
+        viewModelScope.launch {
+            combine(connectionState, workoutState) { conn, workout -> conn to workout }
+                .collect { (conn, workout) ->
+                    val title = when (conn) {
+                        is TrainerConnectionState.Ready -> "Connesso al trainer"
+                        is TrainerConnectionState.Failed -> "Errore di connessione"
+                        is TrainerConnectionState.Disconnected -> "Trainer disconnesso"
+                        else -> "Connessione in corso…"
+                    }
+                    val target = workout.currentTargetWatts.takeIf { workout.isRunning }
+                    trainerService?.updateStatus(title, target)
+                }
+        }
+    }
+
+    private fun startTrainerService() {
+        val app = getApplication<Application>()
+        val intent = Intent(app, TrainerForegroundService::class.java)
+        ContextCompat.startForegroundService(app, intent)
+        if (!serviceBound) {
+            app.bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
+            serviceBound = true
+        }
+    }
+
+    private fun stopTrainerService() {
+        val app = getApplication<Application>()
+        if (serviceBound) {
+            app.unbindService(serviceConnection)
+            serviceBound = false
+        }
+        trainerService = null
+        app.stopService(Intent(app, TrainerForegroundService::class.java))
     }
 
     fun startScan() {
@@ -107,6 +163,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun connectToDevice(discovered: DiscoveredTrainer) {
         stopScan()
+        startTrainerService()
         trainerConnection.connect(discovered.device)
         viewModelScope.launch {
             settingsRepository.rememberDevice(discovered.device.address, discovered.name)
@@ -116,6 +173,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun disconnect() {
         workoutExecutor.stop()
         trainerConnection.disconnect()
+        stopTrainerService()
     }
 
     fun saveIntervalsSettings(apiKey: String, athleteId: String, ftpWatts: Int) {
@@ -195,6 +253,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     override fun onCleared() {
         stopScan()
         trainerConnection.disconnect()
+        stopTrainerService()
         super.onCleared()
     }
 }
