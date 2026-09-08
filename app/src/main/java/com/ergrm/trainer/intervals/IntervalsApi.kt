@@ -33,7 +33,7 @@ interface IntervalsApi {
     ): List<IcuEventDto>
 
     /** Structured workout for a planned event, in .zwo XML format. */
-    @GET("api/v1/athlete/{athleteId}/events/{eventId}/downloads/zwo")
+    @GET("api/v1/athlete/{athleteId}/events/{eventId}/download.zwo")
     suspend fun getWorkoutZwo(
         @Path("athleteId") athleteId: String,
         @Path("eventId") eventId: Long,

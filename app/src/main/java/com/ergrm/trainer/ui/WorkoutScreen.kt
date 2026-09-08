@@ -41,6 +41,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.PointMode
 import androidx.compose.ui.graphics.StrokeCap
@@ -126,6 +127,7 @@ fun WorkoutScreen(viewModel: MainViewModel, isTrainerConnected: Boolean = true, 
             totalElapsedSec = workoutState.totalElapsedSec,
             totalDurationSec = workoutState.totalDurationSec,
             samples = samples,
+            ftpWatts = settings.ftpWatts,
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
@@ -250,6 +252,7 @@ private fun ChartCard(
     totalElapsedSec: Int,
     totalDurationSec: Int,
     samples: List<SamplePoint>,
+    ftpWatts: Int,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -281,6 +284,7 @@ private fun ChartCard(
             totalElapsedSec = totalElapsedSec,
             totalDurationSec = totalDurationSec,
             samples = samples,
+            ftpWatts = ftpWatts,
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
@@ -302,6 +306,17 @@ private fun LegendKey(color: Color, label: String) {
     }
 }
 
+/** Headroom left empty above the tallest interval bar, as a fraction of the chart height. */
+private const val CHART_TOP_HEADROOM = 0.20f
+
+/** Blends a zone's bright accent color toward near-black so bar fills read as muted background,
+ *  never as bright as the power/HR/cadence trace lines drawn on top of them. */
+private fun mutedZoneColor(zoneColor: Color, active: Boolean): Color {
+    val base = Color(0xFF14171D)
+    val t = if (active) 0.55f else 0.28f
+    return lerp(base, zoneColor, t)
+}
+
 @Composable
 private fun WorkoutProfileChart(
     steps: List<WorkoutStep>,
@@ -309,18 +324,19 @@ private fun WorkoutProfileChart(
     totalElapsedSec: Int,
     totalDurationSec: Int,
     samples: List<SamplePoint>,
+    ftpWatts: Int,
     modifier: Modifier = Modifier,
 ) {
     val maxTargetWatts = remember(steps) {
         steps.maxOfOrNull { max(it.startWatts, it.endWatts) }?.coerceAtLeast(1) ?: 1
     }
     val maxSampleWatts = remember(samples) { samples.maxOfOrNull { it.watts } ?: 0 }
-    val wattsScale = max(maxTargetWatts, maxSampleWatts).coerceAtLeast(1)
+    // Divide by (1 - headroom) so the tallest bar/trace reaches only that fraction of the height,
+    // leaving CHART_TOP_HEADROOM free at the top.
+    val wattsScale = (max(maxTargetWatts, maxSampleWatts).coerceAtLeast(1) / (1f - CHART_TOP_HEADROOM))
     val bpmScale = 200f
     val cadScale = 160f
 
-    val doneColor = Color(0xFF3A4048)
-    val pendingColor = Color(0xFF232833)
     var zoom by remember { mutableStateOf(ChartZoom.FULL) }
 
     Canvas(
@@ -369,11 +385,8 @@ private fun WorkoutProfileChart(
             val x0 = xAt(stepStart).coerceIn(0f, w)
             val x1 = xAt(stepEnd).coerceIn(0f, w)
             val barHeight = h * (max(step.startWatts, step.endWatts).toFloat() / wattsScale).coerceIn(0.05f, 1f)
-            val color = when {
-                index < currentStepIndex -> doneColor
-                index == currentStepIndex -> ErgAccent
-                else -> pendingColor
-            }
+            val zone = zoneFor(max(step.startWatts, step.endWatts), ftpWatts)
+            val color = mutedZoneColor(zone.color, active = index == currentStepIndex)
             drawRect(color = color, topLeft = Offset(x0, h - barHeight), size = Size((x1 - x0).coerceAtLeast(1f), barHeight))
 
             // Thin light-blue divider between consecutive intervals.

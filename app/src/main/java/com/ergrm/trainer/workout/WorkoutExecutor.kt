@@ -38,8 +38,7 @@ data class SamplePoint(
 
 private const val AUTO_EXTEND_SEC = 300
 private const val AUTO_EXTEND_LABEL = "Prolungamento"
-private const val MIN_INTENSITY_PERCENT = 70
-private const val MAX_INTENSITY_PERCENT = 115
+private const val MIN_INTENSITY_PERCENT = 10
 private const val INTENSITY_STEP_PERCENT = 5
 private const val MAX_SAMPLE_HISTORY = 6 * 3600
 
@@ -74,10 +73,10 @@ class WorkoutExecutor(
         )
     }
 
-    /** Scales every target power (current step and beyond) by this %FTP-style multiplier. */
+    /** Scales every target power (current step and beyond) by this %FTP-style multiplier. Unbounded above. */
     fun setIntensity(percent: Int) {
         _state.value = _state.value.copy(
-            intensityPercent = percent.coerceIn(MIN_INTENSITY_PERCENT, MAX_INTENSITY_PERCENT),
+            intensityPercent = percent.coerceAtLeast(MIN_INTENSITY_PERCENT),
         )
         pushTargetForCurrentStep()
     }
