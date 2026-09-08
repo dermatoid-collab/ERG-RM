@@ -16,6 +16,7 @@ val ErgBelowTarget = Color(0xFF5AA9E6)
 val ErgAtTarget = Color(0xFF3DDC84)
 val ErgAboveTarget = Color(0xFFE65A5A)
 val ErgWarn = Color(0xFFE6C15A)
+val ErgDivider = Color(0xFF7FC2F0)
 
 private val ErgColorScheme = darkColorScheme(
     background = ErgBackground,

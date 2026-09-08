@@ -21,9 +21,13 @@ data class WorkoutRunState(
     val isFinished: Boolean = false,
 ) {
     val currentStep: WorkoutStep? get() = steps.getOrNull(currentStepIndex)
+    val nextStep: WorkoutStep? get() = steps.getOrNull(currentStepIndex + 1)
     val remainingInStepSec: Int get() = (currentStep?.durationSec ?: 0) - elapsedInStepSec
     val totalRemainingSec: Int get() = (totalDurationSec - totalElapsedSec).coerceAtLeast(0)
 }
+
+private const val AUTO_EXTEND_SEC = 300
+private const val AUTO_EXTEND_LABEL = "Prolungamento"
 
 /**
  * Drives a structured workout in ERG mode: ticks once per second, computes the target
@@ -39,9 +43,11 @@ class WorkoutExecutor(
 
     private var tickerJob: Job? = null
     private var lastSentWatts: Int? = null
+    private var autoExtendApplied = false
 
     fun load(steps: List<WorkoutStep>) {
         stop()
+        autoExtendApplied = false
         _state.value = WorkoutRunState(
             steps = steps,
             totalDurationSec = steps.sumOf { it.durationSec },
@@ -98,6 +104,21 @@ class WorkoutExecutor(
         if (newElapsedInStep >= step.durationSec) {
             val nextIndex = s.currentStepIndex + 1
             if (nextIndex >= s.steps.size) {
+                if (!autoExtendApplied) {
+                    // Keep holding the last target power for a few minutes instead of an
+                    // abrupt stop, so the trainer doesn't suddenly cut resistance.
+                    autoExtendApplied = true
+                    val extension = WorkoutStep(AUTO_EXTEND_SEC, step.endWatts, step.endWatts, AUTO_EXTEND_LABEL)
+                    _state.value = s.copy(
+                        steps = s.steps + extension,
+                        currentStepIndex = nextIndex,
+                        elapsedInStepSec = 0,
+                        totalElapsedSec = s.totalElapsedSec + 1,
+                        totalDurationSec = s.totalDurationSec + AUTO_EXTEND_SEC,
+                    )
+                    pushTargetForCurrentStep()
+                    return
+                }
                 _state.value = s.copy(
                     totalElapsedSec = s.totalElapsedSec + 1,
                     elapsedInStepSec = step.durationSec,
