@@ -11,6 +11,9 @@ Il workout del giorno viene recuperato automaticamente da **Intervals.icu**.
 - Lettura dati live (potenza, cadenza, frequenza cardiaca) da Indoor Bike Data (`0x2AD2`).
 - Fetch del workout pianificato per oggi da Intervals.icu (formato `.zwo`) e conversione
   automatica dei target da %FTP a watt assoluti.
+- Libreria workout locale: import su richiesta di file `.zwo` da una cartella scelta con il
+  picker di sistema (funziona anche con una cartella sincronizzata da Google Drive, se l'app
+  Drive è installata — nessuna configurazione OAuth necessaria).
 - Esecuzione del workout: avanzamento step, rampe interpolate, grafico del profilo di potenza,
   play/pausa/salto step.
 
@@ -20,6 +23,7 @@ Il workout del giorno viene recuperato automaticamente da **Intervals.icu**.
 app/src/main/java/com/ergrm/trainer/
 ├── ble/          # BLE scanner + gestione connessione FTMS/ERG
 ├── intervals/    # Client REST Intervals.icu + parsing eventi
+├── library/      # Libreria workout locale (import .zwo via Storage Access Framework)
 ├── workout/      # Modello workout, parser .zwo, motore di esecuzione
 ├── data/         # Persistenza impostazioni (DataStore)
 └── ui/           # ViewModel + schermate Jetpack Compose

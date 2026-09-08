@@ -16,6 +16,8 @@ data class AppSettings(
     val ftpWatts: Int = 200,
     val lastDeviceAddress: String? = null,
     val lastDeviceName: String? = null,
+    val libraryFolderUri: String? = null,
+    val libraryFolderName: String? = null,
 ) {
     val intervalsConfigured: Boolean get() = intervalsApiKey.isNotBlank() && intervalsAthleteId.isNotBlank()
 }
@@ -28,6 +30,8 @@ class SettingsRepository(private val context: Context) {
         val FTP = intPreferencesKey("ftp_watts")
         val DEVICE_ADDRESS = stringPreferencesKey("last_device_address")
         val DEVICE_NAME = stringPreferencesKey("last_device_name")
+        val LIBRARY_FOLDER_URI = stringPreferencesKey("library_folder_uri")
+        val LIBRARY_FOLDER_NAME = stringPreferencesKey("library_folder_name")
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { prefs ->
@@ -37,6 +41,8 @@ class SettingsRepository(private val context: Context) {
             ftpWatts = prefs[Keys.FTP] ?: 200,
             lastDeviceAddress = prefs[Keys.DEVICE_ADDRESS],
             lastDeviceName = prefs[Keys.DEVICE_NAME],
+            libraryFolderUri = prefs[Keys.LIBRARY_FOLDER_URI],
+            libraryFolderName = prefs[Keys.LIBRARY_FOLDER_NAME],
         )
     }
 
@@ -55,6 +61,13 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit { prefs ->
             prefs[Keys.DEVICE_ADDRESS] = address
             prefs[Keys.DEVICE_NAME] = name
+        }
+    }
+
+    suspend fun setLibraryFolder(uri: String, name: String) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.LIBRARY_FOLDER_URI] = uri
+            prefs[Keys.LIBRARY_FOLDER_NAME] = name
         }
     }
 }

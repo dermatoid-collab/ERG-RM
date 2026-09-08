@@ -3,6 +3,7 @@ package com.ergrm.trainer.ui
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -23,11 +24,13 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ergrm.trainer.ble.TrainerConnectionState
 import com.ergrm.trainer.ui.theme.ErgRmTheme
 
+private enum class Overlay { NONE, SETTINGS, LIBRARY }
+
 @Composable
 fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
     ErgRmTheme {
         Surface(color = MaterialTheme.colorScheme.background) {
-            var showSettings by remember { mutableStateOf(false) }
+            var overlay by remember { mutableStateOf(Overlay.NONE) }
             val connectionState by viewModel.connectionState.collectAsState()
             val settings by viewModel.settings.collectAsState()
 
@@ -36,7 +39,14 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
                     TopAppBar(
                         title = { Text("ERG-RM") },
                         actions = {
-                            IconButton(onClick = { showSettings = !showSettings }) {
+                            IconButton(onClick = {
+                                overlay = if (overlay == Overlay.LIBRARY) Overlay.NONE else Overlay.LIBRARY
+                            }) {
+                                Icon(Icons.Filled.FolderOpen, contentDescription = "Libreria workout")
+                            }
+                            IconButton(onClick = {
+                                overlay = if (overlay == Overlay.SETTINGS) Overlay.NONE else Overlay.SETTINGS
+                            }) {
                                 Icon(Icons.Filled.Settings, contentDescription = "Impostazioni")
                             }
                         },
@@ -48,11 +58,12 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
             ) { padding ->
                 Box(modifier = Modifier.padding(padding)) {
                     when {
-                        showSettings -> SettingsScreen(
+                        overlay == Overlay.SETTINGS -> SettingsScreen(
                             settings = settings,
                             onSave = viewModel::saveIntervalsSettings,
-                            onClose = { showSettings = false },
+                            onClose = { overlay = Overlay.NONE },
                         )
+                        overlay == Overlay.LIBRARY -> LibraryScreen(viewModel, onImported = { overlay = Overlay.NONE })
                         connectionState is TrainerConnectionState.Ready -> WorkoutScreen(viewModel)
                         else -> ConnectScreen(viewModel)
                     }
