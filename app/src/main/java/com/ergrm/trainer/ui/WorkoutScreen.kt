@@ -77,7 +77,7 @@ fun WorkoutScreen(viewModel: MainViewModel, onOpenLibrary: () -> Unit = {}) {
             totalDurationSec = workoutState.totalDurationSec,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(120.dp),
+                .height(160.dp), // +33% vs the original 120.dp
         )
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -247,6 +247,10 @@ private fun WorkoutProfileChart(
 
 private data class PowerZone(val label: String, val color: Color)
 
+/**
+ * Andrew Coggan's 7-level power training zones, as %FTP: Active Recovery, Endurance, Tempo,
+ * Lactate Threshold, VO2max, Anaerobic Capacity, Neuromuscular Power.
+ */
 private val POWER_ZONES = listOf(
     0.55f to PowerZone("Z1", Color(0xFF5B6472)),
     0.75f to PowerZone("Z2", ErgBelowTarget),
@@ -274,28 +278,50 @@ private fun IntervalDetailsSection(
     ftpWatts: Int,
 ) {
     if (current == null) return
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        IntervalDetailRow("In corso", current, currentRemainingSec, ftpWatts)
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IntervalDetailBlock(
+            label = "Ora",
+            step = current,
+            remainingSec = currentRemainingSec,
+            ftpWatts = ftpWatts,
+            modifier = Modifier.weight(1f),
+        )
         if (next != null) {
-            IntervalDetailRow("Prossimo", next, next.durationSec, ftpWatts)
+            Box(
+                modifier = Modifier
+                    .width(1.dp)
+                    .height(22.dp)
+                    .background(ErgOnSurface.copy(alpha = 0.15f)),
+            )
+            IntervalDetailBlock(
+                label = "Poi",
+                step = next,
+                remainingSec = next.durationSec,
+                ftpWatts = ftpWatts,
+                modifier = Modifier.weight(1f),
+            )
         }
     }
 }
 
 @Composable
-private fun IntervalDetailRow(label: String, step: WorkoutStep, remainingSec: Int, ftpWatts: Int) {
+private fun IntervalDetailBlock(
+    label: String,
+    step: WorkoutStep,
+    remainingSec: Int,
+    ftpWatts: Int,
+    modifier: Modifier = Modifier,
+) {
     val zone = zoneFor(step.endWatts, ftpWatts)
     Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
+        modifier = modifier.padding(horizontal = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            label,
-            style = MaterialTheme.typography.labelSmall,
-            color = ErgOnSurface,
-            modifier = Modifier.width(64.dp),
-        )
+        Text(label, style = MaterialTheme.typography.labelSmall, color = ErgOnSurface)
         Text(formatTime(remainingSec), style = MaterialTheme.typography.bodyMedium)
         Text(wattsLabel(step), style = MaterialTheme.typography.bodyMedium)
         Text(
@@ -304,7 +330,7 @@ private fun IntervalDetailRow(label: String, step: WorkoutStep, remainingSec: In
             color = Color.Black,
             modifier = Modifier
                 .background(zone.color, RoundedCornerShape(6.dp))
-                .padding(horizontal = 8.dp, vertical = 2.dp),
+                .padding(horizontal = 6.dp, vertical = 1.dp),
         )
     }
 }
