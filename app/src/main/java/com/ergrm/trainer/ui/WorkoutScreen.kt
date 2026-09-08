@@ -69,9 +69,10 @@ fun WorkoutScreen(viewModel: MainViewModel, onOpenLibrary: () -> Unit = {}) {
             .fillMaxSize()
             .padding(16.dp),
     ) {
+        val loaded = loadState
         WorkoutHeader(
-            title = when (loadState) {
-                is WorkoutLoadState.Loaded -> loadState.name
+            title = when (loaded) {
+                is WorkoutLoadState.Loaded -> loaded.name
                 else -> if (workoutState.steps.isNotEmpty()) "Allenamento" else "Nessun allenamento"
             },
             onPickFromToday = { viewModel.fetchTodayWorkout() },
