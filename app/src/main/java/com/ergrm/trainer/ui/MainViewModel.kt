@@ -147,6 +147,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun startWorkout() = workoutExecutor.start()
     fun pauseWorkout() = workoutExecutor.pause()
     fun skipStep() = workoutExecutor.skipToNextStep()
+    fun exitWorkout() = workoutExecutor.exit()
+    fun extendCurrentInterval() = workoutExecutor.extendCurrentStep()
 
     /** Called after the user picks a folder via ACTION_OPEN_DOCUMENT_TREE. */
     fun onLibraryFolderPicked(uri: Uri, displayName: String) {

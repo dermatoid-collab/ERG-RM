@@ -2,6 +2,7 @@ package com.ergrm.trainer.ui
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,9 +16,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
@@ -39,6 +43,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ergrm.trainer.ble.TrainerSample
@@ -64,6 +69,16 @@ fun WorkoutScreen(viewModel: MainViewModel, onOpenLibrary: () -> Unit = {}) {
             .fillMaxSize()
             .padding(16.dp),
     ) {
+        WorkoutHeader(
+            title = when (loadState) {
+                is WorkoutLoadState.Loaded -> loadState.name
+                else -> if (workoutState.steps.isNotEmpty()) "Allenamento" else "Nessun allenamento"
+            },
+            onPickFromToday = { viewModel.fetchTodayWorkout() },
+            onPickFromLibrary = onOpenLibrary,
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
         PowerReadout(live, workoutState.currentTargetWatts)
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -96,11 +111,11 @@ fun WorkoutScreen(viewModel: MainViewModel, onOpenLibrary: () -> Unit = {}) {
         ControlsRow(
             hasWorkout = workoutState.steps.isNotEmpty(),
             isRunning = workoutState.isRunning,
-            onPickFromToday = { viewModel.fetchTodayWorkout() },
-            onPickFromLibrary = onOpenLibrary,
-            onPlayPause = {
-                if (workoutState.isRunning) viewModel.pauseWorkout() else viewModel.startWorkout()
-            },
+            hasStarted = workoutState.hasStarted,
+            onPlay = { viewModel.startWorkout() },
+            onPause = { viewModel.pauseWorkout() },
+            onExit = { viewModel.exitWorkout() },
+            onExtend = { viewModel.extendCurrentInterval() },
             onSkip = { viewModel.skipStep() },
             onDisconnect = { viewModel.disconnect() },
         )
@@ -347,34 +362,45 @@ private fun WorkoutStatusLine(loadState: WorkoutLoadState, workoutState: Workout
     Text(text, style = MaterialTheme.typography.bodyMedium, color = ErgOnSurface)
 }
 
+/**
+ * Main action button cycles Avvia -> Pausa -> Stop: pausing a started workout doesn't offer a
+ * resume, only a Stop that exits it (via [onExit]) — matches how the rider actually uses it.
+ */
 @Composable
 private fun ControlsRow(
     hasWorkout: Boolean,
     isRunning: Boolean,
-    onPickFromToday: () -> Unit,
-    onPickFromLibrary: () -> Unit,
-    onPlayPause: () -> Unit,
+    hasStarted: Boolean,
+    onPlay: () -> Unit,
+    onPause: () -> Unit,
+    onExit: () -> Unit,
+    onExtend: () -> Unit,
     onSkip: () -> Unit,
     onDisconnect: () -> Unit,
 ) {
+    val isPaused = hasStarted && !isRunning
+    val mainLabel = when { isRunning -> "Pausa"; isPaused -> "Stop"; else -> "Avvia" }
+    val mainIcon = when { isRunning -> Icons.Filled.Pause; isPaused -> Icons.Filled.Stop; else -> Icons.Filled.PlayArrow }
+    val mainAction = when { isRunning -> onPause; isPaused -> onExit; else -> onPlay }
+    val mainColor = if (isPaused) ErgAboveTarget else ErgAccent
+
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            WorkoutSourceButton(
-                onPickFromToday = onPickFromToday,
-                onPickFromLibrary = onPickFromLibrary,
-                modifier = Modifier.weight(1f),
-            )
             Button(
-                onClick = onPlayPause,
+                onClick = mainAction,
                 enabled = hasWorkout,
                 modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.buttonColors(containerColor = ErgAccent),
+                colors = ButtonDefaults.buttonColors(containerColor = mainColor),
             ) {
-                Icon(if (isRunning) Icons.Filled.Pause else Icons.Filled.PlayArrow, contentDescription = null)
-                Text(if (isRunning) "Pausa" else "Avvia")
+                Icon(mainIcon, contentDescription = null)
+                Text(mainLabel)
+            }
+            OutlinedButton(onClick = onExtend, enabled = hasWorkout, modifier = Modifier.weight(1f)) {
+                Icon(Icons.Filled.Add, contentDescription = null)
+                Text("5 min")
             }
             OutlinedButton(onClick = onSkip, enabled = hasWorkout, modifier = Modifier.weight(1f)) {
                 Icon(Icons.Filled.SkipNext, contentDescription = null)
@@ -387,17 +413,26 @@ private fun ControlsRow(
     }
 }
 
-/** Lets the rider choose whether to load today's plan from Intervals.icu or a workout from the local library. */
+/** Workout title, tap to choose whether to load today's plan from Intervals.icu or the local library. */
 @Composable
-private fun WorkoutSourceButton(
+private fun WorkoutHeader(
+    title: String,
     onPickFromToday: () -> Unit,
     onPickFromLibrary: () -> Unit,
-    modifier: Modifier = Modifier,
 ) {
     var expanded by remember { mutableStateOf(false) }
-    Box(modifier = modifier) {
-        OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
-            Text("Carica allenamento")
+    Box {
+        Row(
+            modifier = Modifier.clickable { expanded = true },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                title,
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Icon(Icons.Filled.ArrowDropDown, contentDescription = "Scegli allenamento")
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             DropdownMenuItem(
