@@ -309,8 +309,15 @@ private fun LegendKey(color: Color, label: String) {
     }
 }
 
-/** Headroom left empty above the tallest interval bar, as a fraction of the chart height. */
+/** Headroom left empty above the chart's max watts, as a fraction of the chart height. */
 private const val CHART_TOP_HEADROOM = 0.20f
+
+/**
+ * Fixed watts ceiling for the chart's Y axis — deliberately not auto-fit to the data, so that
+ * raising or lowering the live %FTP intensity actually changes bar heights against a stable
+ * reference instead of the axis rescaling to compensate and hiding the change.
+ */
+private const val CHART_MAX_WATTS = 550f
 
 /** Blends a zone's bright accent color toward near-black so bar fills read as muted background,
  *  never as bright as the power/HR/cadence trace lines drawn on top of them. */
@@ -336,18 +343,11 @@ private fun WorkoutProfileChart(
     intensityPercent: Int,
     modifier: Modifier = Modifier,
 ) {
-    val maxTargetWatts = remember(steps, currentStepIndex, intensityPercent) {
-        steps.withIndex().maxOfOrNull { (i, step) ->
-            max(
-                displayWatts(step.startWatts, i, currentStepIndex, intensityPercent),
-                displayWatts(step.endWatts, i, currentStepIndex, intensityPercent),
-            )
-        }?.coerceAtLeast(1) ?: 1
-    }
-    val maxSampleWatts = remember(samples) { samples.maxOfOrNull { it.watts } ?: 0 }
-    // Divide by (1 - headroom) so the tallest bar/trace reaches only that fraction of the height,
-    // leaving CHART_TOP_HEADROOM free at the top.
-    val wattsScale = (max(maxTargetWatts, maxSampleWatts).coerceAtLeast(1) / (1f - CHART_TOP_HEADROOM))
+    // Divide by (1 - headroom) so the fixed ceiling reaches only that fraction of the height,
+    // leaving CHART_TOP_HEADROOM free at the top. A bar or trace above CHART_MAX_WATTS (e.g. a
+    // high intensity multiplier pushed it past 550W) is simply clipped rather than rescaling
+    // the whole axis — that's the point: the axis stays put so intensity changes are visible.
+    val wattsScale = CHART_MAX_WATTS / (1f - CHART_TOP_HEADROOM)
     val bpmScale = 200f
     val cadScale = 160f
 
