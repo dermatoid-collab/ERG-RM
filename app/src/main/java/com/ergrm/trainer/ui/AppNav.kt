@@ -52,10 +52,16 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
                     TopAppBar(
                         title = { Text("ERG-RM") },
                         actions = {
-                            IconButton(onClick = { screen = Screen.WORKOUT }) {
+                            IconButton(onClick = {
+                                overlay = Overlay.NONE
+                                screen = Screen.WORKOUT
+                            }) {
                                 Icon(Icons.Filled.FitnessCenter, contentDescription = "Workout")
                             }
-                            IconButton(onClick = { screen = Screen.CONNECT }) {
+                            IconButton(onClick = {
+                                overlay = Overlay.NONE
+                                screen = Screen.CONNECT
+                            }) {
                                 Icon(
                                     Icons.Filled.Bluetooth,
                                     contentDescription = "Devices",
