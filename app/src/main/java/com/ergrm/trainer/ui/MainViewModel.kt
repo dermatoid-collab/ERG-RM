@@ -23,6 +23,9 @@ import com.ergrm.trainer.ble.TrainerConnectionState
 import com.ergrm.trainer.ble.TrainerSample
 import com.ergrm.trainer.data.AppSettings
 import com.ergrm.trainer.data.SettingsRepository
+import com.ergrm.trainer.history.SessionHistoryRepository
+import com.ergrm.trainer.history.SessionSample
+import com.ergrm.trainer.history.WorkoutSession
 import com.ergrm.trainer.intervals.FetchResult
 import com.ergrm.trainer.intervals.IntervalsRepository
 import com.ergrm.trainer.library.LibraryImportResult
@@ -41,6 +44,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
+import java.util.UUID
+import kotlin.math.roundToInt
 
 sealed interface WorkoutLoadState {
     data object Idle : WorkoutLoadState
@@ -62,6 +67,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val settingsRepository = SettingsRepository(application)
     private val intervalsRepository = IntervalsRepository()
     private val libraryRepository = LibraryRepository(application)
+    private val historyRepository = SessionHistoryRepository(application)
 
     private val bluetoothAdapter: BluetoothAdapter? =
         (application.getSystemService(BluetoothManager::class.java))?.adapter
@@ -104,6 +110,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _libraryState = MutableStateFlow<LibraryUiState>(LibraryUiState.NoFolder)
     val libraryState: StateFlow<LibraryUiState> = _libraryState.asStateFlow()
+
+    private val _sessionHistory = MutableStateFlow<List<WorkoutSession>>(emptyList())
+    val sessionHistory: StateFlow<List<WorkoutSession>> = _sessionHistory.asStateFlow()
 
     private var scanJob: Job? = null
 
@@ -257,7 +266,48 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun startWorkout() = workoutExecutor.start()
     fun pauseWorkout() = workoutExecutor.pause()
     fun skipStep() = workoutExecutor.skipToNextStep()
-    fun exitWorkout() = workoutExecutor.exit()
+
+    /** Stop: saves a summary of the just-finished ride to the local history (if it was actually
+     *  started) before clearing the loaded workout. */
+    fun exitWorkout() {
+        val s = workoutState.value
+        if (s.hasStarted) {
+            val samples = sampleHistory.value
+            val watts = samples.map { it.watts }
+            val hrs = samples.mapNotNull { it.hrBpm }
+            val cadences = samples.mapNotNull { it.cadenceRpm }
+            val session = WorkoutSession(
+                id = UUID.randomUUID().toString(),
+                startEpochMillis = System.currentTimeMillis() - s.totalElapsedSec * 1000L,
+                durationSec = s.totalElapsedSec,
+                workoutName = (workoutLoadState.value as? WorkoutLoadState.Loaded)?.name,
+                avgWatts = if (watts.isNotEmpty()) watts.average().roundToInt() else 0,
+                maxWatts = watts.maxOrNull() ?: 0,
+                avgHrBpm = if (hrs.isNotEmpty()) hrs.average().roundToInt() else null,
+                avgCadenceRpm = if (cadences.isNotEmpty()) cadences.average().roundToInt() else null,
+                samples = samples.map { SessionSample(it.tSec, it.watts, it.hrBpm, it.cadenceRpm) },
+            )
+            viewModelScope.launch {
+                historyRepository.saveSession(session)
+                refreshHistory()
+            }
+        }
+        workoutExecutor.exit()
+    }
+
+    fun refreshHistory() {
+        viewModelScope.launch {
+            _sessionHistory.value = historyRepository.listSessions()
+        }
+    }
+
+    fun deleteSession(id: String) {
+        viewModelScope.launch {
+            historyRepository.deleteSession(id)
+            refreshHistory()
+        }
+    }
+
     fun extendCurrentInterval() = workoutExecutor.extendCurrentStep()
     fun increaseIntensity() = workoutExecutor.increaseIntensity()
     fun decreaseIntensity() = workoutExecutor.decreaseIntensity()

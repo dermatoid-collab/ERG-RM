@@ -6,6 +6,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -28,7 +29,7 @@ import com.ergrm.trainer.ble.TrainerConnectionState
 import com.ergrm.trainer.ui.theme.ErgRmTheme
 
 private enum class Screen { CONNECT, WORKOUT }
-private enum class Overlay { NONE, SETTINGS, LIBRARY }
+private enum class Overlay { NONE, SETTINGS, LIBRARY, HISTORY }
 
 @Composable
 fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
@@ -67,6 +68,11 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
                                 Icon(Icons.Filled.FolderOpen, contentDescription = "Workout library")
                             }
                             IconButton(onClick = {
+                                overlay = if (overlay == Overlay.HISTORY) Overlay.NONE else Overlay.HISTORY
+                            }) {
+                                Icon(Icons.Filled.History, contentDescription = "History")
+                            }
+                            IconButton(onClick = {
                                 overlay = if (overlay == Overlay.SETTINGS) Overlay.NONE else Overlay.SETTINGS
                             }) {
                                 Icon(Icons.Filled.Settings, contentDescription = "Settings")
@@ -93,6 +99,7 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
                                 overlay = Overlay.NONE
                             },
                         )
+                        overlay == Overlay.HISTORY -> HistoryScreen(viewModel)
                         screen == Screen.WORKOUT -> WorkoutScreen(
                             viewModel,
                             isTrainerConnected = isConnected,
