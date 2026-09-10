@@ -34,10 +34,12 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -45,9 +47,14 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.PointMode
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -58,6 +65,7 @@ import com.ergrm.trainer.ui.theme.ErgAtTarget
 import com.ergrm.trainer.ui.theme.ErgBelowTarget
 import com.ergrm.trainer.ui.theme.ErgDivider
 import com.ergrm.trainer.ui.theme.ErgOnSurface
+import com.ergrm.trainer.ui.theme.ErgProgressLine
 import com.ergrm.trainer.ui.theme.ErgSurface
 import com.ergrm.trainer.ui.theme.ErgSurface2
 import com.ergrm.trainer.ui.theme.ErgWarn
@@ -169,16 +177,16 @@ private fun StatTileGrid(live: TrainerSample, workoutState: WorkoutRunState, ftp
     }
     val zone = zoneFor(target, ftpWatts)
 
-    Column(verticalArrangement = Arrangement.spacedBy(7.dp), modifier = Modifier.fillMaxWidth()) {
-        Row(horizontalArrangement = Arrangement.spacedBy(7.dp), modifier = Modifier.fillMaxWidth()) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
             StatTile("Interval", formatTime(workoutState.remainingInStepSec), Modifier.weight(1f))
             StatTile("Total", formatTime(workoutState.totalElapsedSec), Modifier.weight(1f))
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(7.dp), modifier = Modifier.fillMaxWidth()) {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
             StatTile("Cadence", live.cadenceRpm?.let { "${it.toInt()}" } ?: "--", Modifier.weight(1f))
             StatTile("HR", live.heartRateBpm?.let { "$it" } ?: "--", Modifier.weight(1f))
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(7.dp), modifier = Modifier.fillMaxWidth()) {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
             StatTile(
                 label = "Target watts",
                 value = "$target",
@@ -203,7 +211,7 @@ private fun StatTile(
     Column(
         modifier = modifier
             .background(ErgSurface, RoundedCornerShape(13.dp))
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .padding(horizontal = 12.dp, vertical = 8.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Text(
@@ -225,26 +233,103 @@ private fun StatTile(
         }
         Text(
             value,
-            fontSize = 30.sp,
+            fontSize = 34.sp,
             fontWeight = FontWeight.SemiBold,
             color = valueColor,
-            modifier = Modifier.padding(top = 2.dp),
+            modifier = Modifier.padding(top = 1.dp),
         )
     }
 }
 
-/** Chart zoom window, cycled by tapping the chart: full workout -> 5 min -> 1 min -> full. */
-private enum class ChartZoom(val windowSec: Int?) {
-    FULL(null),
-    FIVE_MIN(5 * 60),
-    ONE_MIN(60);
+/**
+ * Chart zoom window, cycled by tapping the chart's empty area above the bars: full workout ->
+ * 20 min -> 5 min -> full. [scrollThresholdSec] is how far into a zoomed window the progress
+ * line travels (pinned at the left edge) before the window starts scrolling to keep it in place.
+ */
+private enum class ChartZoom(val windowSec: Int?, val scrollThresholdSec: Int) {
+    FULL(null, 0),
+    TWENTY_MIN(20 * 60, 5 * 60),
+    FIVE_MIN(5 * 60, 60);
 
     fun next(): ChartZoom = when (this) {
-        FULL -> FIVE_MIN
-        FIVE_MIN -> ONE_MIN
-        ONE_MIN -> FULL
+        FULL -> TWENTY_MIN
+        TWENTY_MIN -> FIVE_MIN
+        FIVE_MIN -> FULL
     }
 }
+
+/** The window [start, end) the chart currently shows, in elapsed seconds. In a zoomed level the
+ *  progress line stays pinned [ChartZoom.scrollThresholdSec] from the window's left edge (or at
+ *  elapsed time if less has passed) — i.e. it sits at the left edge until that much time has
+ *  passed, then the window scrolls to keep it fixed there. */
+private fun computeChartWindow(zoom: ChartZoom, totalElapsedSec: Int, totalDurationSec: Int): Pair<Int, Int> {
+    val windowSec = zoom.windowSec
+    if (windowSec == null || windowSec >= totalDurationSec) {
+        return 0 to totalDurationSec
+    }
+    val start = (totalElapsedSec - zoom.scrollThresholdSec).coerceAtLeast(0)
+    return start to (start + windowSec)
+}
+
+/** Which step (if any) covers elapsed time [t]. */
+private fun stepIndexAt(t: Int, steps: List<WorkoutStep>): Int? {
+    var acc = 0
+    steps.forEachIndexed { index, step ->
+        val stepStart = acc
+        val stepEnd = acc + step.durationSec
+        acc = stepEnd
+        if (t in stepStart until stepEnd) return index
+        if (index == steps.lastIndex && t >= stepStart) return index
+    }
+    return null
+}
+
+/** [start, end) elapsed-seconds range of the step at [index]. */
+private fun stepTimeRange(index: Int, steps: List<WorkoutStep>): Pair<Int, Int> {
+    var acc = 0
+    steps.forEachIndexed { i, step ->
+        val start = acc
+        acc += step.durationSec
+        if (i == index) return start to acc
+    }
+    return 0 to 0
+}
+
+/** Fraction (0..1) of the chart height the bar at elapsed time [t] reaches. */
+private fun barHeightFractionAt(t: Int, steps: List<WorkoutStep>, currentStepIndex: Int, intensityPercent: Int): Float {
+    val index = stepIndexAt(t, steps) ?: return 0.05f
+    val step = steps[index]
+    val dispStart = displayWatts(step.startWatts, index, currentStepIndex, intensityPercent)
+    val dispEnd = displayWatts(step.endWatts, index, currentStepIndex, intensityPercent)
+    val wattsScale = CHART_MAX_WATTS / (1f - CHART_TOP_HEADROOM)
+    return (max(dispStart, dispEnd).toFloat() / wattsScale).coerceIn(0.05f, 1f)
+}
+
+/** Draws a rounded pill with centered text, returning its width so the caller can chain pills. */
+private fun DrawScope.drawPill(text: String, x: Float, y: Float, bg: Color, textColor: Color, textMeasurer: TextMeasurer): Float {
+    val measured = textMeasurer.measure(text, TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Bold, color = textColor))
+    val paddingH = 10.dp.toPx()
+    val paddingV = 6.dp.toPx()
+    val pillWidth = measured.size.width + paddingH * 2
+    val pillHeight = measured.size.height + paddingV * 2
+    drawRoundRect(
+        color = bg,
+        topLeft = Offset(x, y),
+        size = Size(pillWidth, pillHeight),
+        cornerRadius = CornerRadius(pillHeight / 2f, pillHeight / 2f),
+    )
+    drawText(measured, topLeft = Offset(x + paddingH, y + paddingV))
+    return pillWidth
+}
+
+private data class ChartInputs(
+    val steps: List<WorkoutStep>,
+    val currentStepIndex: Int,
+    val totalElapsedSec: Int,
+    val totalDurationSec: Int,
+    val intensityPercent: Int,
+    val ftpWatts: Int,
+)
 
 @Composable
 private fun ChartCard(
@@ -260,26 +345,8 @@ private fun ChartCard(
     Column(
         modifier = modifier
             .background(ErgSurface, RoundedCornerShape(14.dp))
-            .padding(top = 10.dp, bottom = 6.dp, start = 4.dp, end = 4.dp),
+            .padding(4.dp),
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 2.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            LegendKey(Color.White, "Power")
-            Spacer(Modifier.width(14.dp))
-            LegendKey(ErgAboveTarget, "HR")
-            Spacer(Modifier.width(14.dp))
-            LegendKey(ErgWarn, "Cadence")
-            Spacer(Modifier.weight(1f))
-            Text(
-                "Tap to zoom",
-                style = MaterialTheme.typography.labelSmall,
-                color = ErgOnSurface.copy(alpha = 0.5f),
-            )
-        }
         WorkoutProfileChart(
             steps = steps,
             currentStepIndex = currentStepIndex,
@@ -292,20 +359,6 @@ private fun ChartCard(
                 .fillMaxWidth()
                 .weight(1f),
         )
-    }
-}
-
-@Composable
-private fun LegendKey(color: Color, label: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            modifier = Modifier
-                .width(14.dp)
-                .height(3.dp)
-                .background(color, RoundedCornerShape(2.dp)),
-        )
-        Spacer(Modifier.width(5.dp))
-        Text(label, style = MaterialTheme.typography.labelSmall, color = ErgOnSurface.copy(alpha = 0.7f))
     }
 }
 
@@ -348,48 +401,54 @@ private fun WorkoutProfileChart(
     // high intensity multiplier pushed it past 550W) is simply clipped rather than rescaling
     // the whole axis — that's the point: the axis stays put so intensity changes are visible.
     val wattsScale = CHART_MAX_WATTS / (1f - CHART_TOP_HEADROOM)
-    val bpmScale = 200f
+    // Right (HR) axis lines up with the left (watts) axis's 4 gridlines: 90/130/170/210 bpm sit
+    // at the same heights as 138/275/413/550 W, a 160bpm range topping out at 210 with the same
+    // headroom fraction free above it.
+    val bpmMin = 50f
+    val bpmRange = 160f
     val cadScale = 160f
 
     var zoom by remember { mutableStateOf(ChartZoom.FULL) }
+    var selectedStepIndex by remember(steps) { mutableStateOf<Int?>(null) }
+    val textMeasurer = rememberTextMeasurer()
+    val latestInputs = rememberUpdatedState(
+        ChartInputs(steps, currentStepIndex, totalElapsedSec, totalDurationSec, intensityPercent, ftpWatts),
+    )
 
     Canvas(
         modifier = modifier.pointerInput(Unit) {
-            detectTapGestures(onTap = { zoom = zoom.next() })
+            detectTapGestures(onTap = { offset ->
+                val inputs = latestInputs.value
+                if (inputs.steps.isEmpty() || inputs.totalDurationSec <= 0) return@detectTapGestures
+                val (windowStart, windowEnd) = computeChartWindow(zoom, inputs.totalElapsedSec, inputs.totalDurationSec)
+                val windowLen = (windowEnd - windowStart).coerceAtLeast(1)
+                val tSec = windowStart + ((offset.x / size.width) * windowLen).roundToInt()
+                val tappedIndex = stepIndexAt(tSec, inputs.steps)
+                val barFraction = barHeightFractionAt(tSec, inputs.steps, inputs.currentStepIndex, inputs.intensityPercent)
+                val barTopY = size.height * (1f - barFraction)
+                if (tappedIndex != null && offset.y >= barTopY) {
+                    // Tapped on a bar: toggle its highlight + duration/watts tooltip instead of zooming.
+                    selectedStepIndex = if (selectedStepIndex == tappedIndex) null else tappedIndex
+                } else {
+                    selectedStepIndex = null
+                    zoom = zoom.next()
+                }
+            })
         },
     ) {
         if (steps.isEmpty() || totalDurationSec <= 0) return@Canvas
         val w = size.width
         val h = size.height
 
-        val windowSec = zoom.windowSec
-        val windowStart: Int
-        val windowEnd: Int
-        if (windowSec == null || windowSec >= totalDurationSec) {
-            windowStart = 0
-            windowEnd = totalDurationSec
-        } else {
-            val half = windowSec / 2
-            var start = totalElapsedSec - half
-            var end = totalElapsedSec + half
-            if (start < 0) {
-                end -= start
-                start = 0
-            }
-            if (end > totalDurationSec) {
-                start -= (end - totalDurationSec)
-                end = totalDurationSec
-            }
-            windowStart = start.coerceAtLeast(0)
-            windowEnd = end
-        }
+        val (windowStart, windowEnd) = computeChartWindow(zoom, totalElapsedSec, totalDurationSec)
         val windowLen = (windowEnd - windowStart).coerceAtLeast(1)
         fun xAt(t: Int): Float = w * (t - windowStart) / windowLen.toFloat()
         fun yWatts(watts: Int): Float = h - h * (watts.toFloat() / wattsScale).coerceIn(0f, 1f)
-        fun yBpm(bpm: Int): Float = h - h * (bpm.toFloat() / bpmScale).coerceIn(0f, 1f)
+        fun yBpm(bpm: Int): Float = h - h * (((bpm - bpmMin) / bpmRange) * (1f - CHART_TOP_HEADROOM)).coerceIn(0f, 1f)
         fun yCad(rpm: Int): Float = h - h * (rpm.toFloat() / cadScale).coerceIn(0f, 1f)
 
         var acc = 0
+        var previousBarHeight = 0f
         steps.forEachIndexed { index, step ->
             val stepStart = acc
             val stepEnd = acc + step.durationSec
@@ -405,10 +464,13 @@ private fun WorkoutProfileChart(
             val color = mutedZoneColor(zone.color, active = index == currentStepIndex)
             drawRect(color = color, topLeft = Offset(x0, h - barHeight), size = Size((x1 - x0).coerceAtLeast(1f), barHeight))
 
-            // Thin light-blue divider between consecutive intervals.
+            // Thin light-blue divider between consecutive intervals — stops at the top of the
+            // taller of the two adjacent bars instead of running into the empty area above them.
             if (stepStart in windowStart..windowEnd && index > 0) {
-                drawLine(color = ErgDivider, start = Offset(x0, 0f), end = Offset(x0, h), strokeWidth = 1.5f)
+                val dividerHeight = max(previousBarHeight, barHeight)
+                drawLine(color = ErgDivider, start = Offset(x0, h - dividerHeight), end = Offset(x0, h), strokeWidth = 1.5f)
             }
+            previousBarHeight = barHeight
         }
 
         // Live traces recorded during the workout: cadence (dashed) under HR under power.
@@ -448,9 +510,60 @@ private fun WorkoutProfileChart(
             }
         }
 
+        // Progress line: a thin light-blue line at full chart height marking elapsed time —
+        // pinned at the window's left edge until computeChartWindow starts scrolling to keep it
+        // at its scroll threshold position (see ChartZoom/computeChartWindow).
         if (totalElapsedSec in windowStart..windowEnd) {
             val progressX = xAt(totalElapsedSec).coerceIn(0f, w)
-            drawLine(color = Color.White, start = Offset(progressX, 0f), end = Offset(progressX, h), strokeWidth = 2f, alpha = 0.55f)
+            drawLine(color = ErgProgressLine, start = Offset(progressX, 0f), end = Offset(progressX, h), strokeWidth = 2.5f)
+        }
+
+        // Axis gridlines + labels: watts on the left, heart rate on the right, sharing the same
+        // 4 height positions.
+        val wattsTicks = listOf(138, 275, 413, 550)
+        val bpmTicks = listOf(90, 130, 170, 210)
+        wattsTicks.forEachIndexed { i, watts ->
+            val y = yWatts(watts)
+            drawLine(color = ErgOnSurface.copy(alpha = 0.12f), start = Offset(0f, y), end = Offset(w, y), strokeWidth = 1f)
+            val wattsLabelResult = textMeasurer.measure("$watts", TextStyle(fontSize = 10.sp, color = ErgOnSurface.copy(alpha = 0.85f)))
+            drawText(wattsLabelResult, topLeft = Offset(4.dp.toPx(), y - wattsLabelResult.size.height - 2f))
+            val bpmLabelResult = textMeasurer.measure("${bpmTicks[i]}", TextStyle(fontSize = 10.sp, color = ErgAboveTarget))
+            drawText(bpmLabelResult, topLeft = Offset(w - bpmLabelResult.size.width - 4.dp.toPx(), y - bpmLabelResult.size.height - 2f))
+        }
+
+        // Selected interval (tapped on its bar): full-height highlight + a duration/watts/zone
+        // tooltip, drawn last so it sits on top of everything else.
+        val selIndex = selectedStepIndex
+        if (selIndex != null && selIndex in steps.indices) {
+            val (selStart, selEnd) = stepTimeRange(selIndex, steps)
+            if (selEnd >= windowStart && selStart <= windowEnd) {
+                val sx0 = xAt(selStart).coerceIn(0f, w)
+                val sx1 = xAt(selEnd).coerceIn(0f, w)
+                drawRect(
+                    color = Color.White.copy(alpha = 0.10f),
+                    topLeft = Offset(sx0, 0f),
+                    size = Size((sx1 - sx0).coerceAtLeast(1f), h),
+                )
+
+                val selStep = steps[selIndex]
+                val selDispStart = displayWatts(selStep.startWatts, selIndex, currentStepIndex, intensityPercent)
+                val selDispEnd = displayWatts(selStep.endWatts, selIndex, currentStepIndex, intensityPercent)
+                val selZone = zoneFor(max(selDispStart, selDispEnd), ftpWatts)
+                val durationText = formatTime(selStep.durationSec)
+                val wattsText = "${wattsLabel(selDispStart, selDispEnd)} (${selZone.label})"
+
+                val paddingH = 10.dp.toPx()
+                val gap = 6.dp.toPx()
+                val durationWidth = textMeasurer.measure(durationText, TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Bold)).size.width + paddingH * 2
+                val wattsWidth = textMeasurer.measure(wattsText, TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Bold)).size.width + paddingH * 2
+                val totalWidth = durationWidth + gap + wattsWidth
+                val margin = 6.dp.toPx()
+                var pillX = (sx0 + margin).coerceIn(margin, (w - totalWidth - margin).coerceAtLeast(margin))
+                val pillY = 8.dp.toPx()
+
+                pillX += drawPill(durationText, pillX, pillY, ErgSurface2, ErgOnSurface, textMeasurer) + gap
+                drawPill(wattsText, pillX, pillY, selZone.color, Color.Black, textMeasurer)
+            }
         }
     }
 }
