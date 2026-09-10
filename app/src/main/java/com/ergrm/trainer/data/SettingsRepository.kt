@@ -13,7 +13,7 @@ private val Context.dataStore by preferencesDataStore(name = "ergrm_settings")
 data class AppSettings(
     val intervalsApiKey: String = "",
     val intervalsAthleteId: String = "",
-    val ftpWatts: Int = 200,
+    val ftpWatts: Int = 275,
     val lastDeviceAddress: String? = null,
     val lastDeviceName: String? = null,
     val libraryFolderUri: String? = null,
@@ -38,7 +38,7 @@ class SettingsRepository(private val context: Context) {
         AppSettings(
             intervalsApiKey = prefs[Keys.API_KEY] ?: "",
             intervalsAthleteId = prefs[Keys.ATHLETE_ID] ?: "",
-            ftpWatts = prefs[Keys.FTP] ?: 200,
+            ftpWatts = prefs[Keys.FTP] ?: 275,
             lastDeviceAddress = prefs[Keys.DEVICE_ADDRESS],
             lastDeviceName = prefs[Keys.DEVICE_NAME],
             libraryFolderUri = prefs[Keys.LIBRARY_FOLDER_URI],

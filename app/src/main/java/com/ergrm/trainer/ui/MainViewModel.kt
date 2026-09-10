@@ -26,6 +26,8 @@ import com.ergrm.trainer.data.SettingsRepository
 import com.ergrm.trainer.history.SessionHistoryRepository
 import com.ergrm.trainer.history.SessionSample
 import com.ergrm.trainer.history.WorkoutSession
+import com.ergrm.trainer.intervals.CalendarFetchResult
+import com.ergrm.trainer.intervals.CalendarWorkout
 import com.ergrm.trainer.intervals.FetchResult
 import com.ergrm.trainer.intervals.IntervalsRepository
 import com.ergrm.trainer.library.LibraryImportResult
@@ -53,6 +55,12 @@ sealed interface WorkoutLoadState {
     data class Loaded(val name: String) : WorkoutLoadState
     data object Empty : WorkoutLoadState
     data class Error(val message: String) : WorkoutLoadState
+}
+
+sealed interface CalendarUiState {
+    data object Loading : CalendarUiState
+    data class Loaded(val workouts: List<CalendarWorkout>) : CalendarUiState
+    data class Error(val message: String) : CalendarUiState
 }
 
 sealed interface LibraryUiState {
@@ -107,6 +115,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _workoutLoadState = MutableStateFlow<WorkoutLoadState>(WorkoutLoadState.Idle)
     val workoutLoadState: StateFlow<WorkoutLoadState> = _workoutLoadState.asStateFlow()
+
+    private val _calendarState = MutableStateFlow<CalendarUiState>(CalendarUiState.Loading)
+    val calendarState: StateFlow<CalendarUiState> = _calendarState.asStateFlow()
 
     private val _libraryState = MutableStateFlow<LibraryUiState>(LibraryUiState.NoFolder)
     val libraryState: StateFlow<LibraryUiState> = _libraryState.asStateFlow()
@@ -244,20 +255,37 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun fetchTodayWorkout() {
+    /** Refreshes the two-week calendar list (current week + next week) shown in [CalendarScreen]. */
+    fun fetchCalendarWorkouts() {
         val s = settings.value
         if (!s.intervalsConfigured) {
-            _workoutLoadState.value = WorkoutLoadState.Error("Set your Intervals.icu API key and athlete ID first")
+            _calendarState.value = CalendarUiState.Error("Set your Intervals.icu API key and athlete ID first")
             return
         }
+        _calendarState.value = CalendarUiState.Loading
+        viewModelScope.launch {
+            _calendarState.value = when (val result = intervalsRepository.fetchCalendarWorkouts(s.intervalsApiKey, s.intervalsAthleteId)) {
+                is CalendarFetchResult.Success -> CalendarUiState.Loaded(result.workouts)
+                is CalendarFetchResult.Error -> CalendarUiState.Error(result.message)
+            }
+        }
+    }
+
+    /** Loads a specific planned event picked from the calendar list. */
+    fun loadCalendarWorkout(workout: CalendarWorkout) {
+        val s = settings.value
         _workoutLoadState.value = WorkoutLoadState.Loading
         viewModelScope.launch {
-            when (val result = intervalsRepository.fetchTodayWorkout(s.intervalsApiKey, s.intervalsAthleteId, s.ftpWatts)) {
+            when (
+                val result = intervalsRepository.fetchWorkoutByEventId(
+                    s.intervalsApiKey, s.intervalsAthleteId, workout.eventId, workout.name, s.ftpWatts,
+                )
+            ) {
                 is FetchResult.Success -> {
                     workoutExecutor.load(result.workout.steps)
                     _workoutLoadState.value = WorkoutLoadState.Loaded(result.workout.name)
                 }
-                FetchResult.NoWorkoutToday -> _workoutLoadState.value = WorkoutLoadState.Empty
+                FetchResult.NoStepsFound -> _workoutLoadState.value = WorkoutLoadState.Empty
                 is FetchResult.Error -> _workoutLoadState.value = WorkoutLoadState.Error(result.message)
             }
         }

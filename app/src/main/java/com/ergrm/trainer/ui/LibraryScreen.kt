@@ -40,7 +40,7 @@ private val dateFormatter = DateTimeFormatter.ofPattern("d MMM, HH:mm")
 fun LibraryScreen(
     viewModel: MainViewModel,
     onImported: () -> Unit = {},
-    onPickToday: () -> Unit = {},
+    onOpenCalendar: () -> Unit = {},
 ) {
     val settings by viewModel.settings.collectAsState()
     val libraryState by viewModel.libraryState.collectAsState()
@@ -66,8 +66,8 @@ fun LibraryScreen(
         ) {
             Text("Workout library", style = MaterialTheme.typography.titleLarge)
             Row(verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = onPickToday) {
-                    Text("Today (Intervals.icu)")
+                TextButton(onClick = onOpenCalendar) {
+                    Text("Calendar (Intervals.icu)")
                 }
                 IconButton(onClick = { viewModel.refreshLibrary() }) {
                     Icon(Icons.Filled.Refresh, contentDescription = "Refresh")

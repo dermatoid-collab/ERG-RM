@@ -78,7 +78,12 @@ import kotlin.math.max
 import kotlin.math.roundToInt
 
 @Composable
-fun WorkoutScreen(viewModel: MainViewModel, isTrainerConnected: Boolean = true, onOpenLibrary: () -> Unit = {}) {
+fun WorkoutScreen(
+    viewModel: MainViewModel,
+    isTrainerConnected: Boolean = true,
+    onOpenLibrary: () -> Unit = {},
+    onOpenCalendar: () -> Unit = {},
+) {
     val live by viewModel.liveData.collectAsState()
     val workoutState by viewModel.workoutState.collectAsState()
     val loadState by viewModel.workoutLoadState.collectAsState()
@@ -97,7 +102,7 @@ fun WorkoutScreen(viewModel: MainViewModel, isTrainerConnected: Boolean = true, 
                 is WorkoutLoadState.Loaded -> loaded.name
                 else -> if (workoutState.steps.isNotEmpty()) "Workout" else "No workout loaded"
             },
-            onPickFromToday = { viewModel.fetchTodayWorkout() },
+            onOpenCalendar = onOpenCalendar,
             onPickFromLibrary = onOpenLibrary,
         )
 
@@ -793,11 +798,11 @@ private fun IntensityRow(
     }
 }
 
-/** Workout title, tap to choose whether to load today's plan from Intervals.icu or the local library. */
+/** Workout title, tap to choose whether to load a plan from the Intervals.icu calendar or the local library. */
 @Composable
 private fun WorkoutHeader(
     title: String,
-    onPickFromToday: () -> Unit,
+    onOpenCalendar: () -> Unit,
     onPickFromLibrary: () -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -816,10 +821,10 @@ private fun WorkoutHeader(
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             DropdownMenuItem(
-                text = { Text("Today (Intervals.icu)") },
+                text = { Text("Calendar (Intervals.icu)") },
                 onClick = {
                     expanded = false
-                    onPickFromToday()
+                    onOpenCalendar()
                 },
             )
             DropdownMenuItem(
