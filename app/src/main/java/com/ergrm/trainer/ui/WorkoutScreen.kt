@@ -3,7 +3,9 @@ package com.ergrm.trainer.ui
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -416,9 +418,17 @@ private fun WorkoutProfileChart(
 
     Canvas(
         modifier = modifier.pointerInput(Unit) {
-            detectTapGestures(onTap = { offset ->
+            // detectTapGestures cancels the whole gesture if the finger drifts past touch slop
+            // before lifting — fine for a big, imprecise target like the zoom band, but a tap
+            // aimed at one specific interval column is exactly the kind of "precise" press that
+            // drifts a pixel or two and silently gets cancelled, producing no callback at all.
+            // Track down-then-up directly instead, which only cares where the finger lifted.
+            awaitEachGesture {
+                awaitFirstDown()
+                val up = waitForUpOrCancellation() ?: return@awaitEachGesture
+                val offset = up.position
                 val inputs = latestInputs.value
-                if (inputs.steps.isEmpty() || inputs.totalDurationSec <= 0) return@detectTapGestures
+                if (inputs.steps.isEmpty() || inputs.totalDurationSec <= 0) return@awaitEachGesture
                 // Top 75% of the chart cycles zoom; the bottom quarter selects whatever interval
                 // sits at that x for its tooltip, even where that particular bar falls short of
                 // the tap — matching TrainerDay, where you don't have to land precisely on a
@@ -426,14 +436,14 @@ private fun WorkoutProfileChart(
                 if (offset.y < size.height * CHART_ZOOM_TAP_FRACTION) {
                     selectedStepIndex = null
                     zoom = zoom.next()
-                    return@detectTapGestures
+                    return@awaitEachGesture
                 }
                 val (windowStart, windowEnd) = computeChartWindow(zoom, inputs.totalElapsedSec, inputs.totalDurationSec)
                 val windowLen = (windowEnd - windowStart).coerceAtLeast(1)
                 val tSec = windowStart + ((offset.x / size.width) * windowLen).roundToInt()
                 val tappedIndex = stepIndexAt(tSec, inputs.steps)
                 selectedStepIndex = if (tappedIndex != null && selectedStepIndex != tappedIndex) tappedIndex else null
-            })
+            }
         },
     ) {
         if (steps.isEmpty() || totalDurationSec <= 0) return@Canvas
