@@ -357,11 +357,12 @@ private fun ChartCard(
  *  of wasting vertical space above them. */
 private const val CHART_TOP_HEADROOM = 0.08f
 
-/** Minimum height of the tap-to-zoom strip above the bars, regardless of [CHART_TOP_HEADROOM] —
- *  that fraction alone (8% of the chart) is too thin a target to hit reliably with a finger, so
- *  the tappable zoom band is always at least this tall even though the axis labels themselves
- *  stay tight against the top edge. */
-private val CHART_ZOOM_BAND_MIN = 32.dp
+/** Fraction of the chart's height, from the top, that's the tap-to-zoom target — deliberately
+ *  independent of and much larger than [CHART_TOP_HEADROOM] (which only sizes the axis-label
+ *  margin). Most real workouts spend most of their profile well under the 550W ceiling, so a
+ *  generous fixed band is a far more reliable zoom target than trying to track each bar's own
+ *  height; the bottom quarter selects whatever interval is at that x for its tooltip instead. */
+private const val CHART_ZOOM_TAP_FRACTION = 0.75f
 
 /**
  * Fixed watts ceiling for the chart's Y axis — deliberately not auto-fit to the data, so that
@@ -418,14 +419,11 @@ private fun WorkoutProfileChart(
             detectTapGestures(onTap = { offset ->
                 val inputs = latestInputs.value
                 if (inputs.steps.isEmpty() || inputs.totalDurationSec <= 0) return@detectTapGestures
-                // The top band is always empty (no bar ever reaches it), so it's a reliable
-                // zoom-cycle target — sized generously enough to actually hit with a finger, even
-                // though the axis labels above the bars only need CHART_TOP_HEADROOM's 8%. Below
-                // it counts as "on a bar" for the whole column, even where that particular
-                // interval's bar falls short of the tap — matching TrainerDay, where you don't
-                // have to land precisely on a short bar's tip.
-                val zoomBandPx = max(size.height * CHART_TOP_HEADROOM, CHART_ZOOM_BAND_MIN.toPx())
-                if (offset.y < zoomBandPx) {
+                // Top 75% of the chart cycles zoom; the bottom quarter selects whatever interval
+                // sits at that x for its tooltip, even where that particular bar falls short of
+                // the tap — matching TrainerDay, where you don't have to land precisely on a
+                // short bar's tip.
+                if (offset.y < size.height * CHART_ZOOM_TAP_FRACTION) {
                     selectedStepIndex = null
                     zoom = zoom.next()
                     return@detectTapGestures
