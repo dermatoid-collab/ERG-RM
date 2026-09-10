@@ -159,9 +159,11 @@ private fun DayHeader(date: LocalDate, today: LocalDate) {
     )
 }
 
+/** Past days are dimmed to show they've already gone by, but stay loadable — e.g. to redo a
+ *  skipped session or repeat an earlier one on demand. */
 @Composable
 private fun CalendarWorkoutRow(workout: CalendarWorkout, isPast: Boolean, onPick: () -> Unit) {
-    val alpha = if (isPast) 0.45f else 1f
+    val alpha = if (isPast) 0.55f else 1f
     Card(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
@@ -180,9 +182,7 @@ private fun CalendarWorkoutRow(workout: CalendarWorkout, isPast: Boolean, onPick
                     Text(it, style = MaterialTheme.typography.bodySmall, color = ErgOnSurface.copy(alpha = alpha))
                 }
             }
-            if (!isPast) {
-                Button(onClick = onPick) { Text("Load") }
-            }
+            Button(onClick = onPick) { Text("Load") }
         }
     }
 }
