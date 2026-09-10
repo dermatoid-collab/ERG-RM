@@ -411,6 +411,7 @@ private fun WorkoutProfileChart(
 
     var zoom by remember { mutableStateOf(ChartZoom.FULL) }
     var selectedStepIndex by remember(steps) { mutableStateOf<Int?>(null) }
+    var debugText by remember { mutableStateOf("no tap yet") } // TEMP diagnostic, remove once tap-select is confirmed working
     val textMeasurer = rememberTextMeasurer()
     val latestInputs = rememberUpdatedState(
         ChartInputs(steps, currentStepIndex, totalElapsedSec, totalDurationSec, intensityPercent, ftpWatts),
@@ -425,17 +426,26 @@ private fun WorkoutProfileChart(
             // Track down-then-up directly instead, which only cares where the finger lifted.
             awaitEachGesture {
                 awaitFirstDown()
-                val up = waitForUpOrCancellation() ?: return@awaitEachGesture
+                val up = waitForUpOrCancellation()
+                if (up == null) {
+                    debugText = "gesture cancelled"
+                    return@awaitEachGesture
+                }
                 val offset = up.position
                 val inputs = latestInputs.value
-                if (inputs.steps.isEmpty() || inputs.totalDurationSec <= 0) return@awaitEachGesture
+                if (inputs.steps.isEmpty() || inputs.totalDurationSec <= 0) {
+                    debugText = "guard blocked: steps=${inputs.steps.size} dur=${inputs.totalDurationSec}"
+                    return@awaitEachGesture
+                }
+                val threshold = size.height * CHART_ZOOM_TAP_FRACTION
                 // Top 75% of the chart cycles zoom; the bottom quarter selects whatever interval
                 // sits at that x for its tooltip, even where that particular bar falls short of
                 // the tap — matching TrainerDay, where you don't have to land precisely on a
                 // short bar's tip.
-                if (offset.y < size.height * CHART_ZOOM_TAP_FRACTION) {
+                if (offset.y < threshold) {
                     selectedStepIndex = null
                     zoom = zoom.next()
+                    debugText = "ZOOM y=${offset.y.toInt()} thr=${threshold.toInt()} -> ${zoom.name}"
                     return@awaitEachGesture
                 }
                 val (windowStart, windowEnd) = computeChartWindow(zoom, inputs.totalElapsedSec, inputs.totalDurationSec)
@@ -443,6 +453,7 @@ private fun WorkoutProfileChart(
                 val tSec = windowStart + ((offset.x / size.width) * windowLen).roundToInt()
                 val tappedIndex = stepIndexAt(tSec, inputs.steps)
                 selectedStepIndex = if (tappedIndex != null && selectedStepIndex != tappedIndex) tappedIndex else null
+                debugText = "SELECT y=${offset.y.toInt()} thr=${threshold.toInt()} tSec=$tSec idx=$tappedIndex sel=$selectedStepIndex"
             }
         },
     ) {
@@ -574,6 +585,13 @@ private fun WorkoutProfileChart(
                 pillX += drawPill(durationText, pillX, pillY, ErgSurface2, ErgOnSurface, textMeasurer) + gap
                 drawPill(wattsText, pillX, pillY, selZone.color, Color.Black, textMeasurer)
             }
+        }
+
+        // TEMP diagnostic overlay, remove once tap-select is confirmed working.
+        run {
+            val debugLabel = textMeasurer.measure(debugText, TextStyle(fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.Black))
+            drawRect(color = Color.Yellow, topLeft = Offset(0f, h - debugLabel.size.height - 6f), size = Size(debugLabel.size.width + 8f, debugLabel.size.height + 6f))
+            drawText(debugLabel, topLeft = Offset(4f, h - debugLabel.size.height - 3f))
         }
     }
 }
