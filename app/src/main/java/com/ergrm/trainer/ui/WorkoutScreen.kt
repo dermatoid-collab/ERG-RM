@@ -86,8 +86,8 @@ fun WorkoutScreen(viewModel: MainViewModel, isTrainerConnected: Boolean = true, 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(7.dp),
     ) {
         val loaded = loadState
         WorkoutHeader(
@@ -295,16 +295,6 @@ private fun stepTimeRange(index: Int, steps: List<WorkoutStep>): Pair<Int, Int> 
     return 0 to 0
 }
 
-/** Fraction (0..1) of the chart height the bar at elapsed time [t] reaches. */
-private fun barHeightFractionAt(t: Int, steps: List<WorkoutStep>, currentStepIndex: Int, intensityPercent: Int): Float {
-    val index = stepIndexAt(t, steps) ?: return 0.05f
-    val step = steps[index]
-    val dispStart = displayWatts(step.startWatts, index, currentStepIndex, intensityPercent)
-    val dispEnd = displayWatts(step.endWatts, index, currentStepIndex, intensityPercent)
-    val wattsScale = CHART_MAX_WATTS / (1f - CHART_TOP_HEADROOM)
-    return (max(dispStart, dispEnd).toFloat() / wattsScale).coerceIn(0.05f, 1f)
-}
-
 /** Draws a rounded pill with centered text, returning its width so the caller can chain pills. */
 private fun DrawScope.drawPill(text: String, x: Float, y: Float, bg: Color, textColor: Color, textMeasurer: TextMeasurer): Float {
     val measured = textMeasurer.measure(text, TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Bold, color = textColor))
@@ -362,8 +352,10 @@ private fun ChartCard(
     }
 }
 
-/** Headroom left empty above the chart's max watts, as a fraction of the chart height. */
-private const val CHART_TOP_HEADROOM = 0.20f
+/** Headroom left empty above the chart's max watts, as a fraction of the chart height — just
+ *  enough for the top axis labels and a tappable strip to cycle zoom; kept small so the 550W/
+ *  210bpm labels sit near the very top edge instead of wasting vertical space above them. */
+private const val CHART_TOP_HEADROOM = 0.08f
 
 /**
  * Fixed watts ceiling for the chart's Y axis — deliberately not auto-fit to the data, so that
@@ -420,19 +412,20 @@ private fun WorkoutProfileChart(
             detectTapGestures(onTap = { offset ->
                 val inputs = latestInputs.value
                 if (inputs.steps.isEmpty() || inputs.totalDurationSec <= 0) return@detectTapGestures
+                // The top CHART_TOP_HEADROOM band is always empty (no bar ever reaches it), so it's
+                // a reliable, generously-sized zoom-cycle target. Below it counts as "on a bar" for
+                // the whole column, even where that particular interval's bar falls short of the tap
+                // — matching TrainerDay, where you don't have to land precisely on a short bar's tip.
+                if (offset.y < size.height * CHART_TOP_HEADROOM) {
+                    selectedStepIndex = null
+                    zoom = zoom.next()
+                    return@detectTapGestures
+                }
                 val (windowStart, windowEnd) = computeChartWindow(zoom, inputs.totalElapsedSec, inputs.totalDurationSec)
                 val windowLen = (windowEnd - windowStart).coerceAtLeast(1)
                 val tSec = windowStart + ((offset.x / size.width) * windowLen).roundToInt()
                 val tappedIndex = stepIndexAt(tSec, inputs.steps)
-                val barFraction = barHeightFractionAt(tSec, inputs.steps, inputs.currentStepIndex, inputs.intensityPercent)
-                val barTopY = size.height * (1f - barFraction)
-                if (tappedIndex != null && offset.y >= barTopY) {
-                    // Tapped on a bar: toggle its highlight + duration/watts tooltip instead of zooming.
-                    selectedStepIndex = if (selectedStepIndex == tappedIndex) null else tappedIndex
-                } else {
-                    selectedStepIndex = null
-                    zoom = zoom.next()
-                }
+                selectedStepIndex = if (tappedIndex != null && selectedStepIndex != tappedIndex) tappedIndex else null
             })
         },
     ) {

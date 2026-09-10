@@ -1,6 +1,10 @@
 package com.ergrm.trainer.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bluetooth
@@ -14,8 +18,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -23,7 +25,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ergrm.trainer.ble.TrainerConnectionState
 import com.ergrm.trainer.ui.theme.ErgRmTheme
@@ -49,9 +53,19 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
 
             Scaffold(
                 topBar = {
-                    TopAppBar(
-                        title = { Text("ERG-RM") },
-                        actions = {
+                    // Compact custom bar instead of Material3's TopAppBar (which reserves ~64dp
+                    // regardless of content) — matches TrainerDay's tighter chrome and frees up
+                    // vertical space for the chart below.
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.surface)
+                            .padding(start = 16.dp, end = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text("ERG-RM", style = MaterialTheme.typography.titleMedium)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
                             IconButton(onClick = {
                                 overlay = Overlay.NONE
                                 screen = Screen.WORKOUT
@@ -83,11 +97,8 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
                             }) {
                                 Icon(Icons.Filled.Settings, contentDescription = "Settings")
                             }
-                        },
-                        colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = MaterialTheme.colorScheme.surface,
-                        ),
-                    )
+                        }
+                    }
                 },
             ) { padding ->
                 Box(modifier = Modifier.padding(padding)) {
