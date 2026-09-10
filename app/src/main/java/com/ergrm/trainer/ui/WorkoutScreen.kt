@@ -589,7 +589,13 @@ private fun WorkoutProfileChart(
 
         // TEMP diagnostic overlay, remove once tap-select is confirmed working.
         run {
-            val debugLabel = textMeasurer.measure(debugText, TextStyle(fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.Black))
+            val drawTimeText = if (selIndex == null) {
+                "draw: sel=null"
+            } else {
+                val (ss, se) = stepTimeRange(selIndex, steps)
+                "draw: sel=$selIndex inBounds=${selIndex in steps.indices} ws=$windowStart we=$windowEnd ss=$ss se=$se pass=${se >= windowStart && ss <= windowEnd}"
+            }
+            val debugLabel = textMeasurer.measure("$debugText | $drawTimeText", TextStyle(fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.Black))
             drawRect(color = Color.Yellow, topLeft = Offset(0f, h - debugLabel.size.height - 6f), size = Size(debugLabel.size.width + 8f, debugLabel.size.height + 6f))
             drawText(debugLabel, topLeft = Offset(4f, h - debugLabel.size.height - 3f))
         }
