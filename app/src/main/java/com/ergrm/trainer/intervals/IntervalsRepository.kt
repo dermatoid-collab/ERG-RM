@@ -175,6 +175,16 @@ class IntervalsRepository {
                 )
             }
             val workouts = nodes.flatMap { flattenLibraryNode(it, it.name ?: "Library") }
+            if (workouts.isEmpty() && nodes.isNotEmpty()) {
+                // The JSON decoded fine (so the top-level shape matches), but nothing survived
+                // flattenLibraryNode's type/children guess — e.g. a folder nested under a
+                // "Training Plan"-type entry rather than a plain "FOLDER". Surface the raw
+                // response instead of a silent (and here, misleading) "nothing found".
+                return@withContext LibraryFetchResult.Error(
+                    "No workouts matched after parsing ${nodes.size} top-level folder(s) — please share this " +
+                        "so the folder/workout type names can be corrected: ${raw.take(600)}",
+                )
+            }
             LibraryFetchResult.Success(workouts)
         }
 
