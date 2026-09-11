@@ -30,6 +30,8 @@ import com.ergrm.trainer.intervals.CalendarFetchResult
 import com.ergrm.trainer.intervals.CalendarWorkout
 import com.ergrm.trainer.intervals.FetchResult
 import com.ergrm.trainer.intervals.IntervalsRepository
+import com.ergrm.trainer.intervals.LibraryFetchResult
+import com.ergrm.trainer.intervals.LibraryWorkout
 import com.ergrm.trainer.library.LibraryImportResult
 import com.ergrm.trainer.library.LibraryRepository
 import com.ergrm.trainer.library.LibraryWorkoutFile
@@ -61,6 +63,12 @@ sealed interface CalendarUiState {
     data object Loading : CalendarUiState
     data class Loaded(val workouts: List<CalendarWorkout>) : CalendarUiState
     data class Error(val message: String) : CalendarUiState
+}
+
+sealed interface IntervalsLibraryUiState {
+    data object Loading : IntervalsLibraryUiState
+    data class Loaded(val workouts: List<LibraryWorkout>) : IntervalsLibraryUiState
+    data class Error(val message: String) : IntervalsLibraryUiState
 }
 
 sealed interface LibraryUiState {
@@ -118,6 +126,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _calendarState = MutableStateFlow<CalendarUiState>(CalendarUiState.Loading)
     val calendarState: StateFlow<CalendarUiState> = _calendarState.asStateFlow()
+
+    private val _intervalsLibraryState = MutableStateFlow<IntervalsLibraryUiState>(IntervalsLibraryUiState.Loading)
+    val intervalsLibraryState: StateFlow<IntervalsLibraryUiState> = _intervalsLibraryState.asStateFlow()
 
     private val _libraryState = MutableStateFlow<LibraryUiState>(LibraryUiState.NoFolder)
     val libraryState: StateFlow<LibraryUiState> = _libraryState.asStateFlow()
@@ -255,6 +266,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** "Intervals WOD" quick action: loads today's first planned bike workout directly, with no
+     *  intermediate picker. If several are scheduled today, use the calendar to pick a specific
+     *  one instead. */
+    fun fetchTodayWorkout() {
+        val s = settings.value
+        if (!s.intervalsConfigured) {
+            _workoutLoadState.value = WorkoutLoadState.Error("Set your Intervals.icu API key and athlete ID first")
+            return
+        }
+        _workoutLoadState.value = WorkoutLoadState.Loading
+        viewModelScope.launch {
+            when (val result = intervalsRepository.fetchTodayWorkout(s.intervalsApiKey, s.intervalsAthleteId, s.ftpWatts)) {
+                is FetchResult.Success -> {
+                    workoutExecutor.load(result.workout.steps)
+                    _workoutLoadState.value = WorkoutLoadState.Loaded(result.workout.name)
+                }
+                FetchResult.NoStepsFound -> _workoutLoadState.value = WorkoutLoadState.Empty
+                is FetchResult.Error -> _workoutLoadState.value = WorkoutLoadState.Error(result.message)
+            }
+        }
+    }
+
     /** Refreshes the two-week calendar list (current week + next week) shown in [CalendarScreen]. */
     fun fetchCalendarWorkouts() {
         val s = settings.value
@@ -279,6 +312,42 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             when (
                 val result = intervalsRepository.fetchWorkoutByEventId(
                     s.intervalsApiKey, s.intervalsAthleteId, workout.eventId, workout.name, s.ftpWatts,
+                )
+            ) {
+                is FetchResult.Success -> {
+                    workoutExecutor.load(result.workout.steps)
+                    _workoutLoadState.value = WorkoutLoadState.Loaded(result.workout.name)
+                }
+                FetchResult.NoStepsFound -> _workoutLoadState.value = WorkoutLoadState.Empty
+                is FetchResult.Error -> _workoutLoadState.value = WorkoutLoadState.Error(result.message)
+            }
+        }
+    }
+
+    /** Refreshes the saved-workout list shown in [IntervalsLibraryScreen]. */
+    fun fetchIntervalsLibrary() {
+        val s = settings.value
+        if (!s.intervalsConfigured) {
+            _intervalsLibraryState.value = IntervalsLibraryUiState.Error("Set your Intervals.icu API key and athlete ID first")
+            return
+        }
+        _intervalsLibraryState.value = IntervalsLibraryUiState.Loading
+        viewModelScope.launch {
+            _intervalsLibraryState.value = when (val result = intervalsRepository.fetchLibrary(s.intervalsApiKey, s.intervalsAthleteId)) {
+                is LibraryFetchResult.Success -> IntervalsLibraryUiState.Loaded(result.workouts)
+                is LibraryFetchResult.Error -> IntervalsLibraryUiState.Error(result.message)
+            }
+        }
+    }
+
+    /** Loads a specific saved workout picked from the Intervals.icu library list. */
+    fun loadIntervalsLibraryWorkout(workout: LibraryWorkout) {
+        val s = settings.value
+        _workoutLoadState.value = WorkoutLoadState.Loading
+        viewModelScope.launch {
+            when (
+                val result = intervalsRepository.fetchLibraryWorkoutById(
+                    s.intervalsApiKey, s.intervalsAthleteId, workout.workoutId, workout.name, s.ftpWatts,
                 )
             ) {
                 is FetchResult.Success -> {

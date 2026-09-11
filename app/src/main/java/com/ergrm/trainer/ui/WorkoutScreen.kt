@@ -83,6 +83,7 @@ fun WorkoutScreen(
     isTrainerConnected: Boolean = true,
     onOpenLibrary: () -> Unit = {},
     onOpenCalendar: () -> Unit = {},
+    onOpenIntervalsLibrary: () -> Unit = {},
 ) {
     val live by viewModel.liveData.collectAsState()
     val workoutState by viewModel.workoutState.collectAsState()
@@ -102,7 +103,9 @@ fun WorkoutScreen(
                 is WorkoutLoadState.Loaded -> loaded.name
                 else -> if (workoutState.steps.isNotEmpty()) "Workout" else "No workout loaded"
             },
+            onLoadToday = { viewModel.fetchTodayWorkout() },
             onOpenCalendar = onOpenCalendar,
+            onOpenIntervalsLibrary = onOpenIntervalsLibrary,
             onPickFromLibrary = onOpenLibrary,
         )
 
@@ -798,11 +801,14 @@ private fun IntensityRow(
     }
 }
 
-/** Workout title, tap to choose whether to load a plan from the Intervals.icu calendar or the local library. */
+/** Workout title, tap to choose where to load a plan from: today's Intervals.icu workout
+ *  directly, the Intervals.icu calendar, the Intervals.icu saved-workout library, or local files. */
 @Composable
 private fun WorkoutHeader(
     title: String,
+    onLoadToday: () -> Unit,
     onOpenCalendar: () -> Unit,
+    onOpenIntervalsLibrary: () -> Unit,
     onPickFromLibrary: () -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -821,6 +827,13 @@ private fun WorkoutHeader(
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             DropdownMenuItem(
+                text = { Text("Intervals WOD") },
+                onClick = {
+                    expanded = false
+                    onLoadToday()
+                },
+            )
+            DropdownMenuItem(
                 text = { Text("Calendar (Intervals.icu)") },
                 onClick = {
                     expanded = false
@@ -828,7 +841,14 @@ private fun WorkoutHeader(
                 },
             )
             DropdownMenuItem(
-                text = { Text("From library") },
+                text = { Text("Intervals.icu Library") },
+                onClick = {
+                    expanded = false
+                    onOpenIntervalsLibrary()
+                },
+            )
+            DropdownMenuItem(
+                text = { Text("Local files") },
                 onClick = {
                     expanded = false
                     onPickFromLibrary()

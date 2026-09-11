@@ -34,7 +34,7 @@ import com.ergrm.trainer.ble.TrainerConnectionState
 import com.ergrm.trainer.ui.theme.ErgRmTheme
 
 private enum class Screen { CONNECT, WORKOUT }
-private enum class Overlay { NONE, SETTINGS, LIBRARY, HISTORY, CALENDAR }
+private enum class Overlay { NONE, SETTINGS, LIBRARY, HISTORY, CALENDAR, INTERVALS_LIBRARY }
 
 @Composable
 fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
@@ -120,11 +120,16 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
                             viewModel,
                             onPicked = { overlay = Overlay.NONE },
                         )
+                        overlay == Overlay.INTERVALS_LIBRARY -> IntervalsLibraryScreen(
+                            viewModel,
+                            onPicked = { overlay = Overlay.NONE },
+                        )
                         screen == Screen.WORKOUT -> WorkoutScreen(
                             viewModel,
                             isTrainerConnected = isConnected,
                             onOpenLibrary = { overlay = Overlay.LIBRARY },
                             onOpenCalendar = { overlay = Overlay.CALENDAR },
+                            onOpenIntervalsLibrary = { overlay = Overlay.INTERVALS_LIBRARY },
                         )
                         else -> ConnectScreen(viewModel)
                     }
