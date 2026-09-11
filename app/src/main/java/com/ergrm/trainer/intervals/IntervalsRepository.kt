@@ -53,7 +53,8 @@ sealed interface CalendarFetchResult {
 }
 
 /** One reusable (undated) workout from the athlete's Intervals.icu library, flattened out of
- *  whatever folder tree it was nested in — [folderPath] is that folder's display name.
+ *  whatever folder tree it was nested in — [folderPath] is the full nested path ("Bike / Threshold"),
+ *  not just the nearest enclosing folder, so the library's real folder structure stays visible.
  *  [workoutDoc] is its full structure exactly as /folders returned it (there's no separate
  *  per-workout download endpoint), parsed on demand by [IntervalsRepository.loadLibraryWorkout]. */
 data class LibraryWorkout(
@@ -186,7 +187,7 @@ class IntervalsRepository {
                         "account's data: ${raw.take(400)}",
                 )
             }
-            val workouts = nodes.flatMap { flattenLibraryNode(it, it.name ?: "Library") }
+            val workouts = nodes.flatMap { flattenLibraryNode(it, "") }
             if (workouts.isEmpty() && nodes.isNotEmpty()) {
                 // The JSON decoded fine (so the top-level shape matches), but nothing survived
                 // flattenLibraryNode's type/children guess — e.g. a folder nested under a
@@ -200,21 +201,29 @@ class IntervalsRepository {
             LibraryFetchResult.Success(workouts)
         }
 
-    /** Walks the folder tree collecting workout leaves, labeling each with the name of the
-     *  nearest enclosing folder (not a full nested path — simplest thing that reads well in a
-     *  flat list). Confirmed against a real account: a folder node always has `type: "FOLDER"`
-     *  (checked first, even when empty — an empty folder isn't a workout); a real workout leaf
-     *  carries a non-null [IcuFolderDto.workoutDoc], which an empty placeholder folder lacks. */
-    private fun flattenLibraryNode(node: IcuFolderDto, folderName: String): List<LibraryWorkout> {
+    /** Walks the folder tree collecting workout leaves, labeling each with the *full* nested
+     *  folder path ("Bike / Threshold / ..."), so sub-folders stay distinguishable instead of
+     *  collapsing into their nearest-enclosing-folder name. Confirmed against a real account: a
+     *  folder node always has `type: "FOLDER"` (checked first, even when empty — an empty folder
+     *  isn't a workout); a real workout leaf carries a non-null [IcuFolderDto.workoutDoc], which
+     *  an empty placeholder folder lacks. */
+    private fun flattenLibraryNode(node: IcuFolderDto, parentPath: String): List<LibraryWorkout> {
         if (node.type == "FOLDER") {
-            val label = node.name ?: folderName
-            return node.children.orEmpty().flatMap { flattenLibraryNode(it, label) }
+            val path = node.name?.let { if (parentPath.isEmpty()) it else "$parentPath / $it" } ?: parentPath
+            return node.children.orEmpty().flatMap { flattenLibraryNode(it, path) }
         }
         val doc = node.workoutDoc
         if (doc != null) {
-            return listOf(LibraryWorkout(workoutId = node.id, folderPath = folderName, name = node.name ?: "Workout", workoutDoc = doc))
+            return listOf(
+                LibraryWorkout(
+                    workoutId = node.id,
+                    folderPath = parentPath.ifEmpty { "Library" },
+                    name = node.name ?: "Workout",
+                    workoutDoc = doc,
+                ),
+            )
         }
-        return node.children.orEmpty().flatMap { flattenLibraryNode(it, folderName) }
+        return node.children.orEmpty().flatMap { flattenLibraryNode(it, parentPath) }
     }
 
     /** Parses a library workout's steps straight out of the `workout_doc` JSON captured by
