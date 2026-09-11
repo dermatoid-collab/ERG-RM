@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import com.ergrm.trainer.BuildConfig
 import com.ergrm.trainer.data.AppSettings
 
 @Composable
@@ -92,5 +93,11 @@ fun SettingsScreen(
         TextButton(onClick = onClose, modifier = Modifier.padding(top = 8.dp)) {
             Text("Cancel")
         }
+
+        Text(
+            "Build ${BuildConfig.GIT_SHA}",
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.padding(top = 24.dp),
+        )
     }
 }

@@ -1,7 +1,24 @@
+import java.io.ByteArrayOutputStream
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.serialization")
+}
+
+// Short commit SHA baked into BuildConfig so the running app can show exactly which build it
+// is — needed after a round of "the fix didn't change anything" reports that turned out to be
+// stale/wrong APKs, not code bugs, with no way to tell from the app itself.
+val gitSha: String = try {
+    ByteArrayOutputStream().use { out ->
+        exec {
+            commandLine("git", "rev-parse", "--short", "HEAD")
+            standardOutput = out
+        }
+        out.toString().trim()
+    }
+} catch (e: Exception) {
+    "unknown"
 }
 
 android {
@@ -14,6 +31,7 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "0.1.0"
+        buildConfigField("String", "GIT_SHA", "\"$gitSha\"")
     }
 
     buildTypes {
@@ -37,6 +55,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     composeOptions {
