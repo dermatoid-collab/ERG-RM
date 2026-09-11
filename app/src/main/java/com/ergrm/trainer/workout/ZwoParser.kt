@@ -83,9 +83,25 @@ object ZwoParser {
         )
     }
 
+    /** A real Intervals.icu export was confirmed (via a fixed 165W = 0.6 * 275W FTP appearing for
+     *  every code path tried, including ones that already handled range strings) to never even
+     *  reach a "Power" attribute at all for a step authored as a target range ("88-90% FTP") —
+     *  third-party tools independently report Intervals.icu's range intervals getting misread "as
+     *  ramp intervals", which only makes sense if the exported value(s) live in PowerLow/PowerHigh
+     *  even on a tag that Zwift will hold flat. So when there's no plain "Power", fall back to
+     *  averaging PowerLow/PowerHigh instead of the old flat 60% guess. */
     private fun steadyStep(parser: XmlPullParser, ftpWatts: Int): WorkoutStep {
         val duration = attrInt(parser, "Duration")
-        val power = watts(attrPowerFraction(parser, "Power", 0.6f), ftpWatts)
+        val fraction = if (parser.getAttributeValue(null, "Power") != null) {
+            attrPowerFraction(parser, "Power", 0.6f)
+        } else if (parser.getAttributeValue(null, "PowerLow") != null || parser.getAttributeValue(null, "PowerHigh") != null) {
+            val low = attrPowerFraction(parser, "PowerLow", 0.6f)
+            val high = attrPowerFraction(parser, "PowerHigh", 0.6f)
+            (low + high) / 2f
+        } else {
+            0.6f
+        }
+        val power = watts(fraction, ftpWatts)
         return WorkoutStep(duration, power, power, "Steady")
     }
 
