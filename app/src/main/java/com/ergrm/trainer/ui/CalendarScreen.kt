@@ -24,6 +24,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.ergrm.trainer.intervals.CalendarWorkout
 import com.ergrm.trainer.ui.theme.ErgOnSurface
@@ -172,11 +173,17 @@ private fun CalendarWorkoutRow(workout: CalendarWorkout, isPast: Boolean, onPick
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column {
+            // weight(1f) + maxLines/ellipsis: an unweighted wrapping Text in a Row can report
+            // its measured width as the full row width and squeeze the Button that follows it
+            // down to nothing — confirmed on a real device for the Library's equivalent row with
+            // a long title. Bound the text instead of letting a long name risk the same thing here.
+            Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
                 Text(
                     workout.name,
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = alpha),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                 )
                 formatDuration(workout.movingTimeSec)?.let {
                     Text(it, style = MaterialTheme.typography.bodySmall, color = ErgOnSurface.copy(alpha = alpha))

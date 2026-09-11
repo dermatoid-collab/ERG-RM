@@ -27,6 +27,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.ergrm.trainer.intervals.LibraryFolderGroup
 import com.ergrm.trainer.intervals.LibraryWorkout
@@ -163,7 +164,20 @@ private fun LibraryWorkoutRow(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(workout.name, style = MaterialTheme.typography.bodyLarge)
+                // The real cause of the "invisible" Load button: a long title wraps to 2 lines,
+                // and an un-weighted Text in a Row reports its measured width as the full
+                // available width whenever it wraps — squeezing the Button that follows it down
+                // to nothing. weight(1f) bounds Text to the space left after the Button's own
+                // (fixed) size instead, and maxLines/overflow keeps very long titles in check.
+                Text(
+                    workout.name,
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 12.dp),
+                )
                 // A real device showed this row's trailing slot completely blank (but still
                 // clickable!) when it alternated between two different composables (Button vs.
                 // CircularProgressIndicator) here — keeping one Button always composed and only

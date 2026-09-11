@@ -27,6 +27,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.ergrm.trainer.library.LibraryWorkoutFile
 import com.ergrm.trainer.ui.theme.ErgOnSurface
@@ -155,8 +156,17 @@ private fun LibraryFileRow(file: LibraryWorkoutFile, onImport: () -> Unit) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column {
-                Text(file.name.substringBeforeLast(".", file.name), style = MaterialTheme.typography.bodyLarge)
+            // weight(1f) + maxLines/ellipsis: an unweighted wrapping Text in a Row can report its
+            // measured width as the full row width and squeeze the Button that follows it down
+            // to nothing — confirmed on a real device for the Library's equivalent row with a
+            // long title. Bound the text instead of letting a long filename risk the same thing.
+            Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                Text(
+                    file.name.substringBeforeLast(".", file.name),
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
                 Text(
                     formatMeta(file),
                     style = MaterialTheme.typography.bodySmall,
