@@ -46,12 +46,24 @@ object ZwoParser {
     private fun attrInt(parser: XmlPullParser, name: String, default: Int = 0): Int =
         attrFloat(parser, name, default.toFloat()).roundToInt()
 
+    /** Like [attrFloat], but for power-fraction attributes: a step authored on Intervals.icu as
+     *  a target range (e.g. "88-90% FTP") is exported as a single attribute holding both bounds
+     *  as text (e.g. "0.88-0.9") rather than a plain number. A plain [String.toFloatOrNull] on
+     *  that fails and would otherwise silently fall back to a default miles off the real target
+     *  — average the two bounds instead. */
+    private fun attrPowerFraction(parser: XmlPullParser, name: String, default: Float): Float {
+        val raw = parser.getAttributeValue(null, name) ?: return default
+        raw.toFloatOrNull()?.let { return it }
+        val bounds = raw.split("-").mapNotNull { it.trim().toFloatOrNull() }
+        return if (bounds.size == 2) (bounds[0] + bounds[1]) / 2f else default
+    }
+
     private fun watts(fraction: Float, ftpWatts: Int): Int = (fraction * ftpWatts).roundToInt()
 
     private fun rampStep(parser: XmlPullParser, ftpWatts: Int, label: String): WorkoutStep {
         val duration = attrInt(parser, "Duration")
-        val powerLow = attrFloat(parser, "PowerLow", 0.5f)
-        val powerHigh = attrFloat(parser, "PowerHigh", 0.5f)
+        val powerLow = attrPowerFraction(parser, "PowerLow", 0.5f)
+        val powerHigh = attrPowerFraction(parser, "PowerHigh", 0.5f)
         return WorkoutStep(
             durationSec = duration,
             startWatts = watts(powerLow, ftpWatts),
@@ -62,7 +74,7 @@ object ZwoParser {
 
     private fun steadyStep(parser: XmlPullParser, ftpWatts: Int): WorkoutStep {
         val duration = attrInt(parser, "Duration")
-        val power = watts(attrFloat(parser, "Power", 0.6f), ftpWatts)
+        val power = watts(attrPowerFraction(parser, "Power", 0.6f), ftpWatts)
         return WorkoutStep(duration, power, power, "Steady")
     }
 
@@ -76,8 +88,8 @@ object ZwoParser {
         val repeatCount = attrInt(parser, "Repeat", 1).coerceAtLeast(1)
         val onDuration = attrInt(parser, "OnDuration")
         val offDuration = attrInt(parser, "OffDuration")
-        val onPower = watts(attrFloat(parser, "OnPower", 1.0f), ftpWatts)
-        val offPower = watts(attrFloat(parser, "OffPower", 0.5f), ftpWatts)
+        val onPower = watts(attrPowerFraction(parser, "OnPower", 1.0f), ftpWatts)
+        val offPower = watts(attrPowerFraction(parser, "OffPower", 0.5f), ftpWatts)
 
         val result = mutableListOf<WorkoutStep>()
         repeat(repeatCount) { i ->
