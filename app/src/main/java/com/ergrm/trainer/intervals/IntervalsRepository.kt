@@ -8,6 +8,7 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.float
 import kotlinx.serialization.json.floatOrNull
 import kotlinx.serialization.json.intOrNull
@@ -243,9 +244,14 @@ class IntervalsRepository {
     }
 
     /** workout_doc looks like `{"steps": [...]}`, where each entry is either a leaf step (a
-     *  "duration" in seconds and a "power" — `{"units": "%ftp", "value": 39}` for a steady 39%
-     *  FTP target, confirmed against a real workout, or presumably `start`/`end` for a ramp) or a
-     *  group with its own nested "steps" and a "reps" count for a repeated block. */
+     *  "duration" in seconds and a "power" — `{"units": "%ftp", "value": 39}` for a steady FTP
+     *  target, or presumably `start`/`end` for a ramp) or a group with its own nested "steps" and
+     *  a "reps" count for a repeated block. Only one simple example has ever been confirmed
+     *  against a real account, and it left the numeric convention for "value"/"start"/"end"
+     *  ambiguous — it could be a 0..1 fraction (0.39) or a 0..100 percent (39), and "units" isn't
+     *  reliably present to disambiguate. [powerValueToFraction] auto-detects by magnitude instead
+     *  of assuming one fixed convention, since assuming wrong silently produces wattages off by a
+     *  factor of ~100 with no error to catch it. */
     private fun parseWorkoutDocSteps(doc: JsonElement, ftpWatts: Int): List<WorkoutStep> {
         val topSteps = doc.jsonObject["steps"]?.jsonArray ?: error("no 'steps' array in workout_doc")
         return topSteps.flatMap { parseDocStep(it.jsonObject, ftpWatts) }
@@ -262,14 +268,16 @@ class IntervalsRepository {
             .firstNotNullOfOrNull { key -> obj[key]?.jsonPrimitive?.intOrNull }
             ?: error("no recognized duration field")
         val powerObj = obj["power"]?.jsonObject
+        val units = powerObj?.get("units")?.jsonPrimitive?.contentOrNull
         val (startFraction, endFraction) = when {
             powerObj == null -> 0.5f to 0.5f
             powerObj["value"]?.jsonPrimitive?.floatOrNull != null -> {
-                val fraction = powerObj["value"]!!.jsonPrimitive.float / 100f
+                val fraction = powerValueToFraction(powerObj["value"]!!.jsonPrimitive.float, units, ftpWatts)
                 fraction to fraction
             }
             powerObj["start"]?.jsonPrimitive?.floatOrNull != null && powerObj["end"]?.jsonPrimitive?.floatOrNull != null -> {
-                (powerObj["start"]!!.jsonPrimitive.float / 100f) to (powerObj["end"]!!.jsonPrimitive.float / 100f)
+                powerValueToFraction(powerObj["start"]!!.jsonPrimitive.float, units, ftpWatts) to
+                    powerValueToFraction(powerObj["end"]!!.jsonPrimitive.float, units, ftpWatts)
             }
             else -> error("unrecognized 'power' shape")
         }
@@ -281,6 +289,17 @@ class IntervalsRepository {
                 label = "Step",
             ),
         )
+    }
+
+    /** Converts one raw power number from workout_doc into a 0..1 fraction of FTP, without
+     *  assuming a single fixed convention: `units == "watts"`/`"power"` means [raw] is an
+     *  absolute wattage; otherwise [raw] <= ~1.5 is treated as an already-0..1 fraction (0.39),
+     *  and anything larger as a 0..100 percent (39) — real %FTP targets are essentially never
+     *  above 150%, so that split reliably tells the two conventions apart. */
+    private fun powerValueToFraction(raw: Float, units: String?, ftpWatts: Int): Float = when {
+        units == "watts" || units == "power" -> raw / ftpWatts
+        raw <= 1.5f -> raw
+        else -> raw / 100f
     }
 
     private suspend fun loadWorkout(name: String, ftpWatts: Int, sourceLabel: String, download: suspend () -> ResponseBody): FetchResult {
