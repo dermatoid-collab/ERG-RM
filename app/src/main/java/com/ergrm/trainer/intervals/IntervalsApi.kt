@@ -2,6 +2,7 @@ package com.ergrm.trainer.intervals
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 import okhttp3.ResponseBody
 import retrofit2.http.GET
 import retrofit2.http.Path
@@ -24,9 +25,10 @@ data class IcuEventDto(
 
 /**
  * One node of the athlete's workout library, as returned by GET /athlete/{id}/folders — a tree
- * of folders and reusable (undated) workouts. The exact field names/shape are not independently
- * verified against live Intervals.icu (this environment can't reach intervals.icu directly), so
- * IntervalsRepository decodes this defensively and surfaces the raw JSON if it doesn't match.
+ * of folders and reusable (undated) workouts. Confirmed against a real account: a folder has
+ * type:"FOLDER"; a workout leaf's own type is its sport (e.g. "Ride") and carries its full
+ * structure inline in [workoutDoc] — there's no separate per-workout download endpoint (a guessed
+ * one 404s), so that's the only source IntervalsRepository has for a library workout's steps.
  */
 @Serializable
 data class IcuFolderDto(
@@ -34,6 +36,7 @@ data class IcuFolderDto(
     val name: String? = null,
     val type: String? = null,
     val children: List<IcuFolderDto>? = null,
+    @SerialName("workout_doc") val workoutDoc: JsonElement? = null,
 )
 
 interface IntervalsApi {
@@ -57,11 +60,4 @@ interface IntervalsApi {
      *  manually by the repository so an unexpected shape can be surfaced instead of crashing. */
     @GET("api/v1/athlete/{athleteId}/folders")
     suspend fun getFoldersRaw(@Path("athleteId") athleteId: String): ResponseBody
-
-    /** A specific library workout's structure, in .zwo XML format. */
-    @GET("api/v1/athlete/{athleteId}/workouts/{workoutId}/download.zwo")
-    suspend fun getLibraryWorkoutZwo(
-        @Path("athleteId") athleteId: String,
-        @Path("workoutId") workoutId: Long,
-    ): ResponseBody
 }
