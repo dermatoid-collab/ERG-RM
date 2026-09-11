@@ -276,8 +276,14 @@ class IntervalsRepository {
                 fraction to fraction
             }
             powerObj["start"]?.jsonPrimitive?.floatOrNull != null && powerObj["end"]?.jsonPrimitive?.floatOrNull != null -> {
-                powerValueToFraction(powerObj["start"]!!.jsonPrimitive.float, units, ftpWatts) to
-                    powerValueToFraction(powerObj["end"]!!.jsonPrimitive.float, units, ftpWatts)
+                // Per the same call made for the ZWO range-string bug: a start/end pair here is
+                // Intervals.icu's min/max target tolerance for one flat effort, not a genuine
+                // power ramp across the interval — so collapse it to a single averaged value
+                // instead of ramping the displayed wattage from one end to the other.
+                val startF = powerValueToFraction(powerObj["start"]!!.jsonPrimitive.float, units, ftpWatts)
+                val endF = powerValueToFraction(powerObj["end"]!!.jsonPrimitive.float, units, ftpWatts)
+                val avg = (startF + endF) / 2f
+                avg to avg
             }
             else -> error("unrecognized 'power' shape")
         }
