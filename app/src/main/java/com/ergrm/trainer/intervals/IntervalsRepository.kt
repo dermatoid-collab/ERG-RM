@@ -188,18 +188,15 @@ class IntervalsRepository {
             LibraryFetchResult.Success(workouts)
         }
 
-    /** Walks the folder tree collecting WORKOUT leaves, labeling each with the name of the
+    /** Walks the folder tree collecting workout leaves, labeling each with the name of the
      *  nearest enclosing folder (not a full nested path — simplest thing that reads well in a
-     *  flat list). A node with no [IcuFolderDto.type] and no children is treated as a workout,
-     *  since the exact type strings this account's folders use aren't independently confirmed. */
+     *  flat list). Confirmed against a real account: a folder node has `type: "FOLDER"`, but a
+     *  workout leaf's `type` is its *sport* (e.g. "Ride") — not a node-kind marker — so any
+     *  childless node is a workout regardless of its `type` value. */
     private fun flattenLibraryNode(node: IcuFolderDto, folderName: String): List<LibraryWorkout> {
         val children = node.children
         if (children.isNullOrEmpty()) {
-            return if (node.type == null || node.type == "WORKOUT") {
-                listOf(LibraryWorkout(workoutId = node.id, folderPath = folderName, name = node.name ?: "Workout"))
-            } else {
-                emptyList()
-            }
+            return listOf(LibraryWorkout(workoutId = node.id, folderPath = folderName, name = node.name ?: "Workout"))
         }
         val labelForChildren = if (node.type == "FOLDER" || node.type == null) node.name ?: folderName else folderName
         return children.flatMap { flattenLibraryNode(it, labelForChildren) }
