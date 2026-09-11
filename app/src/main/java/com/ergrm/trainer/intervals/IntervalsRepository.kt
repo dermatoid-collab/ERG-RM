@@ -44,18 +44,24 @@ sealed interface CalendarFetchResult {
     data class Error(val message: String) : CalendarFetchResult
 }
 
-/** One reusable (undated) workout from the athlete's Intervals.icu library, flattened out of
- *  whatever folder tree it was nested in — [folderPath] is the full nested path ("Bike / Threshold"),
- *  not just the nearest enclosing folder, so the library's real folder structure stays visible.
- *  Its structure isn't fetched until picked — see [IntervalsRepository.loadLibraryWorkout]. */
+/** One reusable (undated) workout from the athlete's Intervals.icu library. Its structure isn't
+ *  fetched until picked — see [IntervalsRepository.loadLibraryWorkout]. */
 data class LibraryWorkout(
     val workoutId: Long,
-    val folderPath: String,
     val name: String,
 )
 
+/** One top-level Intervals.icu library folder and every workout nested anywhere beneath it
+ *  (sub-folders flattened in). [workouts] can be empty — a folder that currently holds nothing
+ *  still gets its own group, so the app's folder list matches the real one instead of silently
+ *  dropping folders that just happen to be empty right now. */
+data class LibraryFolderGroup(
+    val name: String,
+    val workouts: List<LibraryWorkout>,
+)
+
 sealed interface LibraryFetchResult {
-    data class Success(val workouts: List<LibraryWorkout>) : LibraryFetchResult
+    data class Success(val folders: List<LibraryFolderGroup>) : LibraryFetchResult
     data class Error(val message: String) : LibraryFetchResult
 }
 
@@ -157,11 +163,13 @@ class IntervalsRepository {
         }
     }
 
-    /** The athlete's saved workout library (folders of reusable, undated workouts), flattened to
-     *  one entry per workout. The exact response shape hasn't been verified against a live
-     *  account from this environment, so a mismatch is surfaced as [LibraryFetchResult.Error]
-     *  with the raw response instead of crashing — check that message against the real payload
-     *  if this comes back empty or wrong on a real device. */
+    /** The athlete's saved workout library, grouped one [LibraryFolderGroup] per top-level folder
+     *  — in the same order Intervals.icu lists them, including a folder that currently has no
+     *  workouts, so the app's folder list matches the real one instead of silently dropping
+     *  folders that just happen to be empty. The exact response shape hasn't been verified
+     *  against a live account from this environment, so a mismatch is surfaced as
+     *  [LibraryFetchResult.Error] with the raw response instead of crashing — check that message
+     *  against the real payload if this comes back empty or wrong on a real device. */
     suspend fun fetchLibrary(apiKey: String, athleteId: String): LibraryFetchResult =
         withContext(Dispatchers.IO) {
             val raw = try {
@@ -177,41 +185,49 @@ class IntervalsRepository {
                         "account's data: ${raw.take(400)}",
                 )
             }
-            val workouts = nodes.flatMap { flattenLibraryNode(it, "") }
-            if (workouts.isEmpty() && nodes.isNotEmpty()) {
+            // One group per top-level entry: a real folder (type "FOLDER", confirmed against a
+            // real account) keeps its own name and gathers every workout nested anywhere beneath
+            // it; a workout sitting directly at the top level (no enclosing folder) falls back to
+            // a plain "Library" group.
+            val folders = nodes.mapNotNull { node ->
+                when {
+                    node.type == "FOLDER" -> LibraryFolderGroup(
+                        name = node.name ?: "Library",
+                        workouts = node.children.orEmpty().flatMap { collectLibraryWorkouts(it) },
+                    )
+                    node.workoutDoc != null -> LibraryFolderGroup(
+                        name = "Library",
+                        workouts = listOf(LibraryWorkout(workoutId = node.id, name = node.name ?: "Workout")),
+                    )
+                    else -> null
+                }
+            }
+            if (folders.isEmpty() && nodes.isNotEmpty()) {
                 // The JSON decoded fine (so the top-level shape matches), but nothing survived
-                // flattenLibraryNode's type/children guess — e.g. a folder nested under a
-                // "Training Plan"-type entry rather than a plain "FOLDER". Surface the raw
-                // response instead of a silent (and here, misleading) "nothing found".
+                // the type/children guess above — e.g. a folder nested under a "Training Plan"-
+                // type entry rather than a plain "FOLDER". Surface the raw response instead of a
+                // silent (and here, misleading) "nothing found".
                 return@withContext LibraryFetchResult.Error(
-                    "No workouts matched after parsing ${nodes.size} top-level folder(s) — please share this " +
+                    "No folders matched after parsing ${nodes.size} top-level entries — please share this " +
                         "so the folder/workout type names can be corrected: ${raw.take(600)}",
                 )
             }
-            LibraryFetchResult.Success(workouts)
+            LibraryFetchResult.Success(folders)
         }
 
-    /** Walks the folder tree collecting workout leaves, labeling each with the *full* nested
-     *  folder path ("Bike / Threshold / ..."), so sub-folders stay distinguishable instead of
-     *  collapsing into their nearest-enclosing-folder name. Confirmed against a real account: a
-     *  folder node always has `type: "FOLDER"` (checked first, even when empty — an empty folder
-     *  isn't a workout); a real workout leaf carries a non-null [IcuFolderDto.workoutDoc], which
-     *  an empty placeholder folder lacks. */
-    private fun flattenLibraryNode(node: IcuFolderDto, parentPath: String): List<LibraryWorkout> {
+    /** Walks the folder tree collecting every workout leaf beneath [node], regardless of how many
+     *  sub-folder levels deep it's nested. Confirmed against a real account: a folder node always
+     *  has `type: "FOLDER"` (checked first, even when empty — an empty folder isn't a workout); a
+     *  real workout leaf carries a non-null [IcuFolderDto.workoutDoc], which an empty placeholder
+     *  folder lacks. */
+    private fun collectLibraryWorkouts(node: IcuFolderDto): List<LibraryWorkout> {
         if (node.type == "FOLDER") {
-            val path = node.name?.let { if (parentPath.isEmpty()) it else "$parentPath / $it" } ?: parentPath
-            return node.children.orEmpty().flatMap { flattenLibraryNode(it, path) }
+            return node.children.orEmpty().flatMap { collectLibraryWorkouts(it) }
         }
         if (node.workoutDoc != null) {
-            return listOf(
-                LibraryWorkout(
-                    workoutId = node.id,
-                    folderPath = parentPath.ifEmpty { "Library" },
-                    name = node.name ?: "Workout",
-                ),
-            )
+            return listOf(LibraryWorkout(workoutId = node.id, name = node.name ?: "Workout"))
         }
-        return node.children.orEmpty().flatMap { flattenLibraryNode(it, parentPath) }
+        return node.children.orEmpty().flatMap { collectLibraryWorkouts(it) }
     }
 
     /** Loads a library workout's steps. Earlier versions tried to interpret workout_doc's step

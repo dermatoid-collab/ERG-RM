@@ -31,6 +31,7 @@ import com.ergrm.trainer.intervals.CalendarWorkout
 import com.ergrm.trainer.intervals.FetchResult
 import com.ergrm.trainer.intervals.IntervalsRepository
 import com.ergrm.trainer.intervals.LibraryFetchResult
+import com.ergrm.trainer.intervals.LibraryFolderGroup
 import com.ergrm.trainer.intervals.LibraryWorkout
 import com.ergrm.trainer.library.LibraryImportResult
 import com.ergrm.trainer.library.LibraryRepository
@@ -67,7 +68,7 @@ sealed interface CalendarUiState {
 
 sealed interface IntervalsLibraryUiState {
     data object Loading : IntervalsLibraryUiState
-    data class Loaded(val workouts: List<LibraryWorkout>) : IntervalsLibraryUiState
+    data class Loaded(val folders: List<LibraryFolderGroup>) : IntervalsLibraryUiState
     data class Error(val message: String) : IntervalsLibraryUiState
 }
 
@@ -334,7 +335,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _intervalsLibraryState.value = IntervalsLibraryUiState.Loading
         viewModelScope.launch {
             _intervalsLibraryState.value = when (val result = intervalsRepository.fetchLibrary(s.intervalsApiKey, s.intervalsAthleteId)) {
-                is LibraryFetchResult.Success -> IntervalsLibraryUiState.Loaded(result.workouts)
+                is LibraryFetchResult.Success -> IntervalsLibraryUiState.Loaded(result.folders)
                 is LibraryFetchResult.Error -> IntervalsLibraryUiState.Error(result.message)
             }
         }

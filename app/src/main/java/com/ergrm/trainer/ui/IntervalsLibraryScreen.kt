@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -27,6 +28,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.ergrm.trainer.intervals.LibraryFolderGroup
 import com.ergrm.trainer.intervals.LibraryWorkout
 import com.ergrm.trainer.ui.theme.ErgOnSurface
 
@@ -88,7 +90,7 @@ fun IntervalsLibraryScreen(viewModel: MainViewModel, onPicked: () -> Unit = {}) 
                 )
             }
             is IntervalsLibraryUiState.Loaded -> {
-                if (s.workouts.isEmpty()) {
+                if (s.folders.isEmpty()) {
                     Text(
                         "No saved workouts found in your Intervals.icu library.",
                         style = MaterialTheme.typography.bodyMedium,
@@ -96,26 +98,38 @@ fun IntervalsLibraryScreen(viewModel: MainViewModel, onPicked: () -> Unit = {}) 
                         modifier = Modifier.padding(top = 16.dp),
                     )
                 } else {
-                    val byFolder = s.workouts.groupBy { it.folderPath }
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(top = 12.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        byFolder.forEach { (folder, workouts) ->
-                            item(key = "folder-$folder") { FolderHeader(folder) }
-                            items(workouts, key = { it.workoutId }) { workout ->
-                                val isPending = pendingWorkoutId == workout.workoutId
-                                LibraryWorkoutRow(
-                                    workout = workout,
-                                    isLoading = isPending && loadState is WorkoutLoadState.Loading,
-                                    errorMessage = (loadState as? WorkoutLoadState.Error)?.message.takeIf { isPending },
-                                    onPick = {
-                                        pendingWorkoutId = workout.workoutId
-                                        viewModel.loadIntervalsLibraryWorkout(workout)
-                                    },
-                                )
+                        // One section per top-level folder, in Intervals.icu's own order —
+                        // including a folder with no workouts right now, so the list here always
+                        // matches the real folder structure instead of silently dropping one.
+                        s.folders.forEach { folder ->
+                            item(key = "folder-${folder.name}") { FolderHeader(folder.name) }
+                            if (folder.workouts.isEmpty()) {
+                                item(key = "folder-${folder.name}-empty") {
+                                    Text(
+                                        "No workouts in this folder.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = ErgOnSurface,
+                                    )
+                                }
+                            } else {
+                                items(folder.workouts, key = { it.workoutId }) { workout ->
+                                    val isPending = pendingWorkoutId == workout.workoutId
+                                    LibraryWorkoutRow(
+                                        workout = workout,
+                                        isLoading = isPending && loadState is WorkoutLoadState.Loading,
+                                        errorMessage = (loadState as? WorkoutLoadState.Error)?.message.takeIf { isPending },
+                                        onPick = {
+                                            pendingWorkoutId = workout.workoutId
+                                            viewModel.loadIntervalsLibraryWorkout(workout)
+                                        },
+                                    )
+                                }
                             }
                         }
                     }
@@ -150,10 +164,20 @@ private fun LibraryWorkoutRow(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(workout.name, style = MaterialTheme.typography.bodyLarge)
-                if (isLoading) {
-                    CircularProgressIndicator(modifier = Modifier.padding(horizontal = 12.dp))
-                } else {
-                    Button(onClick = onPick) { Text("Load") }
+                // A real device showed this row's trailing slot completely blank (but still
+                // clickable!) when it alternated between two different composables (Button vs.
+                // CircularProgressIndicator) here — keeping one Button always composed and only
+                // swapping its inner content avoids whatever that was.
+                Button(onClick = onPick, enabled = !isLoading) {
+                    if (isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary,
+                        )
+                    } else {
+                        Text("Load")
+                    }
                 }
             }
             if (errorMessage != null) {
