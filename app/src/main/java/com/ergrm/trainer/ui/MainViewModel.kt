@@ -340,16 +340,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** Loads a specific saved workout picked from the Intervals.icu library list — parsed
-     *  straight from the data already fetched by [fetchIntervalsLibrary], no network call. */
+    /** Loads a specific saved workout picked from the Intervals.icu library list. Fetches the
+     *  workout's canonical record and round-trips it through Intervals.icu's own ZWO converter —
+     *  see [IntervalsRepository.loadLibraryWorkout] for why that replaced parsing workout_doc
+     *  locally. */
     fun loadIntervalsLibraryWorkout(workout: LibraryWorkout) {
-        when (val result = intervalsRepository.loadLibraryWorkout(workout, settings.value.ftpWatts)) {
-            is FetchResult.Success -> {
-                workoutExecutor.load(result.workout.steps)
-                _workoutLoadState.value = WorkoutLoadState.Loaded(result.workout.name)
+        val s = settings.value
+        _workoutLoadState.value = WorkoutLoadState.Loading
+        viewModelScope.launch {
+            when (
+                val result = intervalsRepository.loadLibraryWorkout(
+                    s.intervalsApiKey, s.intervalsAthleteId, workout, s.ftpWatts,
+                )
+            ) {
+                is FetchResult.Success -> {
+                    workoutExecutor.load(result.workout.steps)
+                    _workoutLoadState.value = WorkoutLoadState.Loaded(result.workout.name)
+                }
+                FetchResult.NoStepsFound -> _workoutLoadState.value = WorkoutLoadState.Empty
+                is FetchResult.Error -> _workoutLoadState.value = WorkoutLoadState.Error(result.message)
             }
-            FetchResult.NoStepsFound -> _workoutLoadState.value = WorkoutLoadState.Empty
-            is FetchResult.Error -> _workoutLoadState.value = WorkoutLoadState.Error(result.message)
         }
     }
 

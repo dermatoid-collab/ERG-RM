@@ -6,18 +6,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.float
-import kotlinx.serialization.json.floatOrNull
-import kotlinx.serialization.json.intOrNull
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Credentials
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.ResponseBody
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
@@ -26,7 +18,6 @@ import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.temporal.TemporalAdjusters
-import kotlin.math.roundToInt
 
 data class LoadedWorkout(
     val id: Long,
@@ -56,13 +47,11 @@ sealed interface CalendarFetchResult {
 /** One reusable (undated) workout from the athlete's Intervals.icu library, flattened out of
  *  whatever folder tree it was nested in — [folderPath] is the full nested path ("Bike / Threshold"),
  *  not just the nearest enclosing folder, so the library's real folder structure stays visible.
- *  [workoutDoc] is its full structure exactly as /folders returned it (there's no separate
- *  per-workout download endpoint), parsed on demand by [IntervalsRepository.loadLibraryWorkout]. */
+ *  Its structure isn't fetched until picked — see [IntervalsRepository.loadLibraryWorkout]. */
 data class LibraryWorkout(
     val workoutId: Long,
     val folderPath: String,
     val name: String,
-    val workoutDoc: JsonElement,
 )
 
 sealed interface LibraryFetchResult {
@@ -213,100 +202,40 @@ class IntervalsRepository {
             val path = node.name?.let { if (parentPath.isEmpty()) it else "$parentPath / $it" } ?: parentPath
             return node.children.orEmpty().flatMap { flattenLibraryNode(it, path) }
         }
-        val doc = node.workoutDoc
-        if (doc != null) {
+        if (node.workoutDoc != null) {
             return listOf(
                 LibraryWorkout(
                     workoutId = node.id,
                     folderPath = parentPath.ifEmpty { "Library" },
                     name = node.name ?: "Workout",
-                    workoutDoc = doc,
                 ),
             )
         }
         return node.children.orEmpty().flatMap { flattenLibraryNode(it, parentPath) }
     }
 
-    /** Parses a library workout's steps straight out of the `workout_doc` JSON captured by
-     *  [fetchLibrary] — no separate network call (a guessed per-workout download endpoint 404s;
-     *  Intervals.icu doesn't expose one, the full structure just comes inline in /folders). */
-    fun loadLibraryWorkout(workout: LibraryWorkout, ftpWatts: Int): FetchResult {
-        val steps = try {
-            parseWorkoutDocSteps(workout.workoutDoc, ftpWatts)
-        } catch (t: Exception) {
-            return FetchResult.Error(
-                "Couldn't read '${workout.name}'s structure — please share this so the reader can be fixed: " +
-                    "${t.message}: ${workout.workoutDoc}".take(600),
-            )
-        }
-        if (steps.isEmpty()) return FetchResult.NoStepsFound
-        return FetchResult.Success(LoadedWorkout(id = workout.workoutId, name = workout.name, steps = steps))
-    }
-
-    /** workout_doc looks like `{"steps": [...]}`, where each entry is either a leaf step (a
-     *  "duration" in seconds and a "power" — `{"units": "%ftp", "value": 39}` for a steady FTP
-     *  target, or presumably `start`/`end` for a ramp) or a group with its own nested "steps" and
-     *  a "reps" count for a repeated block. Only one simple example has ever been confirmed
-     *  against a real account, and it left the numeric convention for "value"/"start"/"end"
-     *  ambiguous — it could be a 0..1 fraction (0.39) or a 0..100 percent (39), and "units" isn't
-     *  reliably present to disambiguate. [powerValueToFraction] auto-detects by magnitude instead
-     *  of assuming one fixed convention, since assuming wrong silently produces wattages off by a
-     *  factor of ~100 with no error to catch it. */
-    private fun parseWorkoutDocSteps(doc: JsonElement, ftpWatts: Int): List<WorkoutStep> {
-        val topSteps = doc.jsonObject["steps"]?.jsonArray ?: error("no 'steps' array in workout_doc")
-        return topSteps.flatMap { parseDocStep(it.jsonObject, ftpWatts) }
-    }
-
-    private fun parseDocStep(obj: JsonObject, ftpWatts: Int): List<WorkoutStep> {
-        val nestedSteps = obj["steps"]?.jsonArray
-        if (nestedSteps != null) {
-            val reps = (obj["reps"] ?: obj["repeat"])?.jsonPrimitive?.intOrNull ?: 1
-            val group = nestedSteps.flatMap { parseDocStep(it.jsonObject, ftpWatts) }
-            return (1..reps).flatMap { group }
-        }
-        val durationSec = listOf("duration", "durationSec", "seconds", "time")
-            .firstNotNullOfOrNull { key -> obj[key]?.jsonPrimitive?.intOrNull }
-            ?: error("no recognized duration field")
-        val powerObj = obj["power"]?.jsonObject
-        val units = powerObj?.get("units")?.jsonPrimitive?.contentOrNull
-        val (startFraction, endFraction) = when {
-            powerObj == null -> 0.5f to 0.5f
-            powerObj["value"]?.jsonPrimitive?.floatOrNull != null -> {
-                val fraction = powerValueToFraction(powerObj["value"]!!.jsonPrimitive.float, units, ftpWatts)
-                fraction to fraction
+    /** Loads a library workout's steps. Earlier versions tried to interpret workout_doc's step
+     *  JSON directly (duration field name, repeat structure, percent-vs-fraction power values)
+     *  and repeatedly got it wrong on a real account, even after several rounds of fixes — the
+     *  schema just isn't documented and guessing at it silently produces wrong wattages with no
+     *  error to catch them. Instead: fetch the workout's full canonical record from Intervals.icu
+     *  (GET /workouts/{id}), then hand that same JSON straight to their own documented converter
+     *  (POST /download-workout.zwo, per https://github.com/eddmann/intervals-icu-mcp's OpenAPI
+     *  spec) to get back real ZWO XML — parsed with the same ZwoParser already verified correct
+     *  against the calendar path, instead of a second, unverified JSON reader. */
+    suspend fun loadLibraryWorkout(apiKey: String, athleteId: String, workout: LibraryWorkout, ftpWatts: Int): FetchResult =
+        withContext(Dispatchers.IO) {
+            try {
+                val api = buildApi(apiKey)
+                val rawWorkout = api.getWorkoutRaw(athleteId, workout.workoutId).string()
+                val body = rawWorkout.toRequestBody("application/json".toMediaType())
+                loadWorkout(workout.name, ftpWatts, "library workout ${workout.workoutId}") {
+                    api.downloadWorkoutFromJson(athleteId, body)
+                }
+            } catch (t: Exception) {
+                FetchResult.Error(describeError(t))
             }
-            powerObj["start"]?.jsonPrimitive?.floatOrNull != null && powerObj["end"]?.jsonPrimitive?.floatOrNull != null -> {
-                // Per the same call made for the ZWO range-string bug: a start/end pair here is
-                // Intervals.icu's min/max target tolerance for one flat effort, not a genuine
-                // power ramp across the interval — so collapse it to a single averaged value
-                // instead of ramping the displayed wattage from one end to the other.
-                val startF = powerValueToFraction(powerObj["start"]!!.jsonPrimitive.float, units, ftpWatts)
-                val endF = powerValueToFraction(powerObj["end"]!!.jsonPrimitive.float, units, ftpWatts)
-                val avg = (startF + endF) / 2f
-                avg to avg
-            }
-            else -> error("unrecognized 'power' shape")
         }
-        return listOf(
-            WorkoutStep(
-                durationSec = durationSec,
-                startWatts = (startFraction * ftpWatts).roundToInt(),
-                endWatts = (endFraction * ftpWatts).roundToInt(),
-                label = "Step",
-            ),
-        )
-    }
-
-    /** Converts one raw power number from workout_doc into a 0..1 fraction of FTP, without
-     *  assuming a single fixed convention: `units == "watts"`/`"power"` means [raw] is an
-     *  absolute wattage; otherwise [raw] <= ~1.5 is treated as an already-0..1 fraction (0.39),
-     *  and anything larger as a 0..100 percent (39) — real %FTP targets are essentially never
-     *  above 150%, so that split reliably tells the two conventions apart. */
-    private fun powerValueToFraction(raw: Float, units: String?, ftpWatts: Int): Float = when {
-        units == "watts" || units == "power" -> raw / ftpWatts
-        raw <= 1.5f -> raw
-        else -> raw / 100f
-    }
 
     private suspend fun loadWorkout(name: String, ftpWatts: Int, sourceLabel: String, download: suspend () -> ResponseBody): FetchResult {
         val zwoBody = try {

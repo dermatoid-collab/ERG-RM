@@ -3,8 +3,11 @@ package com.ergrm.trainer.intervals
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
+import okhttp3.RequestBody
 import okhttp3.ResponseBody
+import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.POST
 import retrofit2.http.Path
 import retrofit2.http.Query
 
@@ -26,9 +29,9 @@ data class IcuEventDto(
 /**
  * One node of the athlete's workout library, as returned by GET /athlete/{id}/folders — a tree
  * of folders and reusable (undated) workouts. Confirmed against a real account: a folder has
- * type:"FOLDER"; a workout leaf's own type is its sport (e.g. "Ride") and carries its full
- * structure inline in [workoutDoc] — there's no separate per-workout download endpoint (a guessed
- * one 404s), so that's the only source IntervalsRepository has for a library workout's steps.
+ * type:"FOLDER"; a workout leaf's own type is its sport (e.g. "Ride"). [workoutDoc] is only used
+ * as a leaf/folder signal here — its content isn't parsed locally (see [getWorkoutRaw] /
+ * [downloadWorkoutFromJson] for why).
  */
 @Serializable
 data class IcuFolderDto(
@@ -60,4 +63,25 @@ interface IntervalsApi {
      *  manually by the repository so an unexpected shape can be surfaced instead of crashing. */
     @GET("api/v1/athlete/{athleteId}/folders")
     suspend fun getFoldersRaw(@Path("athleteId") athleteId: String): ResponseBody
+
+    /** One saved library workout's full record (per Intervals.icu's OpenAPI spec — confirmed via
+     *  https://github.com/eddmann/intervals-icu-mcp), as raw JSON. Passed straight through to
+     *  [downloadWorkoutFromJson] rather than parsed locally: earlier attempts at interpreting
+     *  workout_doc's step schema ourselves (duration field name, repeat structure, percent vs.
+     *  fraction power values) got it wrong on a real account even after several rounds of fixes. */
+    @GET("api/v1/athlete/{athleteId}/workouts/{workoutId}")
+    suspend fun getWorkoutRaw(
+        @Path("athleteId") athleteId: String,
+        @Path("workoutId") workoutId: Long,
+    ): ResponseBody
+
+    /** Converts a Workout JSON object (as returned by [getWorkoutRaw]) into .zwo XML, per
+     *  Intervals.icu's own OpenAPI-documented `POST /download-workout{ext}` — round-tripping
+     *  through their own converter instead of guessing workout_doc's schema, so the result can be
+     *  parsed with the same ZwoParser already verified against the calendar path. */
+    @POST("api/v1/athlete/{athleteId}/download-workout.zwo")
+    suspend fun downloadWorkoutFromJson(
+        @Path("athleteId") athleteId: String,
+        @Body workout: RequestBody,
+    ): ResponseBody
 }
