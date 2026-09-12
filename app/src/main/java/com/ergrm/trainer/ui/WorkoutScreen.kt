@@ -46,7 +46,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.PointMode
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -489,12 +488,12 @@ private fun WorkoutProfileChart(
             // taller of the two adjacent bars instead of running into the empty area above them.
             if (stepStart in windowStart..windowEnd && index > 0) {
                 val dividerHeight = max(previousBarHeight, barHeight)
-                drawLine(color = ErgDivider, start = Offset(x0, h - dividerHeight), end = Offset(x0, h), strokeWidth = 1.5f)
+                drawLine(color = ErgDivider, start = Offset(x0, h - dividerHeight), end = Offset(x0, h), strokeWidth = 0.75f)
             }
             previousBarHeight = barHeight
         }
 
-        // Live traces recorded during the workout: cadence (dashed) under HR under power.
+        // Live traces recorded during the workout: cadence under HR under power.
         val visibleSamples = samples.filter { it.tSec in windowStart..windowEnd }
         if (visibleSamples.size >= 2) {
             val cadPoints = visibleSamples.mapNotNull { s -> s.cadenceRpm?.let { Offset(xAt(s.tSec), yCad(it)) } }
@@ -505,10 +504,9 @@ private fun WorkoutProfileChart(
                 drawPoints(
                     points = cadPoints,
                     pointMode = PointMode.Polygon,
-                    color = ErgWarn,
+                    color = ErgDivider,
                     strokeWidth = 3f,
                     cap = StrokeCap.Round,
-                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 8f)),
                 )
             }
             if (hrPoints.size >= 2) {

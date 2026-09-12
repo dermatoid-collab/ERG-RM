@@ -83,6 +83,10 @@ class WorkoutExecutor(
 
     private var tickerJob: Job? = null
     private var lastSentWatts: Int? = null
+    // The plan exactly as loaded, before any auto-extend blocks get appended during the ride —
+    // so exit() can restore this clean, restartable definition instead of whatever the finished
+    // ride's steps list grew into.
+    private var originalSteps: List<WorkoutStep> = emptyList()
 
     init {
         scope.launch {
@@ -108,6 +112,7 @@ class WorkoutExecutor(
     fun load(steps: List<WorkoutStep>) {
         stop()
         _sampleHistory.value = emptyList()
+        originalSteps = steps
         _state.value = WorkoutRunState(
             steps = steps,
             totalDurationSec = steps.sumOf { it.durationSec },
@@ -161,12 +166,18 @@ class WorkoutExecutor(
         scope.launch { trainer.stop() }
     }
 
-    /** Fully ends the current workout session: clears the loaded plan, leaves the trainer connected. */
+    /** Ends the current ride: leaves the same workout loaded, reset to a clean, restartable state
+     *  (any auto-extend blocks appended during the finished ride are discarded, progress and
+     *  timers go back to zero) rather than clearing the plan entirely — so the rider can hit
+     *  Start again for the same workout without re-picking it. The trainer stays connected. */
     fun exit() {
         tickerJob?.cancel()
         tickerJob = null
         lastSentWatts = null
-        _state.value = WorkoutRunState()
+        _state.value = WorkoutRunState(
+            steps = originalSteps,
+            totalDurationSec = originalSteps.sumOf { it.durationSec },
+        )
         _sampleHistory.value = emptyList()
         scope.launch { trainer.stop() }
     }
