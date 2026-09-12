@@ -38,6 +38,7 @@ import com.ergrm.trainer.library.LibraryRepository
 import com.ergrm.trainer.library.LibraryWorkoutFile
 import com.ergrm.trainer.service.TrainerForegroundService
 import com.ergrm.trainer.workout.WorkoutExecutor
+import com.ergrm.trainer.workout.WorkoutStep
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -91,16 +92,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     val trainerConnection = TrainerConnection(application, viewModelScope)
     val heartRateConnection = HeartRateConnection(application)
-    val workoutExecutor = WorkoutExecutor(trainerConnection, viewModelScope)
 
     val connectionState = trainerConnection.connectionState
     val hrConnectionState = heartRateConnection.connectionState
 
     // A standalone HR sensor's reading takes priority over whatever heart rate the trainer
-    // itself might be forwarding (some trainers bridge an ANT+ strap over FTMS).
+    // itself might be forwarding (some trainers bridge an ANT+ strap over FTMS). WorkoutExecutor
+    // reads from this merged flow (not trainerConnection.liveData directly) so its recorded
+    // samples — and therefore the workout chart's HR trace — actually see the standalone
+    // sensor's readings instead of always getting null heart rate.
     val liveData = combine(trainerConnection.liveData, heartRateConnection.heartRateBpm) { sample, hrOverride ->
         if (hrOverride != null) sample.copy(heartRateBpm = hrOverride) else sample
     }.stateIn(viewModelScope, SharingStarted.Eagerly, TrainerSample())
+
+    val workoutExecutor = WorkoutExecutor(trainerConnection, liveData, viewModelScope)
 
     val workoutState = workoutExecutor.state
     val sampleHistory = workoutExecutor.sampleHistory
@@ -363,6 +368,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
     }
+
+    /** Best-effort structure for a Calendar row's mini chart/duration — see
+     *  [IntervalsRepository.fetchCalendarWorkoutPreview]; empty on any failure, never an error. */
+    suspend fun fetchCalendarWorkoutPreview(eventId: Long): List<WorkoutStep> {
+        val s = settings.value
+        if (!s.intervalsConfigured) return emptyList()
+        return intervalsRepository.fetchCalendarWorkoutPreview(s.intervalsApiKey, s.intervalsAthleteId, eventId, s.ftpWatts)
+    }
+
+    /** Same as [fetchCalendarWorkoutPreview], for an Intervals.icu Library row. */
+    suspend fun fetchLibraryWorkoutPreview(workout: LibraryWorkout): List<WorkoutStep> {
+        val s = settings.value
+        if (!s.intervalsConfigured) return emptyList()
+        return intervalsRepository.fetchLibraryWorkoutPreview(s.intervalsApiKey, s.intervalsAthleteId, workout, s.ftpWatts)
+    }
+
+    /** Same as [fetchCalendarWorkoutPreview], for a local (SAF) library file — no network call. */
+    suspend fun previewLocalWorkout(file: LibraryWorkoutFile): List<WorkoutStep> =
+        libraryRepository.previewWorkout(file.uri, file.name, settings.value.ftpWatts)
 
     fun startWorkout() = workoutExecutor.start()
     fun pauseWorkout() = workoutExecutor.pause()

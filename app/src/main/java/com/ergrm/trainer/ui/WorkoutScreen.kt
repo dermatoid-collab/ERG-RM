@@ -516,7 +516,7 @@ private fun WorkoutProfileChart(
                     points = hrPoints,
                     pointMode = PointMode.Polygon,
                     color = ErgAboveTarget,
-                    strokeWidth = 3.5f,
+                    strokeWidth = 4f,
                     cap = StrokeCap.Round,
                 )
             }
@@ -589,13 +589,13 @@ private fun WorkoutProfileChart(
     }
 }
 
-private data class PowerZone(val label: String, val color: Color)
+internal data class PowerZone(val label: String, val color: Color)
 
 /**
  * Andrew Coggan's 7-level power training zones, as %FTP: Active Recovery, Endurance, Tempo,
  * Lactate Threshold, VO2max, Anaerobic Capacity, Neuromuscular Power.
  */
-private val POWER_ZONES = listOf(
+internal val POWER_ZONES = listOf(
     0.55f to PowerZone("Z1", Color(0xFF5B6472)),
     0.75f to PowerZone("Z2", ErgBelowTarget),
     0.90f to PowerZone("Z3", ErgAccent),
@@ -603,9 +603,9 @@ private val POWER_ZONES = listOf(
     1.20f to PowerZone("Z5", Color(0xFFE08A3E)),
     1.50f to PowerZone("Z6", ErgAboveTarget),
 )
-private val ZONE_MAX = PowerZone("Z7", Color(0xFFB23A5A))
+internal val ZONE_MAX = PowerZone("Z7", Color(0xFFB23A5A))
 
-private fun zoneFor(watts: Int, ftpWatts: Int): PowerZone {
+internal fun zoneFor(watts: Int, ftpWatts: Int): PowerZone {
     if (ftpWatts <= 0) return PowerZone("--", ErgOnSurface)
     val pct = watts.toFloat() / ftpWatts
     return POWER_ZONES.firstOrNull { pct <= it.first }?.second ?: ZONE_MAX

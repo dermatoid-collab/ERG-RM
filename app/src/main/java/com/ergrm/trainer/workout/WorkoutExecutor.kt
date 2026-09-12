@@ -1,6 +1,7 @@
 package com.ergrm.trainer.workout
 
 import com.ergrm.trainer.ble.TrainerConnection
+import com.ergrm.trainer.ble.TrainerSample
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -67,6 +68,11 @@ private const val AUTO_STOP_DEBOUNCE_MS = 3000L
  */
 class WorkoutExecutor(
     private val trainer: TrainerConnection,
+    // Merged live data (trainer + standalone HR sensor override, see MainViewModel.liveData) —
+    // reading trainer.liveData directly here meant recorded samples never carried a real heart
+    // rate (FTMS trainers essentially never report it themselves), so the workout chart's HR
+    // trace had no data to draw despite the drawing code already being in place.
+    private val liveData: StateFlow<TrainerSample>,
     private val scope: CoroutineScope,
 ) {
     private val _state = MutableStateFlow(WorkoutRunState())
@@ -80,7 +86,7 @@ class WorkoutExecutor(
 
     init {
         scope.launch {
-            trainer.liveData
+            liveData
                 .map { (it.powerWatts ?: 0) > AUTO_START_THRESHOLD_WATTS }
                 .distinctUntilChanged()
                 .collectLatest { pedaling ->
@@ -252,7 +258,7 @@ class WorkoutExecutor(
 
     private fun recordSample() {
         if (!_state.value.isRunning) return
-        val live = trainer.liveData.value
+        val live = liveData.value
         val sample = SamplePoint(
             tSec = _state.value.totalElapsedSec,
             watts = live.powerWatts ?: 0,

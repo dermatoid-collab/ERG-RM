@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -23,19 +24,19 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.ergrm.trainer.library.LibraryWorkoutFile
 import com.ergrm.trainer.ui.theme.ErgOnSurface
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-
-private val dateFormatter = DateTimeFormatter.ofPattern("d MMM, HH:mm")
+import com.ergrm.trainer.workout.WorkoutStep
 
 @Composable
 fun LibraryScreen(
@@ -134,10 +135,15 @@ fun LibraryScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         items(state.files, key = { it.uri.toString() }) { file ->
-                            LibraryFileRow(file) {
-                                viewModel.importLibraryWorkout(file)
-                                onImported()
-                            }
+                            LibraryFileRow(
+                                file = file,
+                                ftpWatts = settings.ftpWatts,
+                                fetchPreview = viewModel::previewLocalWorkout,
+                                onImport = {
+                                    viewModel.importLibraryWorkout(file)
+                                    onImported()
+                                },
+                            )
                         }
                     }
                 }
@@ -147,39 +153,54 @@ fun LibraryScreen(
 }
 
 @Composable
-private fun LibraryFileRow(file: LibraryWorkoutFile, onImport: () -> Unit) {
+private fun LibraryFileRow(
+    file: LibraryWorkoutFile,
+    ftpWatts: Int,
+    fetchPreview: suspend (LibraryWorkoutFile) -> List<WorkoutStep>,
+    onImport: () -> Unit,
+) {
+    var previewSteps by remember(file.uri) { mutableStateOf<List<WorkoutStep>?>(null) }
+    LaunchedEffect(file.uri) { previewSteps = fetchPreview(file) }
+
     Card(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            // weight(1f) + maxLines/ellipsis: an unweighted wrapping Text in a Row can report its
-            // measured width as the full row width and squeeze the Button that follows it down
-            // to nothing — confirmed on a real device for the Library's equivalent row with a
-            // long title. Bound the text instead of letting a long filename risk the same thing.
-            Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // weight(1f) + maxLines/ellipsis: an unweighted wrapping Text in a Row can report
+                // its measured width as the full row width and squeeze the Button that follows it
+                // down to nothing — confirmed on a real device for the Library's equivalent row
+                // with a long title. Bound the text instead of letting a long filename risk it.
                 Text(
                     file.name.substringBeforeLast(".", file.name),
                     style = MaterialTheme.typography.bodyLarge,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 12.dp),
                 )
+                Button(onClick = onImport) { Text("Import") }
+            }
+            val steps = previewSteps
+            if (!steps.isNullOrEmpty()) {
                 Text(
-                    formatMeta(file),
+                    formatWorkoutDuration(steps.sumOf { it.durationSec }),
                     style = MaterialTheme.typography.bodySmall,
                     color = ErgOnSurface,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+                WorkoutMiniChart(
+                    steps = steps,
+                    ftpWatts = ftpWatts,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(32.dp)
+                        .padding(top = 6.dp),
                 )
             }
-            Button(onClick = onImport) { Text("Import") }
         }
     }
-}
-
-private fun formatMeta(file: LibraryWorkoutFile): String {
-    val date = Instant.ofEpochMilli(file.lastModifiedMillis).atZone(ZoneId.systemDefault()).format(dateFormatter)
-    val sizeKb = file.sizeBytes / 1024f
-    return "%.1f KB · %s".format(sizeKb, date)
 }

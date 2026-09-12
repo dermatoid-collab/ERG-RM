@@ -58,4 +58,12 @@ class LibraryRepository(private val context: Context) {
             LibraryImportResult.Error(t.message ?: t.javaClass.simpleName)
         }
     }
+
+    /** Best-effort structure for a picker list row's mini chart/duration — same parse as
+     *  [importWorkout], but a failure just means the row shows no chart rather than an error. */
+    suspend fun previewWorkout(fileUri: Uri, fileName: String, ftpWatts: Int): List<WorkoutStep> =
+        when (val result = importWorkout(fileUri, fileName, ftpWatts)) {
+            is LibraryImportResult.Success -> result.steps
+            is LibraryImportResult.Error -> emptyList()
+        }
 }

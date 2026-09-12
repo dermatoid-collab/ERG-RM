@@ -253,6 +253,40 @@ class IntervalsRepository {
             }
         }
 
+    /** Best-effort structure for a picker list row's mini chart/duration. Unlike [loadWorkout],
+     *  failures are silent (empty list) — a missing preview just means the row shows no chart,
+     *  not a broken pick, so there's no reason to surface an error for it. */
+    suspend fun fetchCalendarWorkoutPreview(apiKey: String, athleteId: String, eventId: Long, ftpWatts: Int): List<WorkoutStep> =
+        withContext(Dispatchers.IO) {
+            try {
+                previewSteps(ftpWatts) { buildApi(apiKey).getWorkoutZwo(athleteId, eventId) }
+            } catch (t: Exception) {
+                emptyList()
+            }
+        }
+
+    /** Same as [fetchCalendarWorkoutPreview], for a saved Library workout — round-trips through
+     *  the same GET-then-convert-to-ZWO chain [loadLibraryWorkout] uses. */
+    suspend fun fetchLibraryWorkoutPreview(apiKey: String, athleteId: String, workout: LibraryWorkout, ftpWatts: Int): List<WorkoutStep> =
+        withContext(Dispatchers.IO) {
+            try {
+                val api = buildApi(apiKey)
+                val rawWorkout = api.getWorkoutRaw(athleteId, workout.workoutId).string()
+                val body = rawWorkout.toRequestBody("application/json".toMediaType())
+                previewSteps(ftpWatts) { api.downloadWorkoutFromJson(athleteId, body) }
+            } catch (t: Exception) {
+                emptyList()
+            }
+        }
+
+    private suspend fun previewSteps(ftpWatts: Int, download: suspend () -> ResponseBody): List<WorkoutStep> =
+        try {
+            val zwoBody = download().string()
+            if (zwoBody.contains("<workout", ignoreCase = true)) ZwoParser.parse(zwoBody, ftpWatts) else emptyList()
+        } catch (t: Exception) {
+            emptyList()
+        }
+
     private suspend fun loadWorkout(name: String, ftpWatts: Int, sourceLabel: String, download: suspend () -> ResponseBody): FetchResult {
         val zwoBody = try {
             download().string()

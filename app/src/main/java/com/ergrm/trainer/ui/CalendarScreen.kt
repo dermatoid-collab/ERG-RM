@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
@@ -22,12 +23,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.ergrm.trainer.intervals.CalendarWorkout
 import com.ergrm.trainer.ui.theme.ErgOnSurface
+import com.ergrm.trainer.workout.WorkoutStep
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -88,10 +93,15 @@ fun CalendarScreen(viewModel: MainViewModel, onPicked: () -> Unit = {}) {
                         modifier = Modifier.padding(top = 16.dp),
                     )
                 } else {
-                    CalendarWorkoutList(state.workouts) { workout ->
-                        viewModel.loadCalendarWorkout(workout)
-                        onPicked()
-                    }
+                    CalendarWorkoutList(
+                        workouts = state.workouts,
+                        ftpWatts = settings.ftpWatts,
+                        fetchPreview = viewModel::fetchCalendarWorkoutPreview,
+                        onPick = { workout ->
+                            viewModel.loadCalendarWorkout(workout)
+                            onPicked()
+                        },
+                    )
                 }
             }
         }
@@ -99,7 +109,12 @@ fun CalendarScreen(viewModel: MainViewModel, onPicked: () -> Unit = {}) {
 }
 
 @Composable
-private fun CalendarWorkoutList(workouts: List<CalendarWorkout>, onPick: (CalendarWorkout) -> Unit) {
+private fun CalendarWorkoutList(
+    workouts: List<CalendarWorkout>,
+    ftpWatts: Int,
+    fetchPreview: suspend (Long) -> List<WorkoutStep>,
+    onPick: (CalendarWorkout) -> Unit,
+) {
     val today = LocalDate.now()
     val sundayThisWeek = today.with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY))
     val (currentWeek, nextWeek) = workouts.partition { it.date <= sundayThisWeek }
@@ -114,11 +129,11 @@ private fun CalendarWorkoutList(workouts: List<CalendarWorkout>, onPick: (Calend
     ) {
         if (currentWeekByDay.isNotEmpty()) {
             item { WeekHeader("Current Week") }
-            currentWeekByDay.forEach { (date, dayWorkouts) -> daySection(date, today, dayWorkouts, onPick) }
+            currentWeekByDay.forEach { (date, dayWorkouts) -> daySection(date, today, dayWorkouts, ftpWatts, fetchPreview, onPick) }
         }
         if (nextWeekByDay.isNotEmpty()) {
             item { WeekHeader("Next Week") }
-            nextWeekByDay.forEach { (date, dayWorkouts) -> daySection(date, today, dayWorkouts, onPick) }
+            nextWeekByDay.forEach { (date, dayWorkouts) -> daySection(date, today, dayWorkouts, ftpWatts, fetchPreview, onPick) }
         }
     }
 }
@@ -127,11 +142,19 @@ private fun LazyListScope.daySection(
     date: LocalDate,
     today: LocalDate,
     dayWorkouts: List<CalendarWorkout>,
+    ftpWatts: Int,
+    fetchPreview: suspend (Long) -> List<WorkoutStep>,
     onPick: (CalendarWorkout) -> Unit,
 ) {
     item(key = "day-$date") { DayHeader(date, today) }
     items(dayWorkouts, key = { it.eventId }) { workout ->
-        CalendarWorkoutRow(workout, isPast = date < today, onPick = { onPick(workout) })
+        CalendarWorkoutRow(
+            workout = workout,
+            isPast = date < today,
+            ftpWatts = ftpWatts,
+            fetchPreview = fetchPreview,
+            onPick = { onPick(workout) },
+        )
     }
 }
 
@@ -163,40 +186,63 @@ private fun DayHeader(date: LocalDate, today: LocalDate) {
 /** Past days are dimmed to show they've already gone by, but stay loadable — e.g. to redo a
  *  skipped session or repeat an earlier one on demand. */
 @Composable
-private fun CalendarWorkoutRow(workout: CalendarWorkout, isPast: Boolean, onPick: () -> Unit) {
+private fun CalendarWorkoutRow(
+    workout: CalendarWorkout,
+    isPast: Boolean,
+    ftpWatts: Int,
+    fetchPreview: suspend (Long) -> List<WorkoutStep>,
+    onPick: () -> Unit,
+) {
     val alpha = if (isPast) 0.55f else 1f
+    var previewSteps by remember(workout.eventId) { mutableStateOf<List<WorkoutStep>?>(null) }
+    LaunchedEffect(workout.eventId) { previewSteps = fetchPreview(workout.eventId) }
+
     Card(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            // weight(1f) + maxLines/ellipsis: an unweighted wrapping Text in a Row can report
-            // its measured width as the full row width and squeeze the Button that follows it
-            // down to nothing — confirmed on a real device for the Library's equivalent row with
-            // a long title. Bound the text instead of letting a long name risk the same thing here.
-            Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // weight(1f) + maxLines/ellipsis: an unweighted wrapping Text in a Row can report
+                // its measured width as the full row width and squeeze the Button that follows it
+                // down to nothing — confirmed on a real device for the Library's equivalent row
+                // with a long title. Bound the text instead of letting a long name risk the same.
                 Text(
                     workout.name,
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = alpha),
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 12.dp),
                 )
-                formatDuration(workout.movingTimeSec)?.let {
-                    Text(it, style = MaterialTheme.typography.bodySmall, color = ErgOnSurface.copy(alpha = alpha))
-                }
+                Button(onClick = onPick) { Text("Load") }
             }
-            Button(onClick = onPick) { Text("Load") }
+            // Duration prefers the parsed preview's own total (once it arrives) over the
+            // calendar event's movingTimeSec, so it stays consistent with the chart drawn from
+            // the same steps; movingTimeSec is just what's shown while the preview is loading.
+            val steps = previewSteps
+            val durationSec = steps?.sumOf { it.durationSec }?.takeIf { it > 0 } ?: workout.movingTimeSec
+            if (durationSec != null && durationSec > 0) {
+                Text(
+                    formatWorkoutDuration(durationSec),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = ErgOnSurface.copy(alpha = alpha),
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+            if (!steps.isNullOrEmpty()) {
+                WorkoutMiniChart(
+                    steps = steps,
+                    ftpWatts = ftpWatts,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(32.dp)
+                        .padding(top = 6.dp),
+                )
+            }
         }
     }
-}
-
-private fun formatDuration(movingTimeSec: Int?): String? {
-    if (movingTimeSec == null || movingTimeSec <= 0) return null
-    val h = movingTimeSec / 3600
-    val m = (movingTimeSec % 3600) / 60
-    return if (h > 0) "%dh %02dmin".format(h, m) else "%d min".format(m)
 }

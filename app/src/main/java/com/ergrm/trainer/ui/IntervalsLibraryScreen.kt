@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -32,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import com.ergrm.trainer.intervals.LibraryFolderGroup
 import com.ergrm.trainer.intervals.LibraryWorkout
 import com.ergrm.trainer.ui.theme.ErgOnSurface
+import com.ergrm.trainer.workout.WorkoutStep
 
 @Composable
 fun IntervalsLibraryScreen(viewModel: MainViewModel, onPicked: () -> Unit = {}) {
@@ -123,6 +125,8 @@ fun IntervalsLibraryScreen(viewModel: MainViewModel, onPicked: () -> Unit = {}) 
                                     val isPending = pendingWorkoutId == workout.workoutId
                                     LibraryWorkoutRow(
                                         workout = workout,
+                                        ftpWatts = settings.ftpWatts,
+                                        fetchPreview = viewModel::fetchLibraryWorkoutPreview,
                                         isLoading = isPending && loadState is WorkoutLoadState.Loading,
                                         errorMessage = (loadState as? WorkoutLoadState.Error)?.message.takeIf { isPending },
                                         onPick = {
@@ -153,10 +157,15 @@ private fun FolderHeader(name: String) {
 @Composable
 private fun LibraryWorkoutRow(
     workout: LibraryWorkout,
+    ftpWatts: Int,
+    fetchPreview: suspend (LibraryWorkout) -> List<WorkoutStep>,
     isLoading: Boolean,
     errorMessage: String?,
     onPick: () -> Unit,
 ) {
+    var previewSteps by remember(workout.workoutId) { mutableStateOf<List<WorkoutStep>?>(null) }
+    LaunchedEffect(workout.workoutId) { previewSteps = fetchPreview(workout) }
+
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(
@@ -193,6 +202,23 @@ private fun LibraryWorkoutRow(
                         Text("Load")
                     }
                 }
+            }
+            val steps = previewSteps
+            if (!steps.isNullOrEmpty()) {
+                Text(
+                    formatWorkoutDuration(steps.sumOf { it.durationSec }),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = ErgOnSurface,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+                WorkoutMiniChart(
+                    steps = steps,
+                    ftpWatts = ftpWatts,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(32.dp)
+                        .padding(top = 6.dp),
+                )
             }
             if (errorMessage != null) {
                 Text(
