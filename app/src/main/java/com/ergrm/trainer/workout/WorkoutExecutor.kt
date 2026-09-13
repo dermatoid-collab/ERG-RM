@@ -35,12 +35,15 @@ data class WorkoutRunState(
     val totalRemainingSec: Int get() = (totalDurationSec - totalElapsedSec).coerceAtLeast(0)
 }
 
-/** One second of recorded live data during a running workout, used to trace power/HR/cadence on the chart. */
+/** One second of recorded live data during a running workout, used to trace power/HR/cadence on
+ *  the chart, and (once saved) to compute a session's average speed/distance in the history
+ *  detail view. */
 data class SamplePoint(
     val tSec: Int,
     val watts: Int,
     val hrBpm: Int?,
     val cadenceRpm: Int?,
+    val speedKmh: Float?,
 )
 
 private const val AUTO_EXTEND_SEC = 300
@@ -275,6 +278,7 @@ class WorkoutExecutor(
             watts = live.powerWatts ?: 0,
             hrBpm = live.heartRateBpm,
             cadenceRpm = live.cadenceRpm?.toInt(),
+            speedKmh = live.speedKmh,
         )
         _sampleHistory.value = (_sampleHistory.value + sample).takeLast(MAX_SAMPLE_HISTORY)
     }

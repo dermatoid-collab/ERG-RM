@@ -410,7 +410,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 maxWatts = watts.maxOrNull() ?: 0,
                 avgHrBpm = if (hrs.isNotEmpty()) hrs.average().roundToInt() else null,
                 avgCadenceRpm = if (cadences.isNotEmpty()) cadences.average().roundToInt() else null,
-                samples = samples.map { SessionSample(it.tSec, it.watts, it.hrBpm, it.cadenceRpm) },
+                samples = samples.map { SessionSample(it.tSec, it.watts, it.hrBpm, it.cadenceRpm, it.speedKmh) },
             )
             viewModelScope.launch {
                 historyRepository.saveSession(session)

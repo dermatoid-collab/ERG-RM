@@ -1,6 +1,7 @@
 package com.ergrm.trainer.ui
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -45,8 +46,15 @@ import java.util.Locale
 @Composable
 fun HistoryScreen(viewModel: MainViewModel) {
     val sessions by viewModel.sessionHistory.collectAsState()
+    var selectedSession by remember { mutableStateOf<WorkoutSession?>(null) }
 
     LaunchedEffect(Unit) { viewModel.refreshHistory() }
+
+    val selected = selectedSession
+    if (selected != null) {
+        SessionDetailScreen(session = selected, onBack = { selectedSession = null })
+        return
+    }
 
     Column(
         modifier = Modifier
@@ -70,7 +78,11 @@ fun HistoryScreen(viewModel: MainViewModel) {
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 items(sessions, key = { it.id }) { session ->
-                    SessionRow(session, onDelete = { viewModel.deleteSession(session.id) })
+                    SessionRow(
+                        session = session,
+                        onClick = { selectedSession = session },
+                        onDelete = { viewModel.deleteSession(session.id) },
+                    )
                 }
             }
         }
@@ -78,13 +90,14 @@ fun HistoryScreen(viewModel: MainViewModel) {
 }
 
 @Composable
-private fun SessionRow(session: WorkoutSession, onDelete: () -> Unit) {
+private fun SessionRow(session: WorkoutSession, onClick: () -> Unit, onDelete: () -> Unit) {
     var confirmDelete by remember { mutableStateOf(false) }
 
     Card(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .clickable(onClick = onClick)
                 .padding(12.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,

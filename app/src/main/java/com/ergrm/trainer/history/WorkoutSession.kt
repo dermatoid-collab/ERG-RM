@@ -8,6 +8,9 @@ data class SessionSample(
     val watts: Int,
     val hrBpm: Int?,
     val cadenceRpm: Int?,
+    // Absent (null) on sessions saved before speed capture was added — the detail view shows
+    // average speed/distance as unavailable for those rather than a misleading zero.
+    val speedKmh: Float? = null,
 )
 
 /** A completed (started and then stopped) workout session, saved locally for the history list. */
