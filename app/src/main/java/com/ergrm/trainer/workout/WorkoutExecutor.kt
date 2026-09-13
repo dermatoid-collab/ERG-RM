@@ -46,7 +46,7 @@ data class SamplePoint(
 private const val AUTO_EXTEND_SEC = 300
 private const val AUTO_EXTEND_LABEL = "Extension"
 private const val MIN_INTENSITY_PERCENT = 10
-private const val INTENSITY_STEP_PERCENT = 5
+private const val INTENSITY_STEP_PERCENT = 2
 private const val MAX_SAMPLE_HISTORY = 6 * 3600
 
 // Auto start/stop: begin the workout as soon as the rider starts pedaling (power above this
