@@ -21,6 +21,18 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
+      - name: Use a stable debug signing key
+        # Without this, AGP auto-generates a random debug.keystore on every CI run since
+        # each run starts from a fresh $HOME, so every build is signed differently — Android
+        # then refuses to install a new APK over the old one (treats it as a different app),
+        # forcing an uninstall that wipes the app's local data (history, settings) each time.
+        # Reusing this checked-in keystore (standard Android debug keystore parameters, not a
+        # release/production key) makes every CI build sign identically, so future builds can
+        # install as a normal update instead.
+        run: |
+          mkdir -p ~/.android
+          cp .github/keystore/debug.keystore ~/.android/debug.keystore
+
       - name: Build debug APK
         run: ./gradlew assembleDebug --no-daemon
 
