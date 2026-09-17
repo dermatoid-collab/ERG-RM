@@ -265,10 +265,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         heartRateConnection.disconnect()
     }
 
-    fun saveIntervalsSettings(apiKey: String, athleteId: String, ftpWatts: Int) {
+    fun saveIntervalsSettings(apiKey: String, athleteId: String, ftpWatts: Int, lthrBpm: Int) {
         viewModelScope.launch {
             settingsRepository.updateIntervalsCredentials(apiKey, athleteId)
             settingsRepository.updateFtp(ftpWatts)
+            settingsRepository.updateLthr(lthrBpm)
         }
     }
 

@@ -64,6 +64,7 @@ import com.ergrm.trainer.ui.theme.ErgAboveTarget
 import com.ergrm.trainer.ui.theme.ErgAccent
 import com.ergrm.trainer.ui.theme.ErgAtTarget
 import com.ergrm.trainer.ui.theme.ErgBelowTarget
+import com.ergrm.trainer.ui.theme.ErgCadenceLine
 import com.ergrm.trainer.ui.theme.ErgDivider
 import com.ergrm.trainer.ui.theme.ErgOnSurface
 import com.ergrm.trainer.ui.theme.ErgProgressLine
@@ -145,6 +146,7 @@ fun WorkoutScreen(
             totalDurationSec = workoutState.totalDurationSec,
             samples = samples,
             ftpWatts = settings.ftpWatts,
+            lthrBpm = settings.lthrBpm,
             intensityPercent = workoutState.intensityPercent,
             modifier = Modifier
                 .fillMaxWidth()
@@ -174,6 +176,10 @@ private fun WorkoutStatusLine(loadState: WorkoutLoadState) {
     }
 }
 
+/** Matches TrainerDay: tapping a tile cycles its display mode instead of adding a separate
+ *  control. Interval/Total each toggle elapsed vs. remaining independently; tapping either of
+ *  Target watts/Watts flips both together between absolute watts and %FTP, since they show the
+ *  same underlying pair of numbers in two units. */
 @Composable
 private fun StatTileGrid(live: TrainerSample, workoutState: WorkoutRunState, ftpWatts: Int) {
     val actual = live.powerWatts ?: 0
@@ -186,10 +192,24 @@ private fun StatTileGrid(live: TrainerSample, workoutState: WorkoutRunState, ftp
     }
     val zone = zoneFor(target, ftpWatts)
 
+    var intervalShowElapsed by remember { mutableStateOf(false) }
+    var totalShowElapsed by remember { mutableStateOf(true) }
+    var showPercentFtp by remember { mutableStateOf(false) }
+
     Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
-            StatTile("Interval", formatTime(workoutState.remainingInStepSec), Modifier.weight(1f))
-            StatTile("Total", formatTime(workoutState.totalElapsedSec), Modifier.weight(1f))
+            StatTile(
+                label = "Interval",
+                value = formatTime(if (intervalShowElapsed) workoutState.elapsedInStepSec else workoutState.remainingInStepSec),
+                modifier = Modifier.weight(1f),
+                onClick = { intervalShowElapsed = !intervalShowElapsed },
+            )
+            StatTile(
+                label = "Total",
+                value = formatTime(if (totalShowElapsed) workoutState.totalElapsedSec else workoutState.totalRemainingSec),
+                modifier = Modifier.weight(1f),
+                onClick = { totalShowElapsed = !totalShowElapsed },
+            )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
             StatTile("Cadence", live.cadenceRpm?.let { "${it.toInt()}" } ?: "--", Modifier.weight(1f))
@@ -197,16 +217,26 @@ private fun StatTileGrid(live: TrainerSample, workoutState: WorkoutRunState, ftp
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
             StatTile(
-                label = "Target watts",
-                value = "$target",
+                label = if (showPercentFtp) "Target % FTP" else "Target watts",
+                value = if (showPercentFtp) percentOfFtp(target, ftpWatts) else "$target",
                 modifier = Modifier.weight(1f),
                 zoneLabel = zone.label,
                 zoneColor = zone.color,
+                onClick = { showPercentFtp = !showPercentFtp },
             )
-            StatTile("Watts", "$actual", Modifier.weight(1f), valueColor = powerColor)
+            StatTile(
+                label = if (showPercentFtp) "% FTP" else "Watts",
+                value = if (showPercentFtp) percentOfFtp(actual, ftpWatts) else "$actual",
+                modifier = Modifier.weight(1f),
+                valueColor = powerColor,
+                onClick = { showPercentFtp = !showPercentFtp },
+            )
         }
     }
 }
+
+private fun percentOfFtp(watts: Int, ftpWatts: Int): String =
+    if (ftpWatts > 0) "${(watts * 100f / ftpWatts).roundToInt()}%" else "--"
 
 @Composable
 private fun StatTile(
@@ -216,10 +246,12 @@ private fun StatTile(
     valueColor: Color = ErgOnSurface,
     zoneLabel: String? = null,
     zoneColor: Color = ErgOnSurface,
+    onClick: (() -> Unit)? = null,
 ) {
     Column(
         modifier = modifier
             .background(ErgSurface, RoundedCornerShape(13.dp))
+            .let { if (onClick != null) it.clickable(onClick = onClick) else it }
             .padding(horizontal = 12.dp, vertical = 8.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
@@ -338,6 +370,7 @@ private fun ChartCard(
     totalDurationSec: Int,
     samples: List<SamplePoint>,
     ftpWatts: Int,
+    lthrBpm: Int,
     intensityPercent: Int,
     modifier: Modifier = Modifier,
 ) {
@@ -353,6 +386,7 @@ private fun ChartCard(
             totalDurationSec = totalDurationSec,
             samples = samples,
             ftpWatts = ftpWatts,
+            lthrBpm = lthrBpm,
             intensityPercent = intensityPercent,
             modifier = Modifier
                 .fillMaxWidth()
@@ -374,11 +408,17 @@ private const val CHART_TOP_HEADROOM = 0.08f
 private const val CHART_ZOOM_TAP_FRACTION = 0.75f
 
 /**
- * Fixed watts ceiling for the chart's Y axis — deliberately not auto-fit to the data, so that
+ * Watts ceiling for the chart's Y axis, fixed relative to FTP (not auto-fit to the data) so that
  * raising or lowering the live %FTP intensity actually changes bar heights against a stable
  * reference instead of the axis rescaling to compensate and hiding the change.
  */
-private const val CHART_MAX_WATTS = 550f
+private fun chartMaxWatts(ftpWatts: Int): Float = if (ftpWatts > 0) 2f * ftpWatts else 550f
+
+/** HR ceiling, fixed relative to LTHR for the same reason [chartMaxWatts] is fixed to FTP. */
+private fun chartMaxBpm(lthrBpm: Int): Float = if (lthrBpm > 0) 1.2f * lthrBpm else 210f
+
+private const val CHART_BPM_MIN = 50f
+private const val CHART_MAX_CADENCE = 140f
 
 /** Blends a zone's bright accent color toward near-black so bar fills read as muted background,
  *  never as bright as the power/HR/cadence trace lines drawn on top of them. */
@@ -401,20 +441,20 @@ private fun WorkoutProfileChart(
     totalDurationSec: Int,
     samples: List<SamplePoint>,
     ftpWatts: Int,
+    lthrBpm: Int,
     intensityPercent: Int,
     modifier: Modifier = Modifier,
 ) {
-    // Divide by (1 - headroom) so the fixed ceiling reaches only that fraction of the height,
-    // leaving CHART_TOP_HEADROOM free at the top. A bar or trace above CHART_MAX_WATTS (e.g. a
-    // high intensity multiplier pushed it past 550W) is simply clipped rather than rescaling
-    // the whole axis — that's the point: the axis stays put so intensity changes are visible.
-    val wattsScale = CHART_MAX_WATTS / (1f - CHART_TOP_HEADROOM)
-    // Right (HR) axis lines up with the left (watts) axis's 4 gridlines: 90/130/170/210 bpm sit
-    // at the same heights as 138/275/413/550 W, a 160bpm range topping out at 210 with the same
-    // headroom fraction free above it.
-    val bpmMin = 50f
-    val bpmRange = 160f
-    val cadScale = 160f
+    // Divide by (1 - headroom) so the ceiling reaches only that fraction of the height, leaving
+    // CHART_TOP_HEADROOM free at the top. A bar or trace above the ceiling (e.g. a high intensity
+    // multiplier pushed it past 2x FTP) is simply clipped rather than rescaling the whole axis —
+    // that's the point: the axis stays put so intensity changes are visible.
+    val wattsScale = chartMaxWatts(ftpWatts) / (1f - CHART_TOP_HEADROOM)
+    // Right (HR) axis lines up with the left (watts) axis's 4 gridlines, both topping out with
+    // the same headroom fraction free above them.
+    val bpmMin = CHART_BPM_MIN
+    val bpmRange = chartMaxBpm(lthrBpm) - bpmMin
+    val cadScale = CHART_MAX_CADENCE / (1f - CHART_TOP_HEADROOM)
 
     var zoom by remember { mutableStateOf(ChartZoom.FULL) }
     // Not keyed on `steps`: a stale index left over from a since-replaced workout plan simply
@@ -504,7 +544,7 @@ private fun WorkoutProfileChart(
                 drawPoints(
                     points = cadPoints,
                     pointMode = PointMode.Polygon,
-                    color = ErgProgressLine,
+                    color = ErgCadenceLine,
                     strokeWidth = 3f,
                     cap = StrokeCap.Round,
                 )
@@ -538,9 +578,11 @@ private fun WorkoutProfileChart(
         }
 
         // Axis gridlines + labels: watts on the left, heart rate on the right, sharing the same
-        // 4 height positions.
-        val wattsTicks = listOf(138, 275, 413, 550)
-        val bpmTicks = listOf(90, 130, 170, 210)
+        // 4 height positions — both derived from the current FTP/LTHR ceilings instead of fixed
+        // numbers, so the printed tick values always match what the axes actually scale to.
+        val maxWatts = chartMaxWatts(ftpWatts)
+        val wattsTicks = listOf(0.25f, 0.5f, 0.75f, 1f).map { (maxWatts * it).roundToInt() }
+        val bpmTicks = listOf(0.25f, 0.5f, 0.75f, 1f).map { (bpmMin + bpmRange * it).roundToInt() }
         wattsTicks.forEachIndexed { i, watts ->
             val y = yWatts(watts)
             drawLine(color = ErgOnSurface.copy(alpha = 0.12f), start = Offset(0f, y), end = Offset(w, y), strokeWidth = 1f)

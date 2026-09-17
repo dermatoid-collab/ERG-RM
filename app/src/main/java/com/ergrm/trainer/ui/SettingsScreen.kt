@@ -27,12 +27,13 @@ import com.ergrm.trainer.data.AppSettings
 @Composable
 fun SettingsScreen(
     settings: AppSettings,
-    onSave: (apiKey: String, athleteId: String, ftpWatts: Int) -> Unit,
+    onSave: (apiKey: String, athleteId: String, ftpWatts: Int, lthrBpm: Int) -> Unit,
     onClose: () -> Unit,
 ) {
     var apiKey by remember(settings) { mutableStateOf(settings.intervalsApiKey) }
     var athleteId by remember(settings) { mutableStateOf(settings.intervalsAthleteId) }
     var ftpText by remember(settings) { mutableStateOf(settings.ftpWatts.toString()) }
+    var lthrText by remember(settings) { mutableStateOf(settings.lthrBpm.toString()) }
 
     Column(
         modifier = Modifier
@@ -74,17 +75,33 @@ fun SettingsScreen(
                 .fillMaxWidth()
                 .padding(top = 8.dp),
         )
+        OutlinedTextField(
+            value = lthrText,
+            onValueChange = { lthrText = it.filter(Char::isDigit) },
+            label = { Text("LTHR (bpm)") },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp),
+        )
 
         Text(
             "You'll find the API key in Intervals.icu → Settings → Developer Settings. " +
-                "FTP is used to convert the workout's targets (% FTP) into absolute watts sent to the trainer.",
+                "FTP is used to convert the workout's targets (% FTP) into absolute watts sent to the trainer. " +
+                "LTHR (lactate threshold heart rate) sets the live chart's heart rate scale.",
             style = MaterialTheme.typography.bodySmall,
             modifier = Modifier.padding(top = 8.dp, bottom = 16.dp),
         )
 
         Button(
             onClick = {
-                onSave(apiKey.trim(), athleteId.trim(), ftpText.toIntOrNull() ?: settings.ftpWatts)
+                onSave(
+                    apiKey.trim(),
+                    athleteId.trim(),
+                    ftpText.toIntOrNull() ?: settings.ftpWatts,
+                    lthrText.toIntOrNull() ?: settings.lthrBpm,
+                )
                 onClose()
             },
             modifier = Modifier.fillMaxWidth(),

@@ -14,6 +14,7 @@ data class AppSettings(
     val intervalsApiKey: String = "",
     val intervalsAthleteId: String = "",
     val ftpWatts: Int = 275,
+    val lthrBpm: Int = 170,
     val lastDeviceAddress: String? = null,
     val lastDeviceName: String? = null,
     val libraryFolderUri: String? = null,
@@ -28,6 +29,7 @@ class SettingsRepository(private val context: Context) {
         val API_KEY = stringPreferencesKey("intervals_api_key")
         val ATHLETE_ID = stringPreferencesKey("intervals_athlete_id")
         val FTP = intPreferencesKey("ftp_watts")
+        val LTHR = intPreferencesKey("lthr_bpm")
         val DEVICE_ADDRESS = stringPreferencesKey("last_device_address")
         val DEVICE_NAME = stringPreferencesKey("last_device_name")
         val LIBRARY_FOLDER_URI = stringPreferencesKey("library_folder_uri")
@@ -39,6 +41,7 @@ class SettingsRepository(private val context: Context) {
             intervalsApiKey = prefs[Keys.API_KEY] ?: "",
             intervalsAthleteId = prefs[Keys.ATHLETE_ID] ?: "",
             ftpWatts = prefs[Keys.FTP] ?: 275,
+            lthrBpm = prefs[Keys.LTHR] ?: 170,
             lastDeviceAddress = prefs[Keys.DEVICE_ADDRESS],
             lastDeviceName = prefs[Keys.DEVICE_NAME],
             libraryFolderUri = prefs[Keys.LIBRARY_FOLDER_URI],
@@ -55,6 +58,10 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun updateFtp(ftpWatts: Int) {
         context.dataStore.edit { prefs -> prefs[Keys.FTP] = ftpWatts }
+    }
+
+    suspend fun updateLthr(lthrBpm: Int) {
+        context.dataStore.edit { prefs -> prefs[Keys.LTHR] = lthrBpm }
     }
 
     suspend fun rememberDevice(address: String, name: String) {

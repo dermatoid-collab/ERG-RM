@@ -113,7 +113,6 @@ private fun SessionRow(session: WorkoutSession, onClick: () -> Unit, onDelete: (
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(formatDuration(session.durationSec), style = MaterialTheme.typography.bodySmall)
                     Text("${session.avgWatts}W avg", style = MaterialTheme.typography.bodySmall)
-                    Text("${session.maxWatts}W max", style = MaterialTheme.typography.bodySmall)
                     session.avgHrBpm?.let {
                         Text("$it bpm avg", style = MaterialTheme.typography.bodySmall)
                     }
