@@ -28,6 +28,7 @@ val gitSha: String = try {
 // increments on every workflow run, so it's a simple, always-increasing source for this build
 // (falls back to 1 for a local, non-CI build, where this problem doesn't come up the same way).
 val ciVersionCode: Int = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
+println("ERG-RM build config: versionCode=$ciVersionCode gitSha=$gitSha (raw GITHUB_RUN_NUMBER=${System.getenv("GITHUB_RUN_NUMBER")})")
 
 android {
     namespace = "com.ergrm.trainer"
