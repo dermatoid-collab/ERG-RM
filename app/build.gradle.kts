@@ -21,6 +21,14 @@ val gitSha: String = try {
     "unknown"
 }
 
+// A fixed versionCode meant every CI build was, as far as Android's package installer is
+// concerned, the exact same version as the last one — updates need a strictly increasing
+// versionCode, so every real content change after the first install was silently rejected
+// ("App not installed") instead of installing over the previous build. GITHUB_RUN_NUMBER
+// increments on every workflow run, so it's a simple, always-increasing source for this build
+// (falls back to 1 for a local, non-CI build, where this problem doesn't come up the same way).
+val ciVersionCode: Int = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
+
 android {
     namespace = "com.ergrm.trainer"
     compileSdk = 34
@@ -29,8 +37,8 @@ android {
         applicationId = "com.ergrm.trainer"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = ciVersionCode
+        versionName = "0.1.0 ($gitSha)"
         buildConfigField("String", "GIT_SHA", "\"$gitSha\"")
     }
 
