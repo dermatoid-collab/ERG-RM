@@ -19,6 +19,10 @@ class SessionHistoryRepository(private val context: Context) {
 
     private val file: File get() = File(context.filesDir, "session_history.json")
 
+    /** Exposed so the UI can share this exact file (via FileProvider) as an export — one file,
+     *  always current, no separate export step needed to keep a copy in sync. */
+    val exportFile: File get() = file
+
     suspend fun listSessions(): List<WorkoutSession> = withContext(Dispatchers.IO) {
         readAll().sortedByDescending { it.startEpochMillis }
     }
@@ -29,6 +33,23 @@ class SessionHistoryRepository(private val context: Context) {
 
     suspend fun deleteSession(id: String) = withContext(Dispatchers.IO) {
         writeAll(readAll().filterNot { it.id == id })
+    }
+
+    /** Merges sessions from a previously exported file into the existing history, skipping any
+     *  id already present — safe to import the same backup twice without duplicating rows.
+     *  Returns the number of sessions actually added. */
+    suspend fun importFromJson(text: String): Result<Int> = withContext(Dispatchers.IO) {
+        val imported = try {
+            json.decodeFromString<List<WorkoutSession>>(text)
+        } catch (t: Exception) {
+            return@withContext Result.failure(t)
+        }
+        val existingIds = readAll().map { it.id }.toSet()
+        val newOnes = imported.filterNot { it.id in existingIds }
+        if (newOnes.isNotEmpty()) {
+            writeAll(readAll() + newOnes)
+        }
+        Result.success(newOnes.size)
     }
 
     private fun readAll(): List<WorkoutSession> {

@@ -46,5 +46,17 @@
             android:name=".service.TrainerForegroundService"
             android:exported="false"
             android:foregroundServiceType="connectedDevice" />
+
+        <!-- Lets the history export share a content:// Uri for the session_history.json file in
+             private storage — modern Android refuses to share a raw file:// path to other apps. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 </manifest>

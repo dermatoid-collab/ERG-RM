@@ -56,6 +56,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
+import java.io.File
 import java.util.UUID
 import kotlin.math.roundToInt
 
@@ -148,10 +149,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _sessionHistory = MutableStateFlow<List<WorkoutSession>>(emptyList())
     val sessionHistory: StateFlow<List<WorkoutSession>> = _sessionHistory.asStateFlow()
 
-    // One-shot event (not state) so the UI can show a "Session saved" snackbar exactly once per
-    // save, rather than re-showing it on every recomposition the way a StateFlow would.
-    private val _sessionSavedEvents = MutableSharedFlow<Unit>()
-    val sessionSavedEvents: SharedFlow<Unit> = _sessionSavedEvents.asSharedFlow()
+    // One-shot events (not state) so the UI can show a snackbar exactly once per occurrence,
+    // rather than re-showing it on every recomposition the way a StateFlow would.
+    private val _snackbarMessages = MutableSharedFlow<String>()
+    val snackbarMessages: SharedFlow<String> = _snackbarMessages.asSharedFlow()
 
     private var scanJob: Job? = null
 
@@ -467,7 +468,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             viewModelScope.launch {
                 historyRepository.saveSession(session)
                 refreshHistory()
-                _sessionSavedEvents.emit(Unit)
+                _snackbarMessages.emit("Session saved")
             }
         }
         workoutExecutor.exit()
@@ -483,6 +484,38 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             historyRepository.deleteSession(id)
             refreshHistory()
+        }
+    }
+
+    /** The single JSON file backing the whole history, for the UI to share via FileProvider as
+     *  an export/backup — always current, no separate export step to keep in sync. */
+    fun historyExportFile(): File = historyRepository.exportFile
+
+    /** Merges sessions from a previously exported file (picked via SAF) into the existing
+     *  history. Safe to import the same file more than once — sessions already present (by id)
+     *  are skipped rather than duplicated. */
+    fun importHistory(uri: Uri) {
+        viewModelScope.launch {
+            val text = try {
+                getApplication<Application>().contentResolver.openInputStream(uri)
+                    ?.bufferedReader()?.use { it.readText() }
+            } catch (t: Exception) {
+                null
+            }
+            if (text == null) {
+                _snackbarMessages.emit("Couldn't read that file")
+                return@launch
+            }
+            historyRepository.importFromJson(text)
+                .onSuccess { count ->
+                    refreshHistory()
+                    _snackbarMessages.emit(
+                        if (count > 0) "Imported $count session${if (count == 1) "" else "s"}" else "Nothing new to import",
+                    )
+                }
+                .onFailure {
+                    _snackbarMessages.emit("That file isn't a valid history export")
+                }
         }
     }
 

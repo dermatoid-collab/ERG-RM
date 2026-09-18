@@ -1,5 +1,8 @@
 package com.ergrm.trainer.ui
 
+import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -15,6 +18,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
@@ -34,7 +39,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.PointMode
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
 import com.ergrm.trainer.history.SessionSample
 import com.ergrm.trainer.history.WorkoutSession
 import com.ergrm.trainer.ui.theme.ErgAccent
@@ -47,8 +54,13 @@ import java.util.Locale
 fun HistoryScreen(viewModel: MainViewModel) {
     val sessions by viewModel.sessionHistory.collectAsState()
     var selectedSession by remember { mutableStateOf<WorkoutSession?>(null) }
+    val context = LocalContext.current
 
     LaunchedEffect(Unit) { viewModel.refreshHistory() }
+
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent(),
+    ) { uri -> uri?.let { viewModel.importHistory(it) } }
 
     val selected = selectedSession
     if (selected != null) {
@@ -61,7 +73,36 @@ fun HistoryScreen(viewModel: MainViewModel) {
             .fillMaxSize()
             .padding(16.dp),
     ) {
-        Text("History", style = MaterialTheme.typography.titleLarge)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("History", style = MaterialTheme.typography.titleLarge)
+            Row {
+                IconButton(
+                    enabled = sessions.isNotEmpty(),
+                    onClick = {
+                        val uri = FileProvider.getUriForFile(
+                            context,
+                            "${context.packageName}.fileprovider",
+                            viewModel.historyExportFile(),
+                        )
+                        val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                            type = "application/json"
+                            putExtra(Intent.EXTRA_STREAM, uri)
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        context.startActivity(Intent.createChooser(sendIntent, "Export history"))
+                    },
+                ) {
+                    Icon(Icons.Filled.FileUpload, contentDescription = "Export history")
+                }
+                IconButton(onClick = { importLauncher.launch("*/*") }) {
+                    Icon(Icons.Filled.FileDownload, contentDescription = "Import history")
+                }
+            }
+        }
 
         if (sessions.isEmpty()) {
             Text(

@@ -56,8 +56,8 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
             }
 
             LaunchedEffect(Unit) {
-                viewModel.sessionSavedEvents.collect {
-                    snackbarHostState.showSnackbar("Session saved")
+                viewModel.snackbarMessages.collect { message ->
+                    snackbarHostState.showSnackbar(message)
                 }
             }
 
