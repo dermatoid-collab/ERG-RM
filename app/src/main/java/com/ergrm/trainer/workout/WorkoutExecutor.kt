@@ -120,6 +120,13 @@ class WorkoutExecutor(
             steps = steps,
             totalDurationSec = steps.sumOf { it.durationSec },
         )
+        // The auto-start collector above only reacts to a pedaling *transition* (not-pedaling ->
+        // pedaling), so it never fires here if the rider was already pedaling before this load —
+        // without this check the workout would sit loaded but idle until they either tap Start
+        // or briefly coast and resume to manufacture a fresh transition.
+        if ((liveData.value.powerWatts ?: 0) > AUTO_START_THRESHOLD_WATTS) {
+            start()
+        }
     }
 
     /** Scales every target power (current step and beyond) by this %FTP-style multiplier. Unbounded above. */
