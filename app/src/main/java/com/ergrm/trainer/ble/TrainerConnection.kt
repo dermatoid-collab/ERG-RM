@@ -56,10 +56,15 @@ class TrainerConnection(
     private var pendingOp: CompletableDeferred<Boolean>? = null
     private var pendingControlResponse: CompletableDeferred<Byte>? = null
 
-    fun connect(device: BluetoothDevice) {
+    /** [autoConnect] true makes Android connect silently whenever this device comes into range
+     *  instead of attempting once and giving up — used for the remembered-device reconnect on
+     *  app launch, where there's no user watching a "Connecting…" spinner. A manual tap on a
+     *  scan result keeps the default direct-connect behavior, which fails fast if the device
+     *  isn't there right now instead of waiting indefinitely in the background. */
+    fun connect(device: BluetoothDevice, autoConnect: Boolean = false) {
         disconnect()
         _connectionState.value = TrainerConnectionState.Connecting
-        gatt = device.connectGatt(context, false, callback, BluetoothDevice.TRANSPORT_LE)
+        gatt = device.connectGatt(context, autoConnect, callback, BluetoothDevice.TRANSPORT_LE)
     }
 
     fun disconnect() {

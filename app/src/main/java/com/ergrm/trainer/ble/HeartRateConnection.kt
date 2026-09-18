@@ -35,10 +35,11 @@ class HeartRateConnection(private val context: Context) {
 
     private var gatt: BluetoothGatt? = null
 
-    fun connect(device: BluetoothDevice) {
+    /** See [com.ergrm.trainer.ble.TrainerConnection.connect] for what [autoConnect] does. */
+    fun connect(device: BluetoothDevice, autoConnect: Boolean = false) {
         disconnect()
         _connectionState.value = HrConnectionState.Connecting
-        gatt = device.connectGatt(context, false, callback, BluetoothDevice.TRANSPORT_LE)
+        gatt = device.connectGatt(context, autoConnect, callback, BluetoothDevice.TRANSPORT_LE)
     }
 
     fun disconnect() {

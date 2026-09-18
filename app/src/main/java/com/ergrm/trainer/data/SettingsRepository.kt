@@ -17,6 +17,8 @@ data class AppSettings(
     val lthrBpm: Int = 170,
     val lastDeviceAddress: String? = null,
     val lastDeviceName: String? = null,
+    val lastHrDeviceAddress: String? = null,
+    val lastHrDeviceName: String? = null,
     val libraryFolderUri: String? = null,
     val libraryFolderName: String? = null,
 ) {
@@ -32,6 +34,8 @@ class SettingsRepository(private val context: Context) {
         val LTHR = intPreferencesKey("lthr_bpm")
         val DEVICE_ADDRESS = stringPreferencesKey("last_device_address")
         val DEVICE_NAME = stringPreferencesKey("last_device_name")
+        val HR_DEVICE_ADDRESS = stringPreferencesKey("last_hr_device_address")
+        val HR_DEVICE_NAME = stringPreferencesKey("last_hr_device_name")
         val LIBRARY_FOLDER_URI = stringPreferencesKey("library_folder_uri")
         val LIBRARY_FOLDER_NAME = stringPreferencesKey("library_folder_name")
     }
@@ -44,6 +48,8 @@ class SettingsRepository(private val context: Context) {
             lthrBpm = prefs[Keys.LTHR] ?: 170,
             lastDeviceAddress = prefs[Keys.DEVICE_ADDRESS],
             lastDeviceName = prefs[Keys.DEVICE_NAME],
+            lastHrDeviceAddress = prefs[Keys.HR_DEVICE_ADDRESS],
+            lastHrDeviceName = prefs[Keys.HR_DEVICE_NAME],
             libraryFolderUri = prefs[Keys.LIBRARY_FOLDER_URI],
             libraryFolderName = prefs[Keys.LIBRARY_FOLDER_NAME],
         )
@@ -68,6 +74,13 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit { prefs ->
             prefs[Keys.DEVICE_ADDRESS] = address
             prefs[Keys.DEVICE_NAME] = name
+        }
+    }
+
+    suspend fun rememberHrDevice(address: String, name: String) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.HR_DEVICE_ADDRESS] = address
+            prefs[Keys.HR_DEVICE_NAME] = name
         }
     }
 
