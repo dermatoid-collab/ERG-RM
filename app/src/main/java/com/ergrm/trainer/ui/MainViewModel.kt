@@ -42,9 +42,12 @@ import com.ergrm.trainer.library.LibraryWorkoutFile
 import com.ergrm.trainer.service.TrainerForegroundService
 import com.ergrm.trainer.workout.WorkoutExecutor
 import com.ergrm.trainer.workout.WorkoutStep
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
@@ -144,6 +147,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _sessionHistory = MutableStateFlow<List<WorkoutSession>>(emptyList())
     val sessionHistory: StateFlow<List<WorkoutSession>> = _sessionHistory.asStateFlow()
+
+    // One-shot event (not state) so the UI can show a "Session saved" snackbar exactly once per
+    // save, rather than re-showing it on every recomposition the way a StateFlow would.
+    private val _sessionSavedEvents = MutableSharedFlow<Unit>()
+    val sessionSavedEvents: SharedFlow<Unit> = _sessionSavedEvents.asSharedFlow()
 
     private var scanJob: Job? = null
 
@@ -459,6 +467,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             viewModelScope.launch {
                 historyRepository.saveSession(session)
                 refreshHistory()
+                _sessionSavedEvents.emit(Unit)
             }
         }
         workoutExecutor.exit()

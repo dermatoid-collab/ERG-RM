@@ -17,6 +17,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -45,6 +47,7 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
             val connectionState by viewModel.connectionState.collectAsState()
             val settings by viewModel.settings.collectAsState()
             val isConnected = connectionState is TrainerConnectionState.Ready
+            val snackbarHostState = remember { SnackbarHostState() }
 
             // Jump to the workout screen automatically once the trainer connects,
             // but the user can also navigate there manually beforehand.
@@ -52,7 +55,14 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
                 if (isConnected) screen = Screen.WORKOUT
             }
 
+            LaunchedEffect(Unit) {
+                viewModel.sessionSavedEvents.collect {
+                    snackbarHostState.showSnackbar("Session saved")
+                }
+            }
+
             Scaffold(
+                snackbarHost = { SnackbarHost(snackbarHostState) },
                 topBar = {
                     // Compact custom bar instead of Material3's TopAppBar (which reserves ~64dp
                     // regardless of content) — matches TrainerDay's tighter chrome and frees up
