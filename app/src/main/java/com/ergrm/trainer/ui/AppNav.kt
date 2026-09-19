@@ -117,6 +117,7 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
                     when {
                         overlay == Overlay.SETTINGS -> SettingsScreen(
                             settings = settings,
+                            viewModel = viewModel,
                             onSave = viewModel::saveIntervalsSettings,
                             onClose = { overlay = Overlay.NONE },
                         )

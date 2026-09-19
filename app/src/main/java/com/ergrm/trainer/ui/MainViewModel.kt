@@ -25,6 +25,7 @@ import com.ergrm.trainer.ble.TrainerConnection
 import com.ergrm.trainer.ble.TrainerConnectionState
 import com.ergrm.trainer.ble.TrainerSample
 import com.ergrm.trainer.data.AppSettings
+import com.ergrm.trainer.data.BackupRepository
 import com.ergrm.trainer.data.SettingsRepository
 import com.ergrm.trainer.history.SessionHistoryRepository
 import com.ergrm.trainer.history.SessionSample
@@ -93,6 +94,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val intervalsRepository = IntervalsRepository()
     private val libraryRepository = LibraryRepository(application)
     private val historyRepository = SessionHistoryRepository(application)
+    private val backupRepository = BackupRepository(application, settingsRepository, historyRepository)
 
     private val bluetoothAdapter: BluetoothAdapter? =
         (application.getSystemService(BluetoothManager::class.java))?.adapter
@@ -487,14 +489,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** The single JSON file backing the whole history, for the UI to share via FileProvider as
-     *  an export/backup — always current, no separate export step to keep in sync. */
-    fun historyExportFile(): File = historyRepository.exportFile
+    /** Writes a fresh backup file (settings + history) and hands it to [onReady] for the UI to
+     *  share via FileProvider — a suspend write, so this goes through viewModelScope rather than
+     *  returning the file directly. */
+    fun exportBackup(onReady: (File) -> Unit) {
+        viewModelScope.launch {
+            onReady(backupRepository.exportFile())
+        }
+    }
 
-    /** Merges sessions from a previously exported file (picked via SAF) into the existing
-     *  history. Safe to import the same file more than once — sessions already present (by id)
-     *  are skipped rather than duplicated. */
-    fun importHistory(uri: Uri) {
+    /** Restores settings and merges history from a previously exported backup (picked via SAF).
+     *  Safe to import the same file more than once — sessions already present (by id) are
+     *  skipped rather than duplicated, and settings are simply overwritten with the backup's. */
+    fun importBackup(uri: Uri) {
         viewModelScope.launch {
             val text = try {
                 getApplication<Application>().contentResolver.openInputStream(uri)
@@ -506,15 +513,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _snackbarMessages.emit("Couldn't read that file")
                 return@launch
             }
-            historyRepository.importFromJson(text)
-                .onSuccess { count ->
+            backupRepository.importFromJson(text)
+                .onSuccess { result ->
                     refreshHistory()
+                    val count = result.sessionsAdded
                     _snackbarMessages.emit(
-                        if (count > 0) "Imported $count session${if (count == 1) "" else "s"}" else "Nothing new to import",
+                        "Backup applied — added $count new session${if (count == 1) "" else "s"}",
                     )
                 }
                 .onFailure {
-                    _snackbarMessages.emit("That file isn't a valid history export")
+                    _snackbarMessages.emit("That file isn't a valid backup")
                 }
         }
     }

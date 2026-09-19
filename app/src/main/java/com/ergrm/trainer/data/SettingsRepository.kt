@@ -7,9 +7,11 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.Serializable
 
 private val Context.dataStore by preferencesDataStore(name = "ergrm_settings")
 
+@Serializable
 data class AppSettings(
     val intervalsApiKey: String = "",
     val intervalsAthleteId: String = "",
@@ -88,6 +90,24 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit { prefs ->
             prefs[Keys.LIBRARY_FOLDER_URI] = uri
             prefs[Keys.LIBRARY_FOLDER_NAME] = name
+        }
+    }
+
+    /** Restores every field from a backup in one atomic write. Nullable fields are only written
+     *  when present in the backup, so restoring an older backup (from before a field existed)
+     *  can't clobber a value set since then with a null. */
+    suspend fun applyBackup(s: AppSettings) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.API_KEY] = s.intervalsApiKey
+            prefs[Keys.ATHLETE_ID] = s.intervalsAthleteId
+            prefs[Keys.FTP] = s.ftpWatts
+            prefs[Keys.LTHR] = s.lthrBpm
+            s.lastDeviceAddress?.let { prefs[Keys.DEVICE_ADDRESS] = it }
+            s.lastDeviceName?.let { prefs[Keys.DEVICE_NAME] = it }
+            s.lastHrDeviceAddress?.let { prefs[Keys.HR_DEVICE_ADDRESS] = it }
+            s.lastHrDeviceName?.let { prefs[Keys.HR_DEVICE_NAME] = it }
+            s.libraryFolderUri?.let { prefs[Keys.LIBRARY_FOLDER_URI] = it }
+            s.libraryFolderName?.let { prefs[Keys.LIBRARY_FOLDER_NAME] = it }
         }
     }
 }

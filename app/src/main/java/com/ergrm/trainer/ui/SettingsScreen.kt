@@ -1,5 +1,9 @@
 package com.ergrm.trainer.ui
 
+import android.content.Intent
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -7,8 +11,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -18,15 +24,18 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
 import com.ergrm.trainer.BuildConfig
 import com.ergrm.trainer.data.AppSettings
 
 @Composable
 fun SettingsScreen(
     settings: AppSettings,
+    viewModel: MainViewModel,
     onSave: (apiKey: String, athleteId: String, ftpWatts: Int, lthrBpm: Int) -> Unit,
     onClose: () -> Unit,
 ) {
@@ -34,6 +43,12 @@ fun SettingsScreen(
     var athleteId by remember(settings) { mutableStateOf(settings.intervalsAthleteId) }
     var ftpText by remember(settings) { mutableStateOf(settings.ftpWatts.toString()) }
     var lthrText by remember(settings) { mutableStateOf(settings.lthrBpm.toString()) }
+    val context = LocalContext.current
+    var pendingImportUri by remember { mutableStateOf<Uri?>(null) }
+
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent(),
+    ) { uri -> if (uri != null) pendingImportUri = uri }
 
     Column(
         modifier = Modifier
@@ -112,9 +127,69 @@ fun SettingsScreen(
         }
 
         Text(
+            "Backup",
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(top = 24.dp, bottom = 8.dp),
+        )
+        Text(
+            "Save everything on this screen plus your FTP/LTHR, remembered trainer and heart " +
+                "rate sensor, and your full workout history to one file — useful before " +
+                "reinstalling the app, since that wipes all of it.",
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.padding(bottom = 12.dp),
+        )
+        OutlinedButton(
+            onClick = {
+                viewModel.exportBackup { file ->
+                    val uri = FileProvider.getUriForFile(
+                        context,
+                        "${context.packageName}.fileprovider",
+                        file,
+                    )
+                    val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                        type = "application/json"
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    context.startActivity(Intent.createChooser(sendIntent, "Export backup"))
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text("Export backup") }
+        OutlinedButton(
+            onClick = { importLauncher.launch("*/*") },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp),
+        ) { Text("Import backup") }
+
+        Text(
             "Build ${BuildConfig.GIT_SHA}",
             style = MaterialTheme.typography.bodySmall,
             modifier = Modifier.padding(top = 24.dp),
+        )
+    }
+
+    pendingImportUri?.let { uri ->
+        AlertDialog(
+            onDismissRequest = { pendingImportUri = null },
+            title = { Text("Apply this backup?") },
+            text = {
+                Text(
+                    "This overwrites your current API key, Athlete ID, FTP, LTHR, and " +
+                        "remembered trainer/HR sensor with what's in the file, and adds any " +
+                        "sessions from it to your history. This can't be undone.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.importBackup(uri)
+                    pendingImportUri = null
+                }) { Text("Apply") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingImportUri = null }) { Text("Cancel") }
+            },
         )
     }
 }
