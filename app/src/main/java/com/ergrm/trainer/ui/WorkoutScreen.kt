@@ -756,13 +756,23 @@ private fun IntervalDetailBlock(
     ) {
         Text(label, style = MaterialTheme.typography.labelSmall, color = ErgOnSurface, maxLines = 1)
         Text(formatTime(remainingSec), style = MaterialTheme.typography.bodyMedium, maxLines = 1)
-        Text(valueLabel, style = MaterialTheme.typography.bodyMedium, maxLines = 1, softWrap = false)
+        // The label/time/zone chip are always short and fixed-width; the value is the one piece
+        // that can genuinely run long (a three-digit bpm range like "150–220 bpm" is wider than
+        // any watt range ever was). weight(fill = false) reserves the fixed pieces' space first
+        // and only lets the value claim what's left, ellipsizing instead of pushing the zone chip
+        // off the edge of the screen — the worst case degrades gracefully instead of overflowing.
+        Text(
+            valueLabel,
+            style = MaterialTheme.typography.bodyMedium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false),
+        )
         Text(
             zone.label,
             style = MaterialTheme.typography.labelSmall,
             color = Color.Black,
             maxLines = 1,
-            softWrap = false,
             modifier = Modifier
                 .background(zone.color, RoundedCornerShape(6.dp))
                 .padding(horizontal = 6.dp, vertical = 1.dp),
