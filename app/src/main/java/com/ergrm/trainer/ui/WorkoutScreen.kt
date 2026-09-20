@@ -754,13 +754,15 @@ private fun IntervalDetailBlock(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(label, style = MaterialTheme.typography.labelSmall, color = ErgOnSurface)
-        Text(formatTime(remainingSec), style = MaterialTheme.typography.bodyMedium)
-        Text(valueLabel, style = MaterialTheme.typography.bodyMedium)
+        Text(label, style = MaterialTheme.typography.labelSmall, color = ErgOnSurface, maxLines = 1)
+        Text(formatTime(remainingSec), style = MaterialTheme.typography.bodyMedium, maxLines = 1)
+        Text(valueLabel, style = MaterialTheme.typography.bodyMedium, maxLines = 1, softWrap = false)
         Text(
             zone.label,
             style = MaterialTheme.typography.labelSmall,
             color = Color.Black,
+            maxLines = 1,
+            softWrap = false,
             modifier = Modifier
                 .background(zone.color, RoundedCornerShape(6.dp))
                 .padding(horizontal = 6.dp, vertical = 1.dp),
