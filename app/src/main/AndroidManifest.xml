@@ -34,6 +34,7 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTop"
             android:screenOrientation="portrait"
             android:theme="@style/Theme.ErgRm">
             <intent-filter>
@@ -46,6 +47,11 @@
             android:name=".service.TrainerForegroundService"
             android:exported="false"
             android:foregroundServiceType="connectedDevice" />
+
+        <!-- Weekly "back up your data" reminder — see BackupReminderScheduler. -->
+        <receiver
+            android:name=".backup.BackupReminderReceiver"
+            android:exported="false" />
 
         <!-- Lets the history export share a content:// Uri for the session_history.json file in
              private storage — modern Android refuses to share a raw file:// path to other apps. -->

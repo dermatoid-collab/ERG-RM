@@ -2,6 +2,7 @@ package com.ergrm.trainer.workout
 
 import com.ergrm.trainer.ble.TrainerConnection
 import com.ergrm.trainer.ble.TrainerSample
+import com.ergrm.trainer.data.AppSettings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -14,6 +15,11 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+
+/** ERG sends the file's own %FTP-derived watts to the trainer, as always. HR+ reinterprets the
+ *  same per-interval percentage against LTHR instead of FTP, and slowly nudges the power actually
+ *  sent so the rider's real heart rate tracks that target — see [WorkoutExecutor.tick]. */
+enum class ControlMode { ERG, HR_PLUS }
 
 data class WorkoutRunState(
     val steps: List<WorkoutStep> = emptyList(),
@@ -28,6 +34,10 @@ data class WorkoutRunState(
     /** True when the last pause was triggered automatically (rider stopped pedaling), as
      *  opposed to a manual tap — only an auto-pause resumes on its own when pedaling resumes. */
     val autoPaused: Boolean = false,
+    val controlMode: ControlMode = ControlMode.ERG,
+    /** Live target heart rate in HR+ mode (null in ERG, or before FTP/LTHR are configured) —
+     *  the power actually sent to the trainer is [currentTargetWatts] either way. */
+    val currentTargetBpm: Int? = null,
 ) {
     val currentStep: WorkoutStep? get() = steps.getOrNull(currentStepIndex)
     val nextStep: WorkoutStep? get() = steps.getOrNull(currentStepIndex + 1)
@@ -60,6 +70,14 @@ private const val AUTO_START_THRESHOLD_WATTS = 20
 private const val AUTO_START_DEBOUNCE_MS = 500L
 private const val AUTO_STOP_DEBOUNCE_MS = 3000L
 
+// HR+ correction loop: every 30s, compare actual HR to the interval's LTHR-derived target and
+// nudge the power actually sent by a small fixed step — slow and coarse on purpose, since power
+// changes take tens of seconds to show up in heart rate, and a faster or finer loop would just
+// chase noise.
+private const val HR_CORRECTION_INTERVAL_SEC = 30
+private const val HR_CORRECTION_STEP_WATTS = 5
+private const val HR_DEADBAND_BPM = 3
+
 /**
  * Drives a structured workout in ERG mode: ticks once per second, computes the target
  * power for the current point in the workout (interpolating across ramps) and pushes it
@@ -76,6 +94,9 @@ class WorkoutExecutor(
     // rate (FTMS trainers essentially never report it themselves), so the workout chart's HR
     // trace had no data to draw despite the drawing code already being in place.
     private val liveData: StateFlow<TrainerSample>,
+    // Read for FTP/LTHR whenever HR+ needs to reinterpret an interval's %FTP as %LTHR — not
+    // copied in at load time, so a mid-ride FTP/LTHR edit in Settings takes effect immediately.
+    private val settings: StateFlow<AppSettings>,
     private val scope: CoroutineScope,
 ) {
     private val _state = MutableStateFlow(WorkoutRunState())
@@ -90,6 +111,17 @@ class WorkoutExecutor(
     // so exit() can restore this clean, restartable definition instead of whatever the finished
     // ride's steps list grew into.
     private var originalSteps: List<WorkoutStep> = emptyList()
+
+    // HR+ only: the power actually being sent, nudged slowly by the correction loop instead of
+    // recomputed fresh every tick like the ERG target is — null means "not established yet",
+    // which pushTargetForCurrentStep() seeds from the plain ERG-equivalent watts.
+    private var hrPlusWatts: Int? = null
+    private var secondsSinceHrCorrection = 0
+
+    private fun resetHrPlusBaseline() {
+        hrPlusWatts = null
+        secondsSinceHrCorrection = 0
+    }
 
     init {
         scope.launch {
@@ -116,9 +148,13 @@ class WorkoutExecutor(
         stop()
         _sampleHistory.value = emptyList()
         originalSteps = steps
+        // Loading a new workout keeps the rider's ERG/HR+ choice from the previous one, rather
+        // than always reverting to ERG.
+        val mode = _state.value.controlMode
         _state.value = WorkoutRunState(
             steps = steps,
             totalDurationSec = steps.sumOf { it.durationSec },
+            controlMode = mode,
         )
         // The auto-start collector above only reacts to a pedaling *transition* (not-pedaling ->
         // pedaling), so it never fires here if the rider was already pedaling before this load —
@@ -139,6 +175,19 @@ class WorkoutExecutor(
 
     fun increaseIntensity() = setIntensity(_state.value.intensityPercent + INTENSITY_STEP_PERCENT)
     fun decreaseIntensity() = setIntensity(_state.value.intensityPercent - INTENSITY_STEP_PERCENT)
+
+    /** Switches between ERG (send the file's %FTP-derived watts as-is) and HR+ (reinterpret the
+     *  same per-interval percentage against LTHR, then slowly correct actual watts toward it) —
+     *  resets the correction loop so the new mode starts from a clean baseline. */
+    fun setControlMode(mode: ControlMode) {
+        if (_state.value.controlMode == mode) return
+        _state.value = _state.value.copy(controlMode = mode)
+        resetHrPlusBaseline()
+        pushTargetForCurrentStep()
+    }
+
+    fun toggleControlMode() =
+        setControlMode(if (_state.value.controlMode == ControlMode.ERG) ControlMode.HR_PLUS else ControlMode.ERG)
 
     fun start() {
         if (_state.value.steps.isEmpty() || _state.value.isRunning) return
@@ -184,9 +233,12 @@ class WorkoutExecutor(
         tickerJob?.cancel()
         tickerJob = null
         lastSentWatts = null
+        resetHrPlusBaseline()
+        val mode = _state.value.controlMode
         _state.value = WorkoutRunState(
             steps = originalSteps,
             totalDurationSec = originalSteps.sumOf { it.durationSec },
+            controlMode = mode,
         )
         _sampleHistory.value = emptyList()
         scope.launch { trainer.stop() }
@@ -205,6 +257,7 @@ class WorkoutExecutor(
     fun skipToNextStep() {
         val s = _state.value
         val current = s.currentStep ?: return
+        resetHrPlusBaseline()
         val nextIndex = s.currentStepIndex + 1
         if (nextIndex >= s.steps.size) {
             appendExtensionAndAdvance(s, current.endWatts, s.totalDurationSec)
@@ -223,6 +276,7 @@ class WorkoutExecutor(
         tickerJob?.cancel()
         tickerJob = null
         lastSentWatts = null
+        resetHrPlusBaseline()
         _state.value = _state.value.copy(isRunning = false, autoPaused = false)
     }
 
@@ -233,6 +287,7 @@ class WorkoutExecutor(
         val newElapsedInStep = s.elapsedInStepSec + 1
         if (newElapsedInStep >= step.durationSec) {
             val nextIndex = s.currentStepIndex + 1
+            resetHrPlusBaseline()
             if (nextIndex >= s.steps.size) {
                 appendExtensionAndAdvance(s, step.endWatts, s.totalElapsedSec + 1)
                 return
@@ -249,6 +304,7 @@ class WorkoutExecutor(
             )
         }
         pushTargetForCurrentStep()
+        maybeApplyHrCorrection()
     }
 
     /** Appends another [AUTO_EXTEND_SEC] block at [holdWatts] and moves into it — repeats forever. */
@@ -268,13 +324,58 @@ class WorkoutExecutor(
         val s = _state.value
         val step = s.currentStep ?: return
         val raw = step.targetWattsAt(s.elapsedInStepSec)
-        val target = (raw * s.intensityPercent / 100f).roundToInt()
-        _state.value = _state.value.copy(currentTargetWatts = target)
+        val ergTarget = (raw * s.intensityPercent / 100f).roundToInt()
+
+        val target: Int
+        val targetBpm: Int?
+        if (s.controlMode == ControlMode.HR_PLUS) {
+            val athlete = settings.value
+            // Same %-of-interval the file encodes as %FTP, reinterpreted against LTHR instead —
+            // no change needed to the parsed WorkoutStep, since its %FTP fraction is just
+            // raw / ftpWatts.
+            targetBpm = if (athlete.ftpWatts > 0) {
+                (athlete.lthrBpm * raw / athlete.ftpWatts.toFloat() * s.intensityPercent / 100f).roundToInt()
+            } else {
+                null
+            }
+            // Seed the correction loop from the plain ERG-equivalent watts the first time this
+            // interval runs in HR+, then leave it alone until maybeApplyHrCorrection() nudges it.
+            if (hrPlusWatts == null) hrPlusWatts = ergTarget
+            target = hrPlusWatts!!
+        } else {
+            targetBpm = null
+            target = ergTarget
+        }
+
+        _state.value = _state.value.copy(currentTargetWatts = target, currentTargetBpm = targetBpm)
         if (target != lastSentWatts) {
             lastSentWatts = target
             scope.launch { trainer.setTargetPowerWatts(target) }
         }
         recordSample()
+    }
+
+    /** Every [HR_CORRECTION_INTERVAL_SEC], nudges [hrPlusWatts] toward the live HR reading
+     *  matching [WorkoutRunState.currentTargetBpm] — a small fixed step per tick rather than a
+     *  proportional correction, since HR lags a power change by tens of seconds and a sharper
+     *  loop would overshoot chasing that lag. No-op outside HR+, or before HR/target are known. */
+    private fun maybeApplyHrCorrection() {
+        val s = _state.value
+        if (s.controlMode != ControlMode.HR_PLUS) return
+        secondsSinceHrCorrection++
+        if (secondsSinceHrCorrection < HR_CORRECTION_INTERVAL_SEC) return
+        secondsSinceHrCorrection = 0
+
+        val targetBpm = s.currentTargetBpm ?: return
+        val actualBpm = liveData.value.heartRateBpm ?: return
+        val current = hrPlusWatts ?: return
+        val diff = actualBpm - targetBpm
+        hrPlusWatts = when {
+            diff > HR_DEADBAND_BPM -> (current - HR_CORRECTION_STEP_WATTS).coerceAtLeast(0)
+            diff < -HR_DEADBAND_BPM -> current + HR_CORRECTION_STEP_WATTS
+            else -> current
+        }
+        pushTargetForCurrentStep()
     }
 
     private fun recordSample() {

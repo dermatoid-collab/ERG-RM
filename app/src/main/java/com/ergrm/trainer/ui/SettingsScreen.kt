@@ -147,7 +147,7 @@ fun SettingsScreen(
                         file,
                     )
                     val sendIntent = Intent(Intent.ACTION_SEND).apply {
-                        type = "application/json"
+                        type = "application/gzip"
                         putExtra(Intent.EXTRA_STREAM, uri)
                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     }

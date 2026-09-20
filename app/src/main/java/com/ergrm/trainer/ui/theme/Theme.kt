@@ -20,6 +20,7 @@ val ErgWarn = Color(0xFFE6C15A)
 val ErgDivider = Color(0xFF7FC2F0)
 val ErgProgressLine = Color(0xFF4E8FE8)
 val ErgCadenceLine = Color(0xFF3A6BB5)
+val ErgHrPlus = Color(0xFFE6598A)
 
 private val ErgColorScheme = darkColorScheme(
     background = ErgBackground,

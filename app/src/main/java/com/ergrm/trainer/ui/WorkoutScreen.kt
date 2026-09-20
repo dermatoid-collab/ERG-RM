@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -66,11 +67,13 @@ import com.ergrm.trainer.ui.theme.ErgAtTarget
 import com.ergrm.trainer.ui.theme.ErgBelowTarget
 import com.ergrm.trainer.ui.theme.ErgCadenceLine
 import com.ergrm.trainer.ui.theme.ErgDivider
+import com.ergrm.trainer.ui.theme.ErgHrPlus
 import com.ergrm.trainer.ui.theme.ErgOnSurface
 import com.ergrm.trainer.ui.theme.ErgProgressLine
 import com.ergrm.trainer.ui.theme.ErgSurface
 import com.ergrm.trainer.ui.theme.ErgSurface2
 import com.ergrm.trainer.ui.theme.ErgWarn
+import com.ergrm.trainer.workout.ControlMode
 import com.ergrm.trainer.workout.SamplePoint
 import com.ergrm.trainer.workout.WorkoutRunState
 import com.ergrm.trainer.workout.WorkoutStep
@@ -136,7 +139,9 @@ fun WorkoutScreen(
             currentRemainingSec = workoutState.remainingInStepSec,
             next = workoutState.nextStep,
             ftpWatts = settings.ftpWatts,
+            lthrBpm = settings.lthrBpm,
             intensityPercent = workoutState.intensityPercent,
+            controlMode = workoutState.controlMode,
         )
 
         ChartCard(
@@ -155,9 +160,11 @@ fun WorkoutScreen(
 
         IntensityRow(
             intensityPercent = workoutState.intensityPercent,
+            controlMode = workoutState.controlMode,
             enabled = workoutState.steps.isNotEmpty(),
             onDecrease = { viewModel.decreaseIntensity() },
             onIncrease = { viewModel.increaseIntensity() },
+            onToggleMode = { viewModel.toggleControlMode() },
         )
     }
 }
@@ -191,6 +198,7 @@ private fun StatTileGrid(live: TrainerSample, workoutState: WorkoutRunState, ftp
         else -> ErgAtTarget
     }
     val zone = zoneFor(target, ftpWatts)
+    val isHrPlus = workoutState.controlMode == ControlMode.HR_PLUS
 
     var intervalShowElapsed by remember { mutableStateOf(false) }
     var totalShowElapsed by remember { mutableStateOf(true) }
@@ -217,18 +225,26 @@ private fun StatTileGrid(live: TrainerSample, workoutState: WorkoutRunState, ftp
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
             StatTile(
-                label = if (showPercentFtp) "Target % FTP" else "Target watts",
-                value = if (showPercentFtp) percentOfFtp(target, ftpWatts) else "$target",
+                label = when { isHrPlus -> "Target HR"; showPercentFtp -> "Target % FTP"; else -> "Target watts" },
+                value = when {
+                    isHrPlus -> workoutState.currentTargetBpm?.toString() ?: "--"
+                    showPercentFtp -> percentOfFtp(target, ftpWatts)
+                    else -> "$target"
+                },
                 modifier = Modifier.weight(1f),
                 zoneLabel = zone.label,
                 zoneColor = zone.color,
                 onClick = { showPercentFtp = !showPercentFtp },
             )
             StatTile(
-                label = if (showPercentFtp) "% FTP" else "Watts",
-                value = if (showPercentFtp) percentOfFtp(actual, ftpWatts) else "$actual",
+                label = when { isHrPlus -> "HR"; showPercentFtp -> "% FTP"; else -> "Watts" },
+                value = when {
+                    isHrPlus -> live.heartRateBpm?.toString() ?: "--"
+                    showPercentFtp -> percentOfFtp(actual, ftpWatts)
+                    else -> "$actual"
+                },
                 modifier = Modifier.weight(1f),
-                valueColor = powerColor,
+                valueColor = if (isHrPlus) ErgOnSurface else powerColor,
                 onClick = { showPercentFtp = !showPercentFtp },
             )
         }
@@ -654,13 +670,24 @@ internal fun zoneFor(watts: Int, ftpWatts: Int): PowerZone {
 private fun wattsLabel(startWatts: Int, endWatts: Int): String =
     if (startWatts == endWatts) "$endWatts W" else "$startWatts–$endWatts W"
 
+/** Same %-of-interval as [wattsLabel], reinterpreted against LTHR instead of FTP — used only in
+ *  HR+, so the zone tag next to it still always reflects the power zone (see [zoneFor] call in
+ *  [IntervalDetailBlock]), not a heart-rate one. */
+private fun bpmLabel(startWatts: Int, endWatts: Int, ftpWatts: Int, lthrBpm: Int): String {
+    val startBpm = (lthrBpm * startWatts / ftpWatts.toFloat()).roundToInt()
+    val endBpm = (lthrBpm * endWatts / ftpWatts.toFloat()).roundToInt()
+    return if (startBpm == endBpm) "$endBpm bpm" else "$startBpm–$endBpm bpm"
+}
+
 @Composable
 private fun IntervalDetailsSection(
     current: WorkoutStep?,
     currentRemainingSec: Int,
     next: WorkoutStep?,
     ftpWatts: Int,
+    lthrBpm: Int,
     intensityPercent: Int,
+    controlMode: ControlMode,
 ) {
     if (current == null) return
     Row(
@@ -675,7 +702,9 @@ private fun IntervalDetailsSection(
             step = current,
             remainingSec = currentRemainingSec,
             ftpWatts = ftpWatts,
+            lthrBpm = lthrBpm,
             intensityPercent = intensityPercent,
+            controlMode = controlMode,
             modifier = Modifier.weight(1f),
         )
         if (next != null) {
@@ -690,25 +719,36 @@ private fun IntervalDetailsSection(
                 step = next,
                 remainingSec = next.durationSec,
                 ftpWatts = ftpWatts,
+                lthrBpm = lthrBpm,
                 intensityPercent = intensityPercent,
+                controlMode = controlMode,
                 modifier = Modifier.weight(1f),
             )
         }
     }
 }
 
+/** Layout and zone tag are identical in ERG and HR+ — see [zoneFor], always power-based — only
+ *  the numeric value's unit switches from watts to the LTHR-derived bpm in HR+. */
 @Composable
 private fun IntervalDetailBlock(
     label: String,
     step: WorkoutStep,
     remainingSec: Int,
     ftpWatts: Int,
+    lthrBpm: Int,
     intensityPercent: Int,
+    controlMode: ControlMode,
     modifier: Modifier = Modifier,
 ) {
     val scaledStart = (step.startWatts * intensityPercent / 100f).roundToInt()
     val scaledEnd = (step.endWatts * intensityPercent / 100f).roundToInt()
     val zone = zoneFor(scaledEnd, ftpWatts)
+    val valueLabel = if (controlMode == ControlMode.HR_PLUS && ftpWatts > 0) {
+        bpmLabel(scaledStart, scaledEnd, ftpWatts, lthrBpm)
+    } else {
+        wattsLabel(scaledStart, scaledEnd)
+    }
     Row(
         modifier = modifier.padding(horizontal = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -716,7 +756,7 @@ private fun IntervalDetailBlock(
     ) {
         Text(label, style = MaterialTheme.typography.labelSmall, color = ErgOnSurface)
         Text(formatTime(remainingSec), style = MaterialTheme.typography.bodyMedium)
-        Text(wattsLabel(scaledStart, scaledEnd), style = MaterialTheme.typography.bodyMedium)
+        Text(valueLabel, style = MaterialTheme.typography.bodyMedium)
         Text(
             zone.label,
             style = MaterialTheme.typography.labelSmall,
@@ -801,14 +841,21 @@ private fun PillIconButton(
     }
 }
 
+/** The ERG/HR+ switch lives inside this same pill instead of a row of its own, so the toggle
+ *  costs no extra vertical space: the ↓/↑ arrows and the pill's overall height are unchanged,
+ *  only the pill's content grows a tappable mode tag to the left of the percentage. */
 @Composable
 private fun IntensityRow(
     intensityPercent: Int,
+    controlMode: ControlMode,
     enabled: Boolean,
     onDecrease: () -> Unit,
     onIncrease: () -> Unit,
+    onToggleMode: () -> Unit,
 ) {
     val adjusted = intensityPercent != 100
+    val isHrPlus = controlMode == ControlMode.HR_PLUS
+    val modeColor = if (isHrPlus) ErgHrPlus else ErgAccent
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         PillIconButton(
             icon = Icons.Filled.KeyboardArrowDown,
@@ -817,19 +864,37 @@ private fun IntensityRow(
             enabled = enabled,
             modifier = Modifier.width(50.dp),
         )
-        Box(
+        Row(
             modifier = Modifier
                 .weight(1f)
                 .height(48.dp)
                 .clip(RoundedCornerShape(50))
                 .background(if (adjusted) ErgAccent else ErgSurface2),
-            contentAlignment = Alignment.Center,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                "$intensityPercent%",
-                fontWeight = FontWeight.Bold,
-                color = if (adjusted) Color.Black else ErgOnSurface,
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(50))
+                    .background(modeColor)
+                    .clickable(enabled = enabled, onClick = onToggleMode)
+                    .padding(horizontal = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    if (isHrPlus) "HR+" else "ERG",
+                    fontWeight = FontWeight.Black,
+                    fontSize = 12.sp,
+                    color = Color.Black,
+                )
+            }
+            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                Text(
+                    "$intensityPercent%",
+                    fontWeight = FontWeight.Bold,
+                    color = if (adjusted) Color.Black else ErgOnSurface,
+                )
+            }
         }
         PillIconButton(
             icon = Icons.Filled.KeyboardArrowUp,

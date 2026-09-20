@@ -24,6 +24,7 @@ import com.ergrm.trainer.ble.HeartRateProfile
 import com.ergrm.trainer.ble.TrainerConnection
 import com.ergrm.trainer.ble.TrainerConnectionState
 import com.ergrm.trainer.ble.TrainerSample
+import com.ergrm.trainer.backup.BackupReminderScheduler
 import com.ergrm.trainer.data.AppSettings
 import com.ergrm.trainer.data.BackupRepository
 import com.ergrm.trainer.data.SettingsRepository
@@ -114,13 +115,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (hrOverride != null) sample.copy(heartRateBpm = hrOverride) else sample
     }.stateIn(viewModelScope, SharingStarted.Eagerly, TrainerSample())
 
-    val workoutExecutor = WorkoutExecutor(trainerConnection, liveData, viewModelScope)
+    val settings: StateFlow<AppSettings> = settingsRepository.settings
+        .stateIn(viewModelScope, SharingStarted.Eagerly, AppSettings())
+
+    val workoutExecutor = WorkoutExecutor(trainerConnection, liveData, settings, viewModelScope)
 
     val workoutState = workoutExecutor.state
     val sampleHistory = workoutExecutor.sampleHistory
-
-    val settings: StateFlow<AppSettings> = settingsRepository.settings
-        .stateIn(viewModelScope, SharingStarted.Eagerly, AppSettings())
 
     private val _scanResults = MutableStateFlow<List<DiscoveredTrainer>>(emptyList())
     val scanResults: StateFlow<List<DiscoveredTrainer>> = _scanResults.asStateFlow()
@@ -192,6 +193,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
         }
         autoReconnect()
+        BackupReminderScheduler.scheduleIfNeeded(application)
     }
 
     /** Silently reconnects the last-used trainer and/or heart rate sensor on app launch, so the
@@ -489,31 +491,34 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** Writes a fresh backup file (settings + history) and hands it to [onReady] for the UI to
-     *  share via FileProvider — a suspend write, so this goes through viewModelScope rather than
-     *  returning the file directly. */
+    /** Writes a fresh backup file (settings + history), confirms it with a snackbar exactly like
+     *  a saved session, and hands the file to [onReady] for the UI to share via FileProvider — a
+     *  suspend write, so this goes through viewModelScope rather than returning the file directly. */
     fun exportBackup(onReady: (File) -> Unit) {
         viewModelScope.launch {
-            onReady(backupRepository.exportFile())
+            val file = backupRepository.exportFile()
+            _snackbarMessages.emit("Backup saved")
+            onReady(file)
         }
     }
 
     /** Restores settings and merges history from a previously exported backup (picked via SAF).
      *  Safe to import the same file more than once — sessions already present (by id) are
-     *  skipped rather than duplicated, and settings are simply overwritten with the backup's. */
+     *  skipped rather than duplicated, and settings are simply overwritten with the backup's.
+     *  Reads raw bytes (not text) since a backup file may be gzip-compressed — see
+     *  [BackupRepository.importFromBytes]. */
     fun importBackup(uri: Uri) {
         viewModelScope.launch {
-            val text = try {
-                getApplication<Application>().contentResolver.openInputStream(uri)
-                    ?.bufferedReader()?.use { it.readText() }
+            val bytes = try {
+                getApplication<Application>().contentResolver.openInputStream(uri)?.use { it.readBytes() }
             } catch (t: Exception) {
                 null
             }
-            if (text == null) {
+            if (bytes == null) {
                 _snackbarMessages.emit("Couldn't read that file")
                 return@launch
             }
-            backupRepository.importFromJson(text)
+            backupRepository.importFromBytes(bytes)
                 .onSuccess { result ->
                     refreshHistory()
                     val count = result.sessionsAdded
@@ -530,6 +535,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun extendCurrentInterval() = workoutExecutor.extendCurrentStep()
     fun increaseIntensity() = workoutExecutor.increaseIntensity()
     fun decreaseIntensity() = workoutExecutor.decreaseIntensity()
+    fun toggleControlMode() = workoutExecutor.toggleControlMode()
 
     /** Called after the user picks a folder via ACTION_OPEN_DOCUMENT_TREE. */
     fun onLibraryFolderPicked(uri: Uri, displayName: String) {

@@ -61,6 +61,12 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
                 }
             }
 
+            LaunchedEffect(Unit) {
+                AppNavigationEvents.openSettingsForBackup.collect {
+                    overlay = Overlay.SETTINGS
+                }
+            }
+
             Scaffold(
                 snackbarHost = { SnackbarHost(snackbarHostState) },
                 topBar = {
