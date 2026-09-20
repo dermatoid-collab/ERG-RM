@@ -1,6 +1,5 @@
 package com.ergrm.trainer.backup
 
-import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
@@ -9,6 +8,7 @@ import android.content.Intent
 import androidx.core.app.NotificationCompat
 import com.ergrm.trainer.MainActivity
 import com.ergrm.trainer.R
+import com.ergrm.trainer.notify.AppNotifications
 
 private const val CHANNEL_ID = "backup_reminder"
 private const val NOTIFICATION_ID = 43
@@ -18,7 +18,7 @@ private const val NOTIFICATION_ID = 43
  *  the Export backup button already is. */
 class BackupReminderReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        createChannel(context)
+        AppNotifications.ensureChannel(context)
         val contentIntent = PendingIntent.getActivity(
             context,
             0,
@@ -39,14 +39,5 @@ class BackupReminderReceiver : BroadcastReceiver() {
         context.getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification)
 
         BackupReminderScheduler.scheduleNext(context)
-    }
-
-    private fun createChannel(context: Context) {
-        val channel = NotificationChannel(
-            CHANNEL_ID,
-            "Backup reminders",
-            NotificationManager.IMPORTANCE_DEFAULT,
-        )
-        context.getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
     }
 }

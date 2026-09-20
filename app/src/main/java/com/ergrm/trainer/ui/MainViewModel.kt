@@ -41,6 +41,7 @@ import com.ergrm.trainer.intervals.LibraryWorkout
 import com.ergrm.trainer.library.LibraryImportResult
 import com.ergrm.trainer.library.LibraryRepository
 import com.ergrm.trainer.library.LibraryWorkoutFile
+import com.ergrm.trainer.notify.AppNotifications
 import com.ergrm.trainer.service.TrainerForegroundService
 import com.ergrm.trainer.workout.WorkoutExecutor
 import com.ergrm.trainer.workout.WorkoutStep
@@ -473,6 +474,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 historyRepository.saveSession(session)
                 refreshHistory()
                 _snackbarMessages.emit("Session saved")
+                val minutes = s.totalElapsedSec / 60
+                val seconds = s.totalElapsedSec % 60
+                AppNotifications.notifyWorkoutSaved(
+                    getApplication(),
+                    "%d:%02d · avg %d W".format(minutes, seconds, session.avgWatts),
+                )
             }
         }
         workoutExecutor.exit()
@@ -498,6 +505,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val file = backupRepository.exportFile()
             _snackbarMessages.emit("Backup saved")
+            AppNotifications.notifyBackupExported(getApplication(), file.name)
             onReady(file)
         }
     }
@@ -525,6 +533,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     _snackbarMessages.emit(
                         "Backup applied — added $count new session${if (count == 1) "" else "s"}",
                     )
+                    val skipped = result.backup.history.size - count
+                    AppNotifications.notifyBackupImported(getApplication(), count, skipped)
                 }
                 .onFailure {
                     _snackbarMessages.emit("That file isn't a valid backup")
