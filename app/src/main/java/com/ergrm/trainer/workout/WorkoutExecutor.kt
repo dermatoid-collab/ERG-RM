@@ -70,12 +70,12 @@ private const val AUTO_START_THRESHOLD_WATTS = 20
 private const val AUTO_START_DEBOUNCE_MS = 500L
 private const val AUTO_STOP_DEBOUNCE_MS = 3000L
 
-// HR+ correction loop: every 30s, compare actual HR to the interval's LTHR-derived target and
-// nudge the power actually sent by a small fixed step — slow and coarse on purpose, since power
-// changes take tens of seconds to show up in heart rate, and a faster or finer loop would just
-// chase noise.
-private const val HR_CORRECTION_INTERVAL_SEC = 30
-private const val HR_CORRECTION_STEP_WATTS = 5
+// HR+ correction loop: every 20s, compare actual HR to the interval's LTHR-derived target and
+// nudge the power actually sent by a small fixed step — still deliberately coarse, since power
+// changes take tens of seconds to show up in heart rate and a much faster or finer loop would
+// just chase noise, but tighter than the original 30s/5W after it felt sluggish in practice.
+private const val HR_CORRECTION_INTERVAL_SEC = 20
+private const val HR_CORRECTION_STEP_WATTS = 8
 private const val HR_DEADBAND_BPM = 3
 
 /**

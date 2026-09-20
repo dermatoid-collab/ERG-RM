@@ -219,9 +219,23 @@ private fun StatTileGrid(live: TrainerSample, workoutState: WorkoutRunState, ftp
                 onClick = { totalShowElapsed = !totalShowElapsed },
             )
         }
+        // The Watts/%FTP tile and the plain HR tile trade positions between modes instead of one
+        // relabeling into a second HR tile — in HR+ the trainer is still holding a real power
+        // (corrected toward the HR target), so Watts stays worth seeing, and duplicating HR
+        // instead of showing it would leave nothing telling the rider what power they're on.
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
             StatTile("Cadence", live.cadenceRpm?.let { "${it.toInt()}" } ?: "--", Modifier.weight(1f))
-            StatTile("HR", live.heartRateBpm?.let { "$it" } ?: "--", Modifier.weight(1f))
+            if (isHrPlus) {
+                StatTile(
+                    label = if (showPercentFtp) "% FTP" else "Watts",
+                    value = if (showPercentFtp) percentOfFtp(actual, ftpWatts) else "$actual",
+                    modifier = Modifier.weight(1f),
+                    valueColor = powerColor,
+                    onClick = { showPercentFtp = !showPercentFtp },
+                )
+            } else {
+                StatTile("HR", live.heartRateBpm?.let { "$it" } ?: "--", Modifier.weight(1f))
+            }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
             StatTile(
@@ -236,17 +250,17 @@ private fun StatTileGrid(live: TrainerSample, workoutState: WorkoutRunState, ftp
                 zoneColor = zone.color,
                 onClick = { showPercentFtp = !showPercentFtp },
             )
-            StatTile(
-                label = when { isHrPlus -> "HR"; showPercentFtp -> "% FTP"; else -> "Watts" },
-                value = when {
-                    isHrPlus -> live.heartRateBpm?.toString() ?: "--"
-                    showPercentFtp -> percentOfFtp(actual, ftpWatts)
-                    else -> "$actual"
-                },
-                modifier = Modifier.weight(1f),
-                valueColor = if (isHrPlus) ErgOnSurface else powerColor,
-                onClick = { showPercentFtp = !showPercentFtp },
-            )
+            if (isHrPlus) {
+                StatTile("HR", live.heartRateBpm?.let { "$it" } ?: "--", Modifier.weight(1f))
+            } else {
+                StatTile(
+                    label = if (showPercentFtp) "% FTP" else "Watts",
+                    value = if (showPercentFtp) percentOfFtp(actual, ftpWatts) else "$actual",
+                    modifier = Modifier.weight(1f),
+                    valueColor = powerColor,
+                    onClick = { showPercentFtp = !showPercentFtp },
+                )
+            }
         }
     }
 }
@@ -881,7 +895,9 @@ private fun IntensityRow(
                 .weight(1f)
                 .height(48.dp)
                 .clip(RoundedCornerShape(50))
-                .background(if (adjusted) ErgAccent else ErgSurface2),
+                // Amber rather than reusing ErgAccent: the mode tag right next to it is already
+                // green in ERG, and a modified % in the same green made the two blend together.
+                .background(if (adjusted) ErgWarn else ErgSurface2),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Row(
