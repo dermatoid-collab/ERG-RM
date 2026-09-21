@@ -112,19 +112,19 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
                                 icon = Icons.Filled.FolderOpen,
                                 contentDescription = "Workout library",
                                 active = overlay == Overlay.LIBRARY,
-                                onClick = { overlay = if (overlay == Overlay.LIBRARY) Overlay.NONE else Overlay.LIBRARY },
+                                onClick = { overlay = Overlay.LIBRARY },
                             )
                             NavIcon(
                                 icon = Icons.Filled.History,
                                 contentDescription = "History",
                                 active = overlay == Overlay.HISTORY,
-                                onClick = { overlay = if (overlay == Overlay.HISTORY) Overlay.NONE else Overlay.HISTORY },
+                                onClick = { overlay = Overlay.HISTORY },
                             )
                             NavIcon(
                                 icon = Icons.Filled.Settings,
                                 contentDescription = "Settings",
                                 active = overlay == Overlay.SETTINGS,
-                                onClick = { overlay = if (overlay == Overlay.SETTINGS) Overlay.NONE else Overlay.SETTINGS },
+                                onClick = { overlay = Overlay.SETTINGS },
                             )
                         }
                     }
