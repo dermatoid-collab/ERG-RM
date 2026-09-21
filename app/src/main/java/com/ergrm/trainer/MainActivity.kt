@@ -1,9 +1,11 @@
 package com.ergrm.trainer
 
 import android.content.Intent
+import android.graphics.Color
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import com.ergrm.trainer.ui.AppNavigationEvents
@@ -12,7 +14,14 @@ import com.ergrm.trainer.ui.ErgRmApp
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        // The default style picks light/dark status+nav bar icons from the *system* theme, but
+        // ErgRmTheme always forces a dark background regardless of it (see Theme.kt) — on a
+        // phone set to system light mode that left dark icons sitting on our dark status bar,
+        // unreadable. Force light icons always, to match the app's own theme instead.
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
+        )
         // A workout screen the rider glances at mid-effort shouldn't dim or lock while in use.
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         setContent {
