@@ -42,7 +42,24 @@ data class IcuFolderDto(
     @SerialName("workout_doc") val workoutDoc: JsonElement? = null,
 )
 
+/** Per-sport athlete settings, as returned by GET /athlete/{id}/sport-settings/{type} — only the
+ *  fields this app pulls in for the FTP/LTHR sync button. [indoorFtp] is preferred over [ftp] when
+ *  present, since that's the number the rider actually trains ERG against on a smart trainer. */
+@Serializable
+data class IcuSportSettingsDto(
+    val ftp: Int? = null,
+    @SerialName("indoor_ftp") val indoorFtp: Int? = null,
+    val lthr: Int? = null,
+)
+
 interface IntervalsApi {
+
+    /** [type] is a sport key, e.g. "Ride" — matches what this app already loads bike workouts as. */
+    @GET("api/v1/athlete/{athleteId}/sport-settings/{type}")
+    suspend fun getSportSettings(
+        @Path("athleteId") athleteId: String,
+        @Path("type") type: String,
+    ): IcuSportSettingsDto
 
     /** Events (including planned workouts) between [oldest] and [newest], both yyyy-MM-dd. */
     @GET("api/v1/athlete/{athleteId}/events")

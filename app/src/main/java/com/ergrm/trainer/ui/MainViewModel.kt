@@ -31,6 +31,7 @@ import com.ergrm.trainer.data.SettingsRepository
 import com.ergrm.trainer.history.SessionHistoryRepository
 import com.ergrm.trainer.history.SessionSample
 import com.ergrm.trainer.history.WorkoutSession
+import com.ergrm.trainer.intervals.AthleteSettingsResult
 import com.ergrm.trainer.intervals.CalendarFetchResult
 import com.ergrm.trainer.intervals.CalendarWorkout
 import com.ergrm.trainer.intervals.FetchResult
@@ -327,6 +328,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             settingsRepository.updateIntervalsCredentials(apiKey, athleteId)
             settingsRepository.updateFtp(ftpWatts)
             settingsRepository.updateLthr(lthrBpm)
+        }
+    }
+
+    /** Pulls FTP/LTHR from Intervals.icu for the Settings screen's Sync button — hands whatever
+     *  it got back to [onResult] so the screen can fill its (still freely editable) text fields,
+     *  rather than saving straight to DataStore itself. Nothing is overwritten here: the rider
+     *  still has to tap Save afterward, same as if they'd typed the numbers in by hand. */
+    fun syncAthleteSettings(onResult: (ftpWatts: Int?, lthrBpm: Int?) -> Unit) {
+        val s = settings.value
+        if (!s.intervalsConfigured) {
+            viewModelScope.launch { _snackbarMessages.emit("Set your Intervals.icu API key and athlete ID first") }
+            return
+        }
+        viewModelScope.launch {
+            when (val result = intervalsRepository.fetchAthleteSettings(s.intervalsApiKey, s.intervalsAthleteId)) {
+                is AthleteSettingsResult.Success -> {
+                    if (result.ftpWatts == null && result.lthrBpm == null) {
+                        _snackbarMessages.emit("Intervals.icu didn't return an FTP or LTHR")
+                    } else {
+                        onResult(result.ftpWatts, result.lthrBpm)
+                        _snackbarMessages.emit("Synced from Intervals.icu")
+                    }
+                }
+                is AthleteSettingsResult.Error -> _snackbarMessages.emit("Sync failed: ${result.message}")
+            }
         }
     }
 

@@ -100,11 +100,24 @@ fun SettingsScreen(
                 .fillMaxWidth()
                 .padding(top = 8.dp),
         )
+        OutlinedButton(
+            onClick = {
+                viewModel.syncAthleteSettings { syncedFtp, syncedLthr ->
+                    syncedFtp?.let { ftpText = it.toString() }
+                    syncedLthr?.let { lthrText = it.toString() }
+                }
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp),
+        ) { Text("Sync from Intervals.icu") }
 
         Text(
             "You'll find the API key in Intervals.icu → Settings → Developer Settings. " +
                 "FTP is used to convert the workout's targets (% FTP) into absolute watts sent to the trainer. " +
-                "LTHR (lactate threshold heart rate) sets the live chart's heart rate scale.",
+                "LTHR (lactate threshold heart rate) sets the live chart's heart rate scale. " +
+                "Sync fills these two fields from your Intervals.icu profile (preferring indoor FTP) — " +
+                "review them and tap Save, same as editing them by hand.",
             style = MaterialTheme.typography.bodySmall,
             modifier = Modifier.padding(top = 8.dp, bottom = 16.dp),
         )

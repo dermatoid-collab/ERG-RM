@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.FitnessCenter
@@ -30,10 +31,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ergrm.trainer.ble.TrainerConnectionState
 import com.ergrm.trainer.ui.theme.ErgRmTheme
+import com.ergrm.trainer.ui.theme.ErgSurface2
 
 private enum class Screen { CONNECT, WORKOUT }
 private enum class Overlay { NONE, SETTINGS, LIBRARY, HISTORY, CALENDAR, INTERVALS_LIBRARY }
@@ -84,37 +89,43 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
                     ) {
                         Text("ERG-RM", style = MaterialTheme.typography.titleMedium)
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            IconButton(onClick = {
-                                overlay = Overlay.NONE
-                                screen = Screen.WORKOUT
-                            }) {
-                                Icon(Icons.Filled.FitnessCenter, contentDescription = "Workout")
-                            }
-                            IconButton(onClick = {
-                                overlay = Overlay.NONE
-                                screen = Screen.CONNECT
-                            }) {
-                                Icon(
-                                    Icons.Filled.Bluetooth,
-                                    contentDescription = "Devices",
-                                    tint = if (isConnected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                                )
-                            }
-                            IconButton(onClick = {
-                                overlay = if (overlay == Overlay.LIBRARY) Overlay.NONE else Overlay.LIBRARY
-                            }) {
-                                Icon(Icons.Filled.FolderOpen, contentDescription = "Workout library")
-                            }
-                            IconButton(onClick = {
-                                overlay = if (overlay == Overlay.HISTORY) Overlay.NONE else Overlay.HISTORY
-                            }) {
-                                Icon(Icons.Filled.History, contentDescription = "History")
-                            }
-                            IconButton(onClick = {
-                                overlay = if (overlay == Overlay.SETTINGS) Overlay.NONE else Overlay.SETTINGS
-                            }) {
-                                Icon(Icons.Filled.Settings, contentDescription = "Settings")
-                            }
+                            NavIcon(
+                                icon = Icons.Filled.FitnessCenter,
+                                contentDescription = "Workout",
+                                active = overlay == Overlay.NONE && screen == Screen.WORKOUT,
+                                onClick = {
+                                    overlay = Overlay.NONE
+                                    screen = Screen.WORKOUT
+                                },
+                            )
+                            NavIcon(
+                                icon = Icons.Filled.Bluetooth,
+                                contentDescription = "Devices",
+                                active = overlay == Overlay.NONE && screen == Screen.CONNECT,
+                                tint = if (isConnected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                onClick = {
+                                    overlay = Overlay.NONE
+                                    screen = Screen.CONNECT
+                                },
+                            )
+                            NavIcon(
+                                icon = Icons.Filled.FolderOpen,
+                                contentDescription = "Workout library",
+                                active = overlay == Overlay.LIBRARY,
+                                onClick = { overlay = if (overlay == Overlay.LIBRARY) Overlay.NONE else Overlay.LIBRARY },
+                            )
+                            NavIcon(
+                                icon = Icons.Filled.History,
+                                contentDescription = "History",
+                                active = overlay == Overlay.HISTORY,
+                                onClick = { overlay = if (overlay == Overlay.HISTORY) Overlay.NONE else Overlay.HISTORY },
+                            )
+                            NavIcon(
+                                icon = Icons.Filled.Settings,
+                                contentDescription = "Settings",
+                                active = overlay == Overlay.SETTINGS,
+                                onClick = { overlay = if (overlay == Overlay.SETTINGS) Overlay.NONE else Overlay.SETTINGS },
+                            )
                         }
                     }
                 },
@@ -153,5 +164,27 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
                 }
             }
         }
+    }
+}
+
+/** A top-bar icon with a rounded highlight behind it when [active] — independent of [tint], so
+ *  Bluetooth's own green "connected" tint and the "you're on this page" highlight can both show
+ *  at once without fighting over the same signal. */
+@Composable
+private fun NavIcon(
+    icon: ImageVector,
+    contentDescription: String,
+    active: Boolean,
+    onClick: () -> Unit,
+    tint: Color = MaterialTheme.colorScheme.onSurface,
+) {
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier
+            .padding(2.dp)
+            .clip(RoundedCornerShape(50))
+            .background(if (active) ErgSurface2 else Color.Transparent),
+    ) {
+        Icon(icon, contentDescription = contentDescription, tint = tint)
     }
 }

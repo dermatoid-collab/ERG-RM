@@ -65,6 +65,14 @@ sealed interface LibraryFetchResult {
     data class Error(val message: String) : LibraryFetchResult
 }
 
+/** FTP/LTHR pulled from the rider's Intervals.icu sport settings, for the Settings screen's Sync
+ *  button — either can be null if Intervals.icu simply has no value set for it, which isn't an
+ *  error on its own (see [AthleteSettingsResult.Success]). */
+sealed interface AthleteSettingsResult {
+    data class Success(val ftpWatts: Int?, val lthrBpm: Int?) : AthleteSettingsResult
+    data class Error(val message: String) : AthleteSettingsResult
+}
+
 private const val BASE_URL = "https://intervals.icu/"
 private val BIKE_TYPES = setOf("Ride", "VirtualRide", "GravelRide", "MountainBikeRide")
 
@@ -303,6 +311,21 @@ class IntervalsRepository {
         if (steps.isEmpty()) return FetchResult.NoStepsFound
         return FetchResult.Success(LoadedWorkout(id = 0, name = name, steps = steps))
     }
+
+    /** FTP (preferring indoor FTP, since that's what a smart-trainer ERG session actually trains
+     *  against) and LTHR from the rider's "Ride" sport settings — the same numbers shown under
+     *  Intervals.icu's Power/Heart Rate Settings. The exact response shape hasn't been verified
+     *  against a live account from this environment, so an unrecognized field just comes back
+     *  null here (ignoreUnknownKeys handles the rest) rather than crashing. */
+    suspend fun fetchAthleteSettings(apiKey: String, athleteId: String): AthleteSettingsResult =
+        withContext(Dispatchers.IO) {
+            try {
+                val dto = buildApi(apiKey).getSportSettings(athleteId, type = "Ride")
+                AthleteSettingsResult.Success(ftpWatts = dto.indoorFtp ?: dto.ftp, lthrBpm = dto.lthr)
+            } catch (t: Exception) {
+                AthleteSettingsResult.Error(describeError(t))
+            }
+        }
 
     private fun describeError(t: Throwable): String = when (t) {
         is retrofit2.HttpException -> {
