@@ -36,8 +36,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.ergrm.trainer.ble.HrConnectionState
 import com.ergrm.trainer.ble.TrainerConnectionState
+import com.ergrm.trainer.ui.theme.ErgAccent
 import com.ergrm.trainer.ui.theme.ErgRmTheme
+import com.ergrm.trainer.ui.theme.ErgWarn
 
 private enum class Screen { CONNECT, WORKOUT }
 private enum class Overlay { NONE, SETTINGS, LIBRARY, HISTORY, CALENDAR, INTERVALS_LIBRARY }
@@ -49,9 +52,26 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
             var overlay by remember { mutableStateOf(Overlay.NONE) }
             var screen by remember { mutableStateOf(Screen.WORKOUT) }
             val connectionState by viewModel.connectionState.collectAsState()
+            val hrConnectionState by viewModel.hrConnectionState.collectAsState()
             val settings by viewModel.settings.collectAsState()
             val isConnected = connectionState is TrainerConnectionState.Ready
             val snackbarHostState = remember { SnackbarHostState() }
+
+            // Green only once the trainer, and the HR sensor if one is remembered at all, are
+            // both actually connected — not just the trainer alone. Amber while either is still
+            // mid-attempt (auto-reconnect on launch, or a manual pick), so the icon reflects
+            // "still working on it" rather than looking identical to "nothing happening".
+            val hrConfigured = settings.lastHrDeviceAddress != null
+            val hrReady = !hrConfigured || hrConnectionState is HrConnectionState.Ready
+            val bluetoothTint = when {
+                isConnected && hrReady -> ErgAccent
+                connectionState is TrainerConnectionState.Connecting ||
+                    connectionState is TrainerConnectionState.DiscoveringServices ||
+                    connectionState is TrainerConnectionState.RequestingControl ||
+                    (hrConfigured && (hrConnectionState is HrConnectionState.Connecting || hrConnectionState is HrConnectionState.DiscoveringServices)) ->
+                    ErgWarn
+                else -> MaterialTheme.colorScheme.onSurface
+            }
 
             // Workout is already the default landing screen, but this also pulls the rider back
             // to it if they'd navigated to Connect (e.g. to pick a different trainer) and it
@@ -102,7 +122,7 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
                                 icon = Icons.Filled.Bluetooth,
                                 contentDescription = "Devices",
                                 active = overlay == Overlay.NONE && screen == Screen.CONNECT,
-                                tint = if (isConnected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                tint = bluetoothTint,
                                 onClick = {
                                     overlay = Overlay.NONE
                                     screen = Screen.CONNECT
