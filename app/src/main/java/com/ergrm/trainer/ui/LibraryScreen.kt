@@ -165,6 +165,22 @@ private fun OtherSourcesMenu(
     onOpenIntervalsLibrary: () -> Unit,
     onLoadToday: () -> Unit,
 ) {
+    WorkoutSourceMenu(
+        listOf(
+            "Intervals WOD" to onLoadToday,
+            "Calendar (Intervals.icu)" to onOpenCalendar,
+            "Intervals.icu Library" to onOpenIntervalsLibrary,
+        )
+    )
+}
+
+/** Same dropdown, reused on every workout-source screen (Library, Calendar, Intervals.icu
+ *  Library) so you can jump straight to another source without backing out first — each caller
+ *  leaves its own screen out of [items], since a self-referential entry would be a no-op at best
+ *  and, on the Intervals.icu Library screen specifically, would duplicate that screen's own
+ *  title text right next to it. */
+@Composable
+internal fun WorkoutSourceMenu(items: List<Pair<String, () -> Unit>>) {
     var expanded by remember { mutableStateOf(false) }
     Box {
         TextButton(onClick = { expanded = true }) {
@@ -172,27 +188,15 @@ private fun OtherSourcesMenu(
             Icon(Icons.Filled.ArrowDropDown, contentDescription = null)
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            DropdownMenuItem(
-                text = { Text("Intervals WOD") },
-                onClick = {
-                    expanded = false
-                    onLoadToday()
-                },
-            )
-            DropdownMenuItem(
-                text = { Text("Calendar (Intervals.icu)") },
-                onClick = {
-                    expanded = false
-                    onOpenCalendar()
-                },
-            )
-            DropdownMenuItem(
-                text = { Text("Intervals.icu Library") },
-                onClick = {
-                    expanded = false
-                    onOpenIntervalsLibrary()
-                },
-            )
+            items.forEach { (label, action) ->
+                DropdownMenuItem(
+                    text = { Text(label) },
+                    onClick = {
+                        expanded = false
+                        action()
+                    },
+                )
+            }
         }
     }
 }

@@ -41,7 +41,13 @@ import java.time.temporal.TemporalAdjusters
 private val dayHeaderFormatter = DateTimeFormatter.ofPattern("EEE d MMM")
 
 @Composable
-fun CalendarScreen(viewModel: MainViewModel, onPicked: () -> Unit = {}) {
+fun CalendarScreen(
+    viewModel: MainViewModel,
+    onPicked: () -> Unit = {},
+    onLoadToday: () -> Unit = {},
+    onOpenIntervalsLibrary: () -> Unit = {},
+    onOpenLibrary: () -> Unit = {},
+) {
     val settings by viewModel.settings.collectAsState()
     val calendarState by viewModel.calendarState.collectAsState()
 
@@ -58,8 +64,17 @@ fun CalendarScreen(viewModel: MainViewModel, onPicked: () -> Unit = {}) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text("Calendar", style = MaterialTheme.typography.titleLarge)
-            IconButton(onClick = { viewModel.fetchCalendarWorkouts() }) {
-                Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                WorkoutSourceMenu(
+                    listOf(
+                        "Intervals WOD" to onLoadToday,
+                        "Intervals.icu Library" to onOpenIntervalsLibrary,
+                        "Local files" to onOpenLibrary,
+                    )
+                )
+                IconButton(onClick = { viewModel.fetchCalendarWorkouts() }) {
+                    Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
+                }
             }
         }
 

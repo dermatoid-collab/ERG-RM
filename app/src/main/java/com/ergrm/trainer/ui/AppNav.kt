@@ -177,10 +177,22 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
                         overlay == Overlay.CALENDAR -> CalendarScreen(
                             viewModel,
                             onPicked = { overlay = Overlay.NONE },
+                            onLoadToday = {
+                                viewModel.fetchTodayWorkout()
+                                overlay = Overlay.NONE
+                            },
+                            onOpenIntervalsLibrary = { overlay = Overlay.INTERVALS_LIBRARY },
+                            onOpenLibrary = { overlay = Overlay.LIBRARY },
                         )
                         overlay == Overlay.INTERVALS_LIBRARY -> IntervalsLibraryScreen(
                             viewModel,
                             onPicked = { overlay = Overlay.NONE },
+                            onLoadToday = {
+                                viewModel.fetchTodayWorkout()
+                                overlay = Overlay.NONE
+                            },
+                            onOpenCalendar = { overlay = Overlay.CALENDAR },
+                            onOpenLibrary = { overlay = Overlay.LIBRARY },
                         )
                         screen == Screen.WORKOUT -> WorkoutScreen(
                             viewModel,

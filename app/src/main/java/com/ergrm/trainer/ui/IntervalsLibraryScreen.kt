@@ -51,7 +51,13 @@ import com.ergrm.trainer.workout.WorkoutStep
 import kotlinx.coroutines.delay
 
 @Composable
-fun IntervalsLibraryScreen(viewModel: MainViewModel, onPicked: () -> Unit = {}) {
+fun IntervalsLibraryScreen(
+    viewModel: MainViewModel,
+    onPicked: () -> Unit = {},
+    onLoadToday: () -> Unit = {},
+    onOpenCalendar: () -> Unit = {},
+    onOpenLibrary: () -> Unit = {},
+) {
     val settings by viewModel.settings.collectAsState()
     val state by viewModel.intervalsLibraryState.collectAsState()
     val loadState by viewModel.workoutLoadState.collectAsState()
@@ -84,8 +90,17 @@ fun IntervalsLibraryScreen(viewModel: MainViewModel, onPicked: () -> Unit = {}) 
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text("Intervals.icu Library", style = MaterialTheme.typography.titleLarge)
-            IconButton(onClick = { viewModel.fetchIntervalsLibrary() }) {
-                Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                WorkoutSourceMenu(
+                    listOf(
+                        "Intervals WOD" to onLoadToday,
+                        "Calendar (Intervals.icu)" to onOpenCalendar,
+                        "Local files" to onOpenLibrary,
+                    )
+                )
+                IconButton(onClick = { viewModel.fetchIntervalsLibrary() }) {
+                    Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
+                }
             }
         }
 
