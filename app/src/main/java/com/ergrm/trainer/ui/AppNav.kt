@@ -141,6 +141,11 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
                             viewModel,
                             onImported = { overlay = Overlay.NONE },
                             onOpenCalendar = { overlay = Overlay.CALENDAR },
+                            onOpenIntervalsLibrary = { overlay = Overlay.INTERVALS_LIBRARY },
+                            onLoadToday = {
+                                viewModel.fetchTodayWorkout()
+                                overlay = Overlay.NONE
+                            },
                         )
                         overlay == Overlay.HISTORY -> HistoryScreen(viewModel)
                         overlay == Overlay.CALENDAR -> CalendarScreen(

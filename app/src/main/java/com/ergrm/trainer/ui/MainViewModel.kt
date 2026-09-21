@@ -195,7 +195,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
         }
         autoReconnect()
+        autoLoadTodayWorkout()
         BackupReminderScheduler.scheduleIfNeeded(application)
+    }
+
+    /** Tries "Intervals WOD" once on launch, so the rider doesn't have to tap for it every time —
+     *  but silently, unlike [fetchTodayWorkout]'s manual path: no Intervals.icu credentials, no
+     *  network, or no workout scheduled today all just leave the screen in its default "No
+     *  workout loaded" state rather than surfacing an error nobody asked for. Skipped outright if
+     *  a workout is already loaded (e.g. the rider had one from local files loaded on the last
+     *  run — auto-reconnect + auto-start could put them mid-ride before this even runs). */
+    private fun autoLoadTodayWorkout() {
+        viewModelScope.launch {
+            val s = settingsRepository.settings.first()
+            if (!s.intervalsConfigured) return@launch
+            if (workoutState.value.steps.isNotEmpty()) return@launch
+            val result = intervalsRepository.fetchTodayWorkout(s.intervalsApiKey, s.intervalsAthleteId, s.ftpWatts)
+            if (result is FetchResult.Success) {
+                workoutExecutor.load(result.workout.steps)
+                _workoutLoadState.value = WorkoutLoadState.Loaded(result.workout.name)
+            }
+        }
     }
 
     /** Silently reconnects the last-used trainer and/or heart rate sensor on app launch, so the

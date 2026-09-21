@@ -12,11 +12,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -43,6 +46,8 @@ fun LibraryScreen(
     viewModel: MainViewModel,
     onImported: () -> Unit = {},
     onOpenCalendar: () -> Unit = {},
+    onOpenIntervalsLibrary: () -> Unit = {},
+    onLoadToday: () -> Unit = {},
 ) {
     val settings by viewModel.settings.collectAsState()
     val libraryState by viewModel.libraryState.collectAsState()
@@ -68,9 +73,7 @@ fun LibraryScreen(
         ) {
             Text("Workout library", style = MaterialTheme.typography.titleLarge)
             Row(verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = onOpenCalendar) {
-                    Text("Calendar (Intervals.icu)")
-                }
+                OtherSourcesMenu(onOpenCalendar = onOpenCalendar, onOpenIntervalsLibrary = onOpenIntervalsLibrary, onLoadToday = onLoadToday)
                 IconButton(onClick = { viewModel.refreshLibrary() }) {
                     Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
                 }
@@ -148,6 +151,47 @@ fun LibraryScreen(
                     }
                 }
             }
+        }
+    }
+}
+
+/** This screen is local files' own home; the other three workout sources (also reachable from
+ *  the Workout screen's own header menu, unchanged) get a compact dropdown here instead of three
+ *  separate buttons competing with the title for space. */
+@Composable
+private fun OtherSourcesMenu(
+    onOpenCalendar: () -> Unit,
+    onOpenIntervalsLibrary: () -> Unit,
+    onLoadToday: () -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        TextButton(onClick = { expanded = true }) {
+            Text("Other sources")
+            Icon(Icons.Filled.ArrowDropDown, contentDescription = null)
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(
+                text = { Text("Intervals WOD") },
+                onClick = {
+                    expanded = false
+                    onLoadToday()
+                },
+            )
+            DropdownMenuItem(
+                text = { Text("Calendar (Intervals.icu)") },
+                onClick = {
+                    expanded = false
+                    onOpenCalendar()
+                },
+            )
+            DropdownMenuItem(
+                text = { Text("Intervals.icu Library") },
+                onClick = {
+                    expanded = false
+                    onOpenIntervalsLibrary()
+                },
+            )
         }
     }
 }
