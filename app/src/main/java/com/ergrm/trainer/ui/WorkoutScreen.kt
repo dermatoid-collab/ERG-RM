@@ -221,7 +221,7 @@ private fun StatTileGrid(live: TrainerSample, workoutState: WorkoutRunState, ftp
     val hrColor = hrTargetColor ?: hrZoneColor
 
     var intervalShowElapsed by remember { mutableStateOf(false) }
-    var totalShowElapsed by remember { mutableStateOf(true) }
+    var totalShowElapsed by remember { mutableStateOf(false) }
     var showPercentFtp by remember { mutableStateOf(false) }
 
     Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
