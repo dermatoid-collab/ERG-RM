@@ -27,11 +27,13 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -95,6 +97,7 @@ fun WorkoutScreen(
     val loadState by viewModel.workoutLoadState.collectAsState()
     val samples by viewModel.sampleHistory.collectAsState()
     val settings by viewModel.settings.collectAsState()
+    var showStopConfirm by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -131,10 +134,27 @@ fun WorkoutScreen(
             hasStarted = workoutState.hasStarted,
             onPlay = { viewModel.startWorkout() },
             onPause = { viewModel.pauseWorkout() },
-            onExit = { viewModel.exitWorkout() },
+            onExit = { showStopConfirm = true },
             onExtend = { viewModel.extendCurrentInterval() },
             onSkip = { viewModel.skipStep() },
         )
+
+        if (showStopConfirm) {
+            AlertDialog(
+                onDismissRequest = { showStopConfirm = false },
+                title = { Text("Stop workout?") },
+                text = { Text("This will save the workout to history and end the session.") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        showStopConfirm = false
+                        viewModel.exitWorkout()
+                    }) { Text("OK") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showStopConfirm = false }) { Text("Cancel") }
+                },
+            )
+        }
 
         IntervalDetailsSection(
             current = workoutState.currentStep,

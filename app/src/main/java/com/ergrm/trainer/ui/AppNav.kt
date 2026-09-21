@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -53,19 +54,23 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
             var screen by remember { mutableStateOf(Screen.WORKOUT) }
             val connectionState by viewModel.connectionState.collectAsState()
             val hrConnectionState by viewModel.hrConnectionState.collectAsState()
+            val isScanning by viewModel.isScanning.collectAsState()
+            val isHrScanning by viewModel.isHrScanning.collectAsState()
             val settings by viewModel.settings.collectAsState()
             val isConnected = connectionState is TrainerConnectionState.Ready
             val snackbarHostState = remember { SnackbarHostState() }
 
             // Green only once the trainer, and the HR sensor if one is remembered at all, are
             // both actually connected — not just the trainer alone. Amber while either is still
-            // mid-attempt (auto-reconnect on launch, or a manual pick), so the icon reflects
+            // mid-attempt — scanning for a device, or already found one and working through the
+            // GATT handshake (auto-reconnect on launch, or a manual pick) — so the icon reflects
             // "still working on it" rather than looking identical to "nothing happening".
             val hrConfigured = settings.lastHrDeviceAddress != null
             val hrReady = !hrConfigured || hrConnectionState is HrConnectionState.Ready
             val bluetoothTint = when {
                 isConnected && hrReady -> ErgAccent
-                connectionState is TrainerConnectionState.Connecting ||
+                isScanning || isHrScanning ||
+                    connectionState is TrainerConnectionState.Connecting ||
                     connectionState is TrainerConnectionState.DiscoveringServices ||
                     connectionState is TrainerConnectionState.RequestingControl ||
                     (hrConfigured && (hrConnectionState is HrConnectionState.Connecting || hrConnectionState is HrConnectionState.DiscoveringServices)) ->
@@ -203,16 +208,22 @@ private fun NavIcon(
     onClick: () -> Unit,
     tint: Color = MaterialTheme.colorScheme.onSurface,
 ) {
-    IconButton(
-        onClick = onClick,
-        modifier = Modifier
-            .padding(2.dp)
-            .clip(RoundedCornerShape(50))
-            // ErgSurface2 was nearly indistinguishable from the bar's own background — a
-            // translucent white lightens whatever's underneath instead, reading as a clearer
-            // highlight without needing its own fixed color.
-            .background(if (active) Color.White.copy(alpha = 0.12f) else Color.Transparent),
-    ) {
-        Icon(icon, contentDescription = contentDescription, tint = tint)
+    // The highlight sits on its own inner Box instead of IconButton's own modifier — IconButton
+    // enforces Android's 48dp min touch target, so a background there always rendered as a
+    // ~44dp circle regardless of this size. Sizing it here shrinks the visible pill while the
+    // tappable area (and the icon's own 24dp glyph, which it still fully covers) stays the same.
+    IconButton(onClick = onClick) {
+        Box(
+            modifier = Modifier
+                .size(38.dp)
+                .clip(RoundedCornerShape(50))
+                // ErgSurface2 was nearly indistinguishable from the bar's own background — a
+                // translucent white lightens whatever's underneath instead, reading as a clearer
+                // highlight without needing its own fixed color.
+                .background(if (active) Color.White.copy(alpha = 0.12f) else Color.Transparent),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(icon, contentDescription = contentDescription, tint = tint)
+        }
     }
 }
