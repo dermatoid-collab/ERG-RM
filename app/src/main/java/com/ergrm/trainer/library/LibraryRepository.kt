@@ -37,7 +37,7 @@ class LibraryRepository(private val context: Context) {
         folder.listFiles()
             .filter { file -> file.isFile && SUPPORTED_EXTENSIONS.any { file.name?.endsWith(it, ignoreCase = true) == true } }
             .map { LibraryWorkoutFile(it.uri, it.name ?: "workout.zwo", it.length(), it.lastModified()) }
-            .sortedByDescending { it.lastModifiedMillis }
+            .sortedBy { it.name.lowercase() }
     }
 
     suspend fun importWorkout(fileUri: Uri, fileName: String, ftpWatts: Int): LibraryImportResult = withContext(Dispatchers.IO) {
