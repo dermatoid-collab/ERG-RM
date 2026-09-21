@@ -869,8 +869,10 @@ private fun IntervalDetailBlock(
 }
 
 /**
- * Main action button cycles Start -> Pause -> Stop: pausing a started workout doesn't offer a
- * resume, only a Stop that exits it (via [onExit]) — matches how the rider actually uses it.
+ * Main action button cycles Start -> Pause -> Stop. Once paused, this button's only action is
+ * Stop (behind a confirm dialog, via [onExit]) — the button itself never offers a Resume, but
+ * pedaling again resumes the ride on its own (see WorkoutExecutor's pedaling collector), so
+ * Stop here really does mean "end the session", not just "step off the bike for a moment".
  */
 @Composable
 private fun ControlsRow(

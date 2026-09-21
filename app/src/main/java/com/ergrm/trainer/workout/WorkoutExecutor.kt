@@ -31,9 +31,6 @@ data class WorkoutRunState(
     val isRunning: Boolean = false,
     val hasStarted: Boolean = false,
     val intensityPercent: Int = 100,
-    /** True when the last pause was triggered automatically (rider stopped pedaling), as
-     *  opposed to a manual tap — only an auto-pause resumes on its own when pedaling resumes. */
-    val autoPaused: Boolean = false,
     val controlMode: ControlMode = ControlMode.ERG,
     /** Live target heart rate in HR+ mode (null in ERG, or before FTP/LTHR are configured) —
      *  the power actually sent to the trainer is [currentTargetWatts] either way. */
@@ -132,13 +129,13 @@ class WorkoutExecutor(
                     delay(if (pedaling) AUTO_START_DEBOUNCE_MS else AUTO_STOP_DEBOUNCE_MS)
                     val s = _state.value
                     if (pedaling) {
-                        // Auto-start from idle, or auto-resume from an auto-pause — but never
-                        // resume a workout the rider explicitly paused by hand.
-                        if (s.steps.isNotEmpty() && !s.isRunning && (!s.hasStarted || s.autoPaused)) {
+                        // Auto-start from idle, or resume from any pause (auto or manual) —
+                        // pedaling again always means "keep going".
+                        if (s.steps.isNotEmpty() && !s.isRunning) {
                             start()
                         }
                     } else if (s.isRunning) {
-                        autoPause()
+                        pause()
                     }
                 }
         }
@@ -191,7 +188,7 @@ class WorkoutExecutor(
 
     fun start() {
         if (_state.value.steps.isEmpty() || _state.value.isRunning) return
-        _state.value = _state.value.copy(isRunning = true, hasStarted = true, autoPaused = false)
+        _state.value = _state.value.copy(isRunning = true, hasStarted = true)
         tickerJob?.cancel()
         tickerJob = scope.launch {
             // Start/Resume must reach the trainer and be acknowledged before the first target
@@ -208,20 +205,14 @@ class WorkoutExecutor(
         }
     }
 
+    /** Pauses the ride, whether triggered by an explicit tap or by the rider coasting to a stop —
+     *  either way, pedaling again resumes it (see the collector in [init]); only [exit] actually
+     *  ends the session. */
     fun pause() {
-        tickerJob?.cancel()
-        tickerJob = null
-        _state.value = _state.value.copy(isRunning = false, autoPaused = false)
-        scope.launch { trainer.stop() }
-    }
-
-    /** Like [pause], but triggered by the rider stopping pedaling rather than an explicit tap —
-     *  pedaling again auto-resumes it, unlike a manual pause which only offers Stop. */
-    private fun autoPause() {
         if (!_state.value.isRunning) return
         tickerJob?.cancel()
         tickerJob = null
-        _state.value = _state.value.copy(isRunning = false, autoPaused = true)
+        _state.value = _state.value.copy(isRunning = false)
         scope.launch { trainer.stop() }
     }
 
@@ -277,7 +268,7 @@ class WorkoutExecutor(
         tickerJob = null
         lastSentWatts = null
         resetHrPlusBaseline()
-        _state.value = _state.value.copy(isRunning = false, autoPaused = false)
+        _state.value = _state.value.copy(isRunning = false)
     }
 
     private fun tick() {
