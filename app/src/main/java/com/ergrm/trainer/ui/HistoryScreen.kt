@@ -52,7 +52,7 @@ fun HistoryScreen(viewModel: MainViewModel) {
 
     val selected = selectedSession
     if (selected != null) {
-        SessionDetailScreen(session = selected, onBack = { selectedSession = null })
+        SessionDetailScreen(session = selected, viewModel = viewModel, onBack = { selectedSession = null })
         return
     }
 

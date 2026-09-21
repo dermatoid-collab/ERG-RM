@@ -7,6 +7,9 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 private val json = Json { ignoreUnknownKeys = true }
 
@@ -40,6 +43,15 @@ class SessionHistoryRepository(private val context: Context) {
             writeAll(readAll() + newOnes)
         }
         newOnes.size
+    }
+
+    /** Writes a single session as a standard TCX file (see [TcxExporter]) and returns it, ready
+     *  to share via FileProvider — named by when the ride happened, not by when it's exported. */
+    suspend fun exportTcx(session: WorkoutSession): File = withContext(Dispatchers.IO) {
+        val stamp = SimpleDateFormat("ddMMyy_HHmm", Locale.US).format(Date(session.startEpochMillis))
+        val file = File(context.filesDir, "erg_rm_session_$stamp.tcx")
+        file.writeText(TcxExporter.build(session))
+        file
     }
 
     private fun readAll(): List<WorkoutSession> {

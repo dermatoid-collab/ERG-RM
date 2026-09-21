@@ -1,5 +1,6 @@
 package com.ergrm.trainer.ui
 
+import android.content.Intent
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -11,12 +12,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -30,7 +33,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PointMode
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
 import com.ergrm.trainer.history.SessionSample
 import com.ergrm.trainer.history.SessionStats
 import com.ergrm.trainer.history.WorkoutSession
@@ -47,8 +52,9 @@ import java.util.Locale
  *  zone bars — a session only stores what was recorded (watts/HR/cadence/speed), not the
  *  original plan, so this mirrors the live workout chart's traces without the interval backdrop. */
 @Composable
-fun SessionDetailScreen(session: WorkoutSession, onBack: () -> Unit) {
+fun SessionDetailScreen(session: WorkoutSession, viewModel: MainViewModel, onBack: () -> Unit) {
     val stats = remember(session.id) { computeSessionStats(session.samples) }
+    val context = LocalContext.current
 
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
@@ -60,13 +66,26 @@ fun SessionDetailScreen(session: WorkoutSession, onBack: () -> Unit) {
             IconButton(onClick = onBack) {
                 Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
             }
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(session.workoutName ?: "Free ride", style = MaterialTheme.typography.titleMedium)
                 Text(
                     formatSessionDate(session.startEpochMillis),
                     style = MaterialTheme.typography.bodySmall,
                     color = ErgOnSurface,
                 )
+            }
+            IconButton(onClick = {
+                viewModel.exportSessionTcx(session) { file ->
+                    val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+                    val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                        type = "application/vnd.garmin.tcx+xml"
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    context.startActivity(Intent.createChooser(sendIntent, "Export session"))
+                }
+            }) {
+                Icon(Icons.Filled.Share, contentDescription = "Export as TCX")
             }
         }
 

@@ -524,6 +524,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** Writes [session] out as a standalone TCX file and hands it to [onReady] for the UI to
+     *  share via FileProvider — same pattern as [exportBackup], but for one ride instead of
+     *  everything, and in a format (TCX) other platforms can actually import as an activity. */
+    fun exportSessionTcx(session: WorkoutSession, onReady: (File) -> Unit) {
+        viewModelScope.launch {
+            onReady(historyRepository.exportTcx(session))
+        }
+    }
+
     /** Writes a fresh backup file (settings + history), confirms it with a snackbar exactly like
      *  a saved session, and hands the file to [onReady] for the UI to share via FileProvider — a
      *  suspend write, so this goes through viewModelScope rather than returning the file directly. */
