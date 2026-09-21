@@ -68,6 +68,7 @@ import com.ergrm.trainer.ui.theme.ErgBelowTarget
 import com.ergrm.trainer.ui.theme.ErgCadenceLine
 import com.ergrm.trainer.ui.theme.ErgDivider
 import com.ergrm.trainer.ui.theme.ErgHrPlus
+import com.ergrm.trainer.ui.theme.ErgIntensityAdjusted
 import com.ergrm.trainer.ui.theme.ErgOnSurface
 import com.ergrm.trainer.ui.theme.ErgProgressLine
 import com.ergrm.trainer.ui.theme.ErgSurface
@@ -895,9 +896,10 @@ private fun IntensityRow(
                 .weight(1f)
                 .height(48.dp)
                 .clip(RoundedCornerShape(50))
-                // Amber rather than reusing ErgAccent: the mode tag right next to it is already
-                // green in ERG, and a modified % in the same green made the two blend together.
-                .background(if (adjusted) ErgWarn else ErgSurface2),
+                // Not ErgAccent (the mode tag right next to it is already green in ERG, so a
+                // modified % in the same green blended together) and not ErgWarn either — amber
+                // already means "warning" for the Z4 zone chip, and a changed % isn't a warning.
+                .background(if (adjusted) ErgIntensityAdjusted else ErgSurface2),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Row(

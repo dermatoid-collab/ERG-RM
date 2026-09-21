@@ -21,6 +21,10 @@ val ErgDivider = Color(0xFF7FC2F0)
 val ErgProgressLine = Color(0xFF4E8FE8)
 val ErgCadenceLine = Color(0xFF3A6BB5)
 val ErgHrPlus = Color(0xFFE6598A)
+// A modified intensity % used to reuse ErgWarn (amber), but that color already means "warning"
+// elsewhere (the Z4 zone chip) — a changed % isn't a warning, so it read as an alarm for no
+// reason. This lavender carries no other meaning in the app.
+val ErgIntensityAdjusted = Color(0xFF8B7EC8)
 
 private val ErgColorScheme = darkColorScheme(
     background = ErgBackground,
