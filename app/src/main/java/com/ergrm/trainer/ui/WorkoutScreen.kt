@@ -122,7 +122,7 @@ fun WorkoutScreen(
         }
         WorkoutStatusLine(loadState)
 
-        StatTileGrid(live, workoutState, settings.ftpWatts)
+        StatTileGrid(live, workoutState, settings.ftpWatts, settings.lthrBpm)
 
         ControlsRow(
             hasWorkout = workoutState.steps.isNotEmpty(),
@@ -189,7 +189,7 @@ private fun WorkoutStatusLine(loadState: WorkoutLoadState) {
  *  Target watts/Watts flips both together between absolute watts and %FTP, since they show the
  *  same underlying pair of numbers in two units. */
 @Composable
-private fun StatTileGrid(live: TrainerSample, workoutState: WorkoutRunState, ftpWatts: Int) {
+private fun StatTileGrid(live: TrainerSample, workoutState: WorkoutRunState, ftpWatts: Int, lthrBpm: Int) {
     val actual = live.powerWatts ?: 0
     val target = workoutState.currentTargetWatts
     val powerColor = when {
@@ -200,6 +200,7 @@ private fun StatTileGrid(live: TrainerSample, workoutState: WorkoutRunState, ftp
     }
     val zone = zoneFor(target, ftpWatts)
     val isHrPlus = workoutState.controlMode == ControlMode.HR_PLUS
+    val hrColor = live.heartRateBpm?.let { zoneForHr(it, lthrBpm).color } ?: ErgOnSurface
 
     var intervalShowElapsed by remember { mutableStateOf(false) }
     var totalShowElapsed by remember { mutableStateOf(true) }
@@ -235,7 +236,12 @@ private fun StatTileGrid(live: TrainerSample, workoutState: WorkoutRunState, ftp
                     onClick = { showPercentFtp = !showPercentFtp },
                 )
             } else {
-                StatTile("HR", live.heartRateBpm?.let { "$it" } ?: "--", Modifier.weight(1f))
+                StatTile(
+                    label = "HR",
+                    value = live.heartRateBpm?.let { "$it" } ?: "--",
+                    modifier = Modifier.weight(1f),
+                    valueColor = hrColor,
+                )
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
@@ -252,7 +258,12 @@ private fun StatTileGrid(live: TrainerSample, workoutState: WorkoutRunState, ftp
                 onClick = { showPercentFtp = !showPercentFtp },
             )
             if (isHrPlus) {
-                StatTile("HR", live.heartRateBpm?.let { "$it" } ?: "--", Modifier.weight(1f))
+                StatTile(
+                    label = "HR",
+                    value = live.heartRateBpm?.let { "$it" } ?: "--",
+                    modifier = Modifier.weight(1f),
+                    valueColor = hrColor,
+                )
             } else {
                 StatTile(
                     label = if (showPercentFtp) "% FTP" else "Watts",
@@ -680,6 +691,29 @@ internal fun zoneFor(watts: Int, ftpWatts: Int): PowerZone {
     if (ftpWatts <= 0) return PowerZone("--", ErgOnSurface)
     val pct = watts.toFloat() / ftpWatts
     return POWER_ZONES.firstOrNull { pct <= it.first }?.second ?: ZONE_MAX
+}
+
+/**
+ * HR zones, as %LTHR — deliberately NOT the same breakpoints as [POWER_ZONES]: heart rate has a
+ * physiological ceiling (it can't spike to 150%+ threshold the way a sprint's power can), so
+ * reusing the power breakpoints here would mean the top zones could never actually light up.
+ * These match the rider's own Intervals.icu HR zone thresholds instead. Reuses [POWER_ZONES]'
+ * colors by zone number, so a "Z4" reads the same warmth in both places even though the two
+ * zone systems measure different things at different percentages.
+ */
+internal val HR_ZONES = listOf(
+    0.80f to POWER_ZONES[0].second,
+    0.89f to POWER_ZONES[1].second,
+    0.93f to POWER_ZONES[2].second,
+    0.99f to POWER_ZONES[3].second,
+    1.02f to POWER_ZONES[4].second,
+    1.05f to POWER_ZONES[5].second,
+)
+
+internal fun zoneForHr(bpm: Int, lthrBpm: Int): PowerZone {
+    if (lthrBpm <= 0) return PowerZone("--", ErgOnSurface)
+    val pct = bpm.toFloat() / lthrBpm
+    return HR_ZONES.firstOrNull { pct <= it.first }?.second ?: ZONE_MAX
 }
 
 private fun wattsLabel(startWatts: Int, endWatts: Int): String =
