@@ -23,8 +23,11 @@ val ErgCadenceLine = Color(0xFF3A6BB5)
 val ErgHrPlus = Color(0xFFE6598A)
 // A modified intensity % used to reuse ErgWarn (amber), but that color already means "warning"
 // elsewhere (the Z4 zone chip) — a changed % isn't a warning, so it read as an alarm for no
-// reason. This lavender carries no other meaning in the app.
-val ErgIntensityAdjusted = Color(0xFF8B7EC8)
+// reason. A single lavender for "modified" (either direction) followed, but lost the direction
+// itself — split into a darker bronze-amber for increased and a dark rose for decreased, distinct
+// from both ErgWarn/Z4 amber and ErgHrPlus/Z7's brighter pink and bordeaux respectively.
+val ErgIntensityUp = Color(0xFFB8863A)
+val ErgIntensityDown = Color(0xFFA8446E)
 
 private val ErgColorScheme = darkColorScheme(
     background = ErgBackground,

@@ -68,7 +68,8 @@ import com.ergrm.trainer.ui.theme.ErgBelowTarget
 import com.ergrm.trainer.ui.theme.ErgCadenceLine
 import com.ergrm.trainer.ui.theme.ErgDivider
 import com.ergrm.trainer.ui.theme.ErgHrPlus
-import com.ergrm.trainer.ui.theme.ErgIntensityAdjusted
+import com.ergrm.trainer.ui.theme.ErgIntensityDown
+import com.ergrm.trainer.ui.theme.ErgIntensityUp
 import com.ergrm.trainer.ui.theme.ErgOnSurface
 import com.ergrm.trainer.ui.theme.ErgProgressLine
 import com.ergrm.trainer.ui.theme.ErgSurface
@@ -932,9 +933,17 @@ private fun IntensityRow(
     onIncrease: () -> Unit,
     onToggleMode: () -> Unit,
 ) {
-    val adjusted = intensityPercent != 100
     val isHrPlus = controlMode == ControlMode.HR_PLUS
     val modeColor = if (isHrPlus) ErgHrPlus else ErgAccent
+    // Not ErgAccent (the mode tag right next to it is already green in ERG, so a modified %
+    // in the same green blended together) and not ErgWarn either — amber already means
+    // "warning" for the Z4 zone chip, and a changed % isn't a warning. Split by direction so
+    // "pushed harder" and "eased off" read differently at a glance, not just "not 100%".
+    val pillColor = when {
+        intensityPercent > 100 -> ErgIntensityUp
+        intensityPercent < 100 -> ErgIntensityDown
+        else -> ErgSurface2
+    }
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         PillIconButton(
             icon = Icons.Filled.KeyboardArrowDown,
@@ -948,10 +957,7 @@ private fun IntensityRow(
                 .weight(1f)
                 .height(48.dp)
                 .clip(RoundedCornerShape(50))
-                // Not ErgAccent (the mode tag right next to it is already green in ERG, so a
-                // modified % in the same green blended together) and not ErgWarn either — amber
-                // already means "warning" for the Z4 zone chip, and a changed % isn't a warning.
-                .background(if (adjusted) ErgIntensityAdjusted else ErgSurface2),
+                .background(pillColor),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Row(
@@ -974,7 +980,10 @@ private fun IntensityRow(
                 Text(
                     "$intensityPercent%",
                     fontWeight = FontWeight.Bold,
-                    color = if (adjusted) Color.Black else ErgOnSurface,
+                    // Both ErgIntensityUp/Down are dark enough to need light text, unlike the
+                    // brighter amber/lavender this pill used before — so unlike the mode tag
+                    // (still black-on-bright), this text stays ErgOnSurface in every state.
+                    color = ErgOnSurface,
                 )
             }
         }

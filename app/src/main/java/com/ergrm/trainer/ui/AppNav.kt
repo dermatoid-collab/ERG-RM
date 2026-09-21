@@ -38,7 +38,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ergrm.trainer.ble.TrainerConnectionState
 import com.ergrm.trainer.ui.theme.ErgRmTheme
-import com.ergrm.trainer.ui.theme.ErgSurface2
 
 private enum class Screen { CONNECT, WORKOUT }
 private enum class Overlay { NONE, SETTINGS, LIBRARY, HISTORY, CALENDAR, INTERVALS_LIBRARY }
@@ -183,7 +182,10 @@ private fun NavIcon(
         modifier = Modifier
             .padding(2.dp)
             .clip(RoundedCornerShape(50))
-            .background(if (active) ErgSurface2 else Color.Transparent),
+            // ErgSurface2 was nearly indistinguishable from the bar's own background — a
+            // translucent white lightens whatever's underneath instead, reading as a clearer
+            // highlight without needing its own fixed color.
+            .background(if (active) Color.White.copy(alpha = 0.12f) else Color.Transparent),
     ) {
         Icon(icon, contentDescription = contentDescription, tint = tint)
     }
