@@ -200,6 +200,11 @@ private fun StatTileGrid(live: TrainerSample, workoutState: WorkoutRunState, ftp
     }
     val zone = zoneFor(target, ftpWatts)
     val isHrPlus = workoutState.controlMode == ControlMode.HR_PLUS
+    // The row a metric lands in decides its color style, not the metric itself: whichever stat
+    // sits next to Cadence (row 2) is colored by zone, and whichever sits next to Target (row 3)
+    // is colored by deviation from that target — Watts is in row 2 in HR+, row 3 in ERG, so it
+    // flips between the two the same way HR already does below.
+    val wattsColor = if (isHrPlus) zone.color else powerColor
     // Mirrors powerColor's ±15W-vs-target logic, at a ±5bpm deadband — but only HR+ has a bpm
     // target to compare against (currentTargetBpm is always null in ERG), so this only applies
     // there. In ERG, with no target to be "on" or "off", fall back to the HR-zone color instead.
@@ -245,7 +250,7 @@ private fun StatTileGrid(live: TrainerSample, workoutState: WorkoutRunState, ftp
                     label = if (showPercentFtp) "% FTP" else "Watts",
                     value = if (showPercentFtp) percentOfFtp(actual, ftpWatts) else "$actual",
                     modifier = Modifier.weight(1f),
-                    valueColor = powerColor,
+                    valueColor = wattsColor,
                     onClick = { showPercentFtp = !showPercentFtp },
                 )
             } else {
@@ -282,7 +287,7 @@ private fun StatTileGrid(live: TrainerSample, workoutState: WorkoutRunState, ftp
                     label = if (showPercentFtp) "% FTP" else "Watts",
                     value = if (showPercentFtp) percentOfFtp(actual, ftpWatts) else "$actual",
                     modifier = Modifier.weight(1f),
-                    valueColor = powerColor,
+                    valueColor = wattsColor,
                     onClick = { showPercentFtp = !showPercentFtp },
                 )
             }
