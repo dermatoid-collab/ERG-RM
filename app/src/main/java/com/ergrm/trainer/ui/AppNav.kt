@@ -47,14 +47,15 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
     ErgRmTheme {
         Surface(color = MaterialTheme.colorScheme.background) {
             var overlay by remember { mutableStateOf(Overlay.NONE) }
-            var screen by remember { mutableStateOf(Screen.CONNECT) }
+            var screen by remember { mutableStateOf(Screen.WORKOUT) }
             val connectionState by viewModel.connectionState.collectAsState()
             val settings by viewModel.settings.collectAsState()
             val isConnected = connectionState is TrainerConnectionState.Ready
             val snackbarHostState = remember { SnackbarHostState() }
 
-            // Jump to the workout screen automatically once the trainer connects,
-            // but the user can also navigate there manually beforehand.
+            // Workout is already the default landing screen, but this also pulls the rider back
+            // to it if they'd navigated to Connect (e.g. to pick a different trainer) and it
+            // then connects — same as a fresh connection would.
             LaunchedEffect(isConnected) {
                 if (isConnected) screen = Screen.WORKOUT
             }
