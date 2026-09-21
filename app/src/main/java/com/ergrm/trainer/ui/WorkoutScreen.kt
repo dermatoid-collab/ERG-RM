@@ -200,7 +200,20 @@ private fun StatTileGrid(live: TrainerSample, workoutState: WorkoutRunState, ftp
     }
     val zone = zoneFor(target, ftpWatts)
     val isHrPlus = workoutState.controlMode == ControlMode.HR_PLUS
-    val hrColor = live.heartRateBpm?.let { zoneForHr(it, lthrBpm).color } ?: ErgOnSurface
+    // Mirrors powerColor's ±15W-vs-target logic, at a ±5bpm deadband — but only HR+ has a bpm
+    // target to compare against (currentTargetBpm is always null in ERG), so this only applies
+    // there. In ERG, with no target to be "on" or "off", fall back to the HR-zone color instead.
+    val hrTargetColor = workoutState.currentTargetBpm?.let { hrTarget ->
+        live.heartRateBpm?.let { hrActual ->
+            when {
+                hrActual < hrTarget - 5 -> ErgBelowTarget
+                hrActual > hrTarget + 5 -> ErgAboveTarget
+                else -> ErgAtTarget
+            }
+        }
+    }
+    val hrZoneColor = live.heartRateBpm?.let { zoneForHr(it, lthrBpm).color } ?: ErgOnSurface
+    val hrColor = hrTargetColor ?: hrZoneColor
 
     var intervalShowElapsed by remember { mutableStateOf(false) }
     var totalShowElapsed by remember { mutableStateOf(true) }
