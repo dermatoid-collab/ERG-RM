@@ -64,6 +64,10 @@ import java.io.File
 import java.util.UUID
 import kotlin.math.roundToInt
 
+/** Why [MainViewModel.autoBackupNeeded] fired — WorkoutScreen shows a different dialog message
+ *  for each, but both point at the same fix (Settings' backup folder picker). */
+enum class AutoBackupNeededReason { NOT_CONFIGURED, WRITE_FAILED }
+
 sealed interface WorkoutLoadState {
     data object Idle : WorkoutLoadState
     data object Loading : WorkoutLoadState
@@ -158,6 +162,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // rather than re-showing it on every recomposition the way a StateFlow would.
     private val _snackbarMessages = MutableSharedFlow<String>()
     val snackbarMessages: SharedFlow<String> = _snackbarMessages.asSharedFlow()
+
+    private val _autoBackupNeeded = MutableSharedFlow<AutoBackupNeededReason>(extraBufferCapacity = 1)
+    val autoBackupNeeded: SharedFlow<AutoBackupNeededReason> = _autoBackupNeeded.asSharedFlow()
 
     private var scanJob: Job? = null
 
@@ -526,22 +533,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     getApplication(),
                     "%d:%02d · avg %d W".format(minutes, seconds, session.avgWatts),
                 )
-                // Silent on success — a snackbar after every single ride would be noise once this
-                // is working. Speaks up (snackbar + a notification that deep-links straight to
-                // Settings' backup section) whenever this ride didn't actually get backed up,
-                // whether because no folder is set yet or because writing to it failed — a
-                // silent miss here is exactly what led to losing a ride and prompting this
-                // feature in the first place, so it must never go unnoticed again.
+                // Silent on success — a dialog after every single ride would be noise once this
+                // is working. Speaks up (an in-app dialog, not just a notification easy to miss
+                // in the shade) whenever this ride didn't actually get backed up, whether because
+                // no folder is set yet or because writing to it failed — a silent miss here is
+                // exactly what led to losing a ride and prompting this feature in the first
+                // place, so it must never go unnoticed again.
                 val backupFolder = settings.value.backupFolderUri
                 val backedUp = backupFolder != null && backupRepository.writeSessionToFolder(Uri.parse(backupFolder), session)
                 if (!backedUp) {
-                    val (title, text) = if (backupFolder == null) {
-                        "Auto-backup not set up" to "This ride wasn't backed up — tap to choose a folder"
-                    } else {
-                        "Auto-backup failed" to "This ride wasn't backed up — tap to check the folder"
-                    }
-                    _snackbarMessages.emit("$title — check Settings")
-                    AppNotifications.notifyAutoBackupNeeded(getApplication(), title, text)
+                    _autoBackupNeeded.emit(
+                        if (backupFolder == null) AutoBackupNeededReason.NOT_CONFIGURED else AutoBackupNeededReason.WRITE_FAILED,
+                    )
                 }
             }
         }

@@ -35,6 +35,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -96,6 +97,11 @@ fun WorkoutScreen(
     val samples by viewModel.sampleHistory.collectAsState()
     val settings by viewModel.settings.collectAsState()
     var showStopConfirm by remember { mutableStateOf(false) }
+    var autoBackupDialogReason by remember { mutableStateOf<AutoBackupNeededReason?>(null) }
+
+    LaunchedEffect(Unit) {
+        viewModel.autoBackupNeeded.collect { reason -> autoBackupDialogReason = reason }
+    }
 
     Column(
         modifier = Modifier
@@ -147,6 +153,33 @@ fun WorkoutScreen(
                 },
                 dismissButton = {
                     TextButton(onClick = { showStopConfirm = false }) { Text("Cancel") }
+                },
+            )
+        }
+
+        autoBackupDialogReason?.let { reason ->
+            AlertDialog(
+                onDismissRequest = { autoBackupDialogReason = null },
+                title = {
+                    Text(if (reason == AutoBackupNeededReason.NOT_CONFIGURED) "Auto-backup not set up" else "Auto-backup failed")
+                },
+                text = {
+                    Text(
+                        if (reason == AutoBackupNeededReason.NOT_CONFIGURED) {
+                            "This ride wasn't backed up — no auto-backup folder is set. Choose one in Settings?"
+                        } else {
+                            "This ride wasn't backed up — writing to the auto-backup folder failed. Check it in Settings?"
+                        },
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        autoBackupDialogReason = null
+                        AppNavigationEvents.openSettingsForBackup.tryEmit(Unit)
+                    }) { Text("Go to Settings") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { autoBackupDialogReason = null }) { Text("Not now") }
                 },
             )
         }
@@ -906,7 +939,7 @@ private fun IntervalDetailBlock(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(label, style = MaterialTheme.typography.labelSmall, color = ErgOnSurface, maxLines = 1)
-        Text(formatTime(remainingSec), style = MaterialTheme.typography.bodyMedium, maxLines = 1)
+        Text(formatMinSec(remainingSec), style = MaterialTheme.typography.bodyMedium, maxLines = 1)
         // The label/time/zone chip are always short and fixed-width; the value is the one piece
         // that can genuinely run long (a three-digit bpm range like "150–220 bpm" is wider than
         // any watt range ever was). weight(fill = false) reserves the fixed pieces' space first
@@ -1122,4 +1155,12 @@ private fun formatTime(totalSeconds: Int): String {
     val m = (totalSeconds % 3600) / 60
     val s = totalSeconds % 60
     return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
+}
+
+/** Always m:ss, even past an hour — used only for the Now/Next row's remaining-time text, which
+ *  stays compact since it's tracking a single interval, not the whole workout. */
+private fun formatMinSec(totalSeconds: Int): String {
+    val m = totalSeconds / 60
+    val s = totalSeconds % 60
+    return "%d:%02d".format(m, s)
 }
