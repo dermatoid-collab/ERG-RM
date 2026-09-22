@@ -527,12 +527,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     "%d:%02d · avg %d W".format(minutes, seconds, session.avgWatts),
                 )
                 // Silent on success — a snackbar after every single ride would be noise once this
-                // is working. Only speaks up if it fails, since a silently-broken auto-backup is
-                // worse than the manual export it's meant to replace: the rider would only find
-                // out the hard way, exactly like the uninstall that prompted adding this at all.
+                // is working. Speaks up (snackbar + a notification that deep-links straight to
+                // Settings' backup section) whenever this ride didn't actually get backed up,
+                // whether because no folder is set yet or because writing to it failed — a
+                // silent miss here is exactly what led to losing a ride and prompting this
+                // feature in the first place, so it must never go unnoticed again.
                 val backupFolder = settings.value.backupFolderUri
-                if (backupFolder != null && !backupRepository.writeSessionToFolder(Uri.parse(backupFolder), session)) {
-                    _snackbarMessages.emit("Auto-backup failed — check the backup folder in Settings")
+                val backedUp = backupFolder != null && backupRepository.writeSessionToFolder(Uri.parse(backupFolder), session)
+                if (!backedUp) {
+                    val (title, text) = if (backupFolder == null) {
+                        "Auto-backup not set up" to "This ride wasn't backed up — tap to choose a folder"
+                    } else {
+                        "Auto-backup failed" to "This ride wasn't backed up — tap to check the folder"
+                    }
+                    _snackbarMessages.emit("$title — check Settings")
+                    AppNotifications.notifyAutoBackupNeeded(getApplication(), title, text)
                 }
             }
         }

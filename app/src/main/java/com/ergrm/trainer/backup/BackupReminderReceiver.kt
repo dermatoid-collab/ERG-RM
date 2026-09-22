@@ -30,7 +30,7 @@ class BackupReminderReceiver : BroadcastReceiver() {
         )
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setContentTitle("Time for a backup")
-            .setContentText("Export your settings and ride history to keep them safe")
+            .setContentText("Export your settings to keep them safe")
             .setSmallIcon(R.drawable.ic_notification_bolt)
             .setAutoCancel(true)
             .setContentIntent(contentIntent)
