@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -36,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ergrm.trainer.ble.HrConnectionState
@@ -123,6 +125,7 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
                                     overlay = Overlay.NONE
                                     screen = Screen.WORKOUT
                                 },
+                                underlineOffsetX = 1.5.dp,
                             )
                             NavIcon(
                                 icon = Icons.Filled.Bluetooth,
@@ -145,6 +148,7 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
                                 contentDescription = "History",
                                 active = overlay == Overlay.HISTORY,
                                 onClick = { overlay = Overlay.HISTORY },
+                                underlineOffsetX = 1.5.dp,
                             )
                             NavIcon(
                                 icon = Icons.Filled.Settings,
@@ -214,7 +218,12 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
  *  Bluetooth's own green "connected" tint and the "you're on this page" indicator can both show
  *  at once without fighting over the same signal. The underline carries no color meaning of its
  *  own (just presence/absence) since color on these icons is already spoken for by Bluetooth's
- *  connection-state tint. */
+ *  connection-state tint.
+ *
+ *  [underlineOffsetX] nudges the mark left/right of dead center — some Material glyphs (the
+ *  FitnessCenter dumbbell, the History clock-arrow) aren't drawn symmetrically within their own
+ *  24dp bounds, so a mark centered on the *layout* box reads as off-center under the *glyph*. A
+ *  perfectly symmetric icon (Bluetooth, FolderOpen, Settings) needs no correction. */
 @Composable
 private fun NavIcon(
     icon: ImageVector,
@@ -222,6 +231,7 @@ private fun NavIcon(
     active: Boolean,
     onClick: () -> Unit,
     tint: Color = MaterialTheme.colorScheme.onSurface,
+    underlineOffsetX: Dp = 0.dp,
 ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         IconButton(onClick = onClick) {
@@ -230,6 +240,7 @@ private fun NavIcon(
         Box(
             modifier = Modifier
                 .padding(top = 1.dp)
+                .offset(x = underlineOffsetX)
                 .size(width = 20.dp, height = 2.5.dp)
                 .clip(RoundedCornerShape(50))
                 .background(if (active) Color.White.copy(alpha = 0.55f) else Color.Transparent),
