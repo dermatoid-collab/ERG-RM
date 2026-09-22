@@ -88,9 +88,7 @@ import kotlin.math.roundToInt
 fun WorkoutScreen(
     viewModel: MainViewModel,
     isTrainerConnected: Boolean = true,
-    onOpenLibrary: () -> Unit = {},
-    onOpenCalendar: () -> Unit = {},
-    onOpenIntervalsLibrary: () -> Unit = {},
+    otherSources: List<Pair<String, () -> Unit>> = emptyList(),
 ) {
     val live by viewModel.liveData.collectAsState()
     val workoutState by viewModel.workoutState.collectAsState()
@@ -111,10 +109,7 @@ fun WorkoutScreen(
                 is WorkoutLoadState.Loaded -> loaded.name
                 else -> if (workoutState.steps.isNotEmpty()) "Workout" else "No workout loaded"
             },
-            onLoadToday = { viewModel.fetchTodayWorkout() },
-            onOpenCalendar = onOpenCalendar,
-            onOpenIntervalsLibrary = onOpenIntervalsLibrary,
-            onPickFromLibrary = onOpenLibrary,
+            otherSources = otherSources,
         )
 
         if (!isTrainerConnected) {
@@ -1086,16 +1081,11 @@ private fun IntensityRow(
     }
 }
 
-/** Workout title, tap to choose where to load a plan from: today's Intervals.icu workout
- *  directly, the Intervals.icu calendar, the Intervals.icu saved-workout library, or local files. */
+/** Workout title, tap to choose where to load a plan from — the same 4 sources and labels as
+ *  every other screen's "Other sources" menu, just triggered from the title itself instead of a
+ *  labeled button, since this screen has no separate space to spare for one. */
 @Composable
-private fun WorkoutHeader(
-    title: String,
-    onLoadToday: () -> Unit,
-    onOpenCalendar: () -> Unit,
-    onOpenIntervalsLibrary: () -> Unit,
-    onPickFromLibrary: () -> Unit,
-) {
+private fun WorkoutHeader(title: String, otherSources: List<Pair<String, () -> Unit>>) {
     var expanded by remember { mutableStateOf(false) }
     Box {
         Row(
@@ -1111,34 +1101,15 @@ private fun WorkoutHeader(
             Icon(Icons.Filled.ArrowDropDown, contentDescription = "Choose workout")
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            DropdownMenuItem(
-                text = { Text("Intervals WOD") },
-                onClick = {
-                    expanded = false
-                    onLoadToday()
-                },
-            )
-            DropdownMenuItem(
-                text = { Text("Calendar (Intervals.icu)") },
-                onClick = {
-                    expanded = false
-                    onOpenCalendar()
-                },
-            )
-            DropdownMenuItem(
-                text = { Text("Intervals.icu Library") },
-                onClick = {
-                    expanded = false
-                    onOpenIntervalsLibrary()
-                },
-            )
-            DropdownMenuItem(
-                text = { Text("Local files") },
-                onClick = {
-                    expanded = false
-                    onPickFromLibrary()
-                },
-            )
+            otherSources.forEach { (label, action) ->
+                DropdownMenuItem(
+                    text = { Text(label) },
+                    onClick = {
+                        expanded = false
+                        action()
+                    },
+                )
+            }
         }
     }
 }

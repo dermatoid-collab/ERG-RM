@@ -44,9 +44,7 @@ private val dayHeaderFormatter = DateTimeFormatter.ofPattern("EEE d MMM")
 fun CalendarScreen(
     viewModel: MainViewModel,
     onPicked: () -> Unit = {},
-    onLoadToday: () -> Unit = {},
-    onOpenIntervalsLibrary: () -> Unit = {},
-    onOpenLibrary: () -> Unit = {},
+    otherSources: List<Pair<String, () -> Unit>> = emptyList(),
 ) {
     val settings by viewModel.settings.collectAsState()
     val calendarState by viewModel.calendarState.collectAsState()
@@ -63,15 +61,15 @@ fun CalendarScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("Calendar", style = MaterialTheme.typography.titleLarge)
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                WorkoutSourceMenu(
-                    listOf(
-                        "Intervals WOD" to onLoadToday,
-                        "Intervals.icu Library" to onOpenIntervalsLibrary,
-                        "Local files" to onOpenLibrary,
-                    )
-                )
+            Text(
+                "Calendar (Intervals.icu)",
+                style = MaterialTheme.typography.titleLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                WorkoutSourceMenu(otherSources)
                 IconButton(onClick = { viewModel.fetchCalendarWorkouts() }) {
                     Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
                 }

@@ -54,9 +54,7 @@ import kotlinx.coroutines.delay
 fun IntervalsLibraryScreen(
     viewModel: MainViewModel,
     onPicked: () -> Unit = {},
-    onLoadToday: () -> Unit = {},
-    onOpenCalendar: () -> Unit = {},
-    onOpenLibrary: () -> Unit = {},
+    otherSources: List<Pair<String, () -> Unit>> = emptyList(),
 ) {
     val settings by viewModel.settings.collectAsState()
     val state by viewModel.intervalsLibraryState.collectAsState()
@@ -89,15 +87,15 @@ fun IntervalsLibraryScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("Intervals.icu Library", style = MaterialTheme.typography.titleLarge)
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                WorkoutSourceMenu(
-                    listOf(
-                        "Intervals WOD" to onLoadToday,
-                        "Calendar (Intervals.icu)" to onOpenCalendar,
-                        "Local files" to onOpenLibrary,
-                    )
-                )
+            Text(
+                "Library (Intervals.icu)",
+                style = MaterialTheme.typography.titleLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                WorkoutSourceMenu(otherSources)
                 IconButton(onClick = { viewModel.fetchIntervalsLibrary() }) {
                     Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
                 }

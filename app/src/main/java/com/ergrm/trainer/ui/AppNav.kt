@@ -100,6 +100,20 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
                 }
             }
 
+            // The same 4 items, same order, on every screen's "Other sources" menu (Workout's own
+            // header included) — each item still works when tapped from the screen it points to,
+            // it's just a no-op, so the menu never has to leave anything out to stay consistent.
+            val otherSources: List<Pair<String, () -> Unit>> = listOf(
+                "Intervals.icu WOD" to {
+                    viewModel.fetchTodayWorkout()
+                    overlay = Overlay.NONE
+                    screen = Screen.WORKOUT
+                },
+                "Calendar (Intervals.icu)" to { overlay = Overlay.CALENDAR },
+                "Library (Intervals.icu)" to { overlay = Overlay.INTERVALS_LIBRARY },
+                "Workout Library" to { overlay = Overlay.LIBRARY },
+            )
+
             Scaffold(
                 snackbarHost = { SnackbarHost(snackbarHostState) },
                 topBar = {
@@ -171,40 +185,23 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
                         overlay == Overlay.LIBRARY -> LibraryScreen(
                             viewModel,
                             onImported = { overlay = Overlay.NONE },
-                            onOpenCalendar = { overlay = Overlay.CALENDAR },
-                            onOpenIntervalsLibrary = { overlay = Overlay.INTERVALS_LIBRARY },
-                            onLoadToday = {
-                                viewModel.fetchTodayWorkout()
-                                overlay = Overlay.NONE
-                            },
+                            otherSources = otherSources,
                         )
                         overlay == Overlay.HISTORY -> HistoryScreen(viewModel)
                         overlay == Overlay.CALENDAR -> CalendarScreen(
                             viewModel,
                             onPicked = { overlay = Overlay.NONE },
-                            onLoadToday = {
-                                viewModel.fetchTodayWorkout()
-                                overlay = Overlay.NONE
-                            },
-                            onOpenIntervalsLibrary = { overlay = Overlay.INTERVALS_LIBRARY },
-                            onOpenLibrary = { overlay = Overlay.LIBRARY },
+                            otherSources = otherSources,
                         )
                         overlay == Overlay.INTERVALS_LIBRARY -> IntervalsLibraryScreen(
                             viewModel,
                             onPicked = { overlay = Overlay.NONE },
-                            onLoadToday = {
-                                viewModel.fetchTodayWorkout()
-                                overlay = Overlay.NONE
-                            },
-                            onOpenCalendar = { overlay = Overlay.CALENDAR },
-                            onOpenLibrary = { overlay = Overlay.LIBRARY },
+                            otherSources = otherSources,
                         )
                         screen == Screen.WORKOUT -> WorkoutScreen(
                             viewModel,
                             isTrainerConnected = isConnected,
-                            onOpenLibrary = { overlay = Overlay.LIBRARY },
-                            onOpenCalendar = { overlay = Overlay.CALENDAR },
-                            onOpenIntervalsLibrary = { overlay = Overlay.INTERVALS_LIBRARY },
+                            otherSources = otherSources,
                         )
                         else -> ConnectScreen(viewModel)
                     }

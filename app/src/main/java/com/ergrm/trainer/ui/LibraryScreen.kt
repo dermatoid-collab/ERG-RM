@@ -46,9 +46,7 @@ import com.ergrm.trainer.workout.WorkoutStep
 fun LibraryScreen(
     viewModel: MainViewModel,
     onImported: () -> Unit = {},
-    onOpenCalendar: () -> Unit = {},
-    onOpenIntervalsLibrary: () -> Unit = {},
-    onLoadToday: () -> Unit = {},
+    otherSources: List<Pair<String, () -> Unit>> = emptyList(),
 ) {
     val settings by viewModel.settings.collectAsState()
     val libraryState by viewModel.libraryState.collectAsState()
@@ -72,9 +70,15 @@ fun LibraryScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("Workout library", style = MaterialTheme.typography.titleLarge)
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                OtherSourcesMenu(onOpenCalendar = onOpenCalendar, onOpenIntervalsLibrary = onOpenIntervalsLibrary, onLoadToday = onLoadToday)
+            Text(
+                "Workout Library",
+                style = MaterialTheme.typography.titleLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                WorkoutSourceMenu(otherSources)
                 IconButton(onClick = { viewModel.refreshLibrary() }) {
                     Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
                 }
@@ -156,29 +160,11 @@ fun LibraryScreen(
     }
 }
 
-/** This screen is local files' own home; the other three workout sources (also reachable from
- *  the Workout screen's own header menu, unchanged) get a compact dropdown here instead of three
- *  separate buttons competing with the title for space. */
-@Composable
-private fun OtherSourcesMenu(
-    onOpenCalendar: () -> Unit,
-    onOpenIntervalsLibrary: () -> Unit,
-    onLoadToday: () -> Unit,
-) {
-    WorkoutSourceMenu(
-        listOf(
-            "Intervals WOD" to onLoadToday,
-            "Calendar (Intervals.icu)" to onOpenCalendar,
-            "Intervals.icu Library" to onOpenIntervalsLibrary,
-        )
-    )
-}
-
-/** Same dropdown, reused on every workout-source screen (Library, Calendar, Intervals.icu
- *  Library) so you can jump straight to another source without backing out first — each caller
- *  leaves its own screen out of [items], since a self-referential entry would be a no-op at best
- *  and, on the Intervals.icu Library screen specifically, would duplicate that screen's own
- *  title text right next to it. */
+/** Same dropdown, reused identically on every workout-source screen (Workout's own header,
+ *  Library, Calendar, Intervals.icu Library) so you can jump straight to another source without
+ *  backing out first — always the same 4 items in the same order, including the screen you're
+ *  already on (tapping it is a harmless no-op), so the menu never looks different depending on
+ *  where you opened it from. */
 @Composable
 internal fun WorkoutSourceMenu(items: List<Pair<String, () -> Unit>>) {
     var expanded by remember { mutableStateOf(false) }
