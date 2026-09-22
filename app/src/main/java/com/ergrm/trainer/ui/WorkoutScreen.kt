@@ -717,7 +717,7 @@ internal data class PowerZone(val label: String, val color: Color)
  * Lactate Threshold, VO2max, Anaerobic Capacity, Neuromuscular Power.
  */
 internal val POWER_ZONES = listOf(
-    0.55f to PowerZone("Z1", Color(0xFF8C97AB)),
+    0.55f to PowerZone("Z1", Color(0xFFA3AEC0)),
     0.75f to PowerZone("Z2", ErgBelowTarget),
     0.90f to PowerZone("Z3", ErgAccent),
     1.05f to PowerZone("Z4", Color(0xFFE6C15A)),
