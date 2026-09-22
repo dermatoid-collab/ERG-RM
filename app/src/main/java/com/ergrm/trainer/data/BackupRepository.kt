@@ -42,32 +42,38 @@ class BackupRepository(
         return out.toByteArray()
     }
 
-    private fun backupFileName(): String {
-        val stamp = SimpleDateFormat("ddMMyy_HHmm", Locale.US).format(Date())
-        return "erg_rm_backup_$stamp.json.gz"
-    }
-
     /** Writes the current settings + history to a freshly timestamped backup file and returns
      *  it, ready to share via FileProvider — a new file per export (rather than one fixed name)
      *  so re-exporting to the same Drive folder doesn't collide with or silently replace the
-     *  previous backup. */
+     *  previous backup. This is the manual, one-off export; [writeToFolder] is the automatic
+     *  one, which deliberately does the opposite (one fixed, overwritten file) since it fires
+     *  after every single saved ride. */
     suspend fun exportFile(): File = withContext(Dispatchers.IO) {
-        val file = File(context.filesDir, backupFileName())
+        val stamp = SimpleDateFormat("ddMMyy_HHmm", Locale.US).format(Date())
+        val file = File(context.filesDir, "erg_rm_backup_$stamp.json.gz")
         file.writeBytes(buildGzippedBytes())
         file
     }
 
     /** Same backup, written straight into a SAF folder the user picked once (e.g. a Drive-synced
      *  folder) instead of the app's own internal storage — the whole point being that it survives
-     *  an uninstall, unlike [exportFile]'s copy. Called automatically after every saved workout;
-     *  returns false (rather than throwing) if the folder is gone or permission was revoked, so
-     *  the caller can warn the rider instead of crashing on a routine save. */
+     *  an uninstall, unlike [exportFile]'s copy. Called automatically after every saved workout,
+     *  so unlike [exportFile] it always overwrites the same file name rather than piling up a new
+     *  one each time — the latest backup already contains the full history, so nothing is lost by
+     *  not keeping the older ones. Returns false (rather than throwing) if the folder is gone or
+     *  permission was revoked, so the caller can warn the rider instead of crashing on a routine
+     *  save. */
     suspend fun writeToFolder(folderUri: Uri): Boolean = withContext(Dispatchers.IO) {
         try {
             val folder = DocumentFile.fromTreeUri(context, folderUri) ?: return@withContext false
             if (!folder.exists() || !folder.isDirectory) return@withContext false
-            val target = folder.createFile("application/gzip", backupFileName()) ?: return@withContext false
+            val fileName = "erg_rm_backup.json.gz"
+            val target = folder.findFile(fileName)
+                ?: folder.createFile("application/gzip", fileName)
+                ?: return@withContext false
             val bytes = buildGzippedBytes()
+            // Default "w" mode already implies truncate (see ParcelFileDescriptor.parseMode), so
+            // overwriting a shorter backup over a longer previous one doesn't leave trailing bytes.
             context.contentResolver.openOutputStream(target.uri)?.use { it.write(bytes) } ?: return@withContext false
             true
         } catch (t: Exception) {
