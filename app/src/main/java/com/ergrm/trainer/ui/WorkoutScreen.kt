@@ -143,7 +143,7 @@ fun WorkoutScreen(
                     TextButton(onClick = {
                         showStopConfirm = false
                         viewModel.exitWorkout()
-                    }) { Text("OK") }
+                    }) { Text("Save") }
                 },
                 dismissButton = {
                     TextButton(onClick = { showStopConfirm = false }) { Text("Cancel") }
