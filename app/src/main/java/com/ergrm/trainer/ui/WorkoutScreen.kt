@@ -215,7 +215,9 @@ private fun StatTileGrid(live: TrainerSample, workoutState: WorkoutRunState, ftp
     val target = workoutState.currentTargetWatts
     val powerColor = when {
         target <= 0 -> ErgOnSurface
-        actual < target - 15 -> ErgBelowTarget
+        // Z4's amber (ErgWarn shares its hex) instead of ErgBelowTarget's blue — that blue stays
+        // Z2's own zone color and HR's below-target color, both untouched by this Watts-only ask.
+        actual < target - 15 -> ErgWarn
         actual > target + 15 -> ErgAboveTarget
         else -> ErgAtTarget
     }
