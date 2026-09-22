@@ -722,9 +722,9 @@ internal val POWER_ZONES = listOf(
     0.90f to PowerZone("Z3", ErgAccent),
     1.05f to PowerZone("Z4", Color(0xFFE6C15A)),
     1.20f to PowerZone("Z5", Color(0xFFE08A3E)),
-    1.50f to PowerZone("Z6", ErgAboveTarget),
+    1.50f to PowerZone("Z6", Color(0xFFB23A5A)),
 )
-internal val ZONE_MAX = PowerZone("Z7", Color(0xFFB23A5A))
+internal val ZONE_MAX = PowerZone("Z7", Color(0xFFA855F7))
 
 internal fun zoneFor(watts: Int, ftpWatts: Int): PowerZone {
     if (ftpWatts <= 0) return PowerZone("--", ErgOnSurface)
