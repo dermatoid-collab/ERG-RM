@@ -1115,8 +1115,11 @@ private fun WorkoutHeader(title: String, otherSources: List<Pair<String, () -> U
     }
 }
 
+/** m:ss under an hour, h:mm:ss at or past it — switches back to m:ss the moment the value drops
+ *  under 3600s again (e.g. TOTAL's remaining-time countdown crossing under an hour left). */
 private fun formatTime(totalSeconds: Int): String {
-    val m = totalSeconds / 60
+    val h = totalSeconds / 3600
+    val m = (totalSeconds % 3600) / 60
     val s = totalSeconds % 60
-    return "%d:%02d".format(m, s)
+    return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
 }
