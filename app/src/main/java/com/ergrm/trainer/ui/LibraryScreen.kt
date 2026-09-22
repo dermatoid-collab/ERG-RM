@@ -167,7 +167,7 @@ internal fun WorkoutSourceMenu(items: List<Pair<String, () -> Unit>>) {
     var expanded by remember { mutableStateOf(false) }
     Box {
         TextButton(onClick = { expanded = true }) {
-            Text("Other sources")
+            Text("Sources")
             Icon(Icons.Filled.ArrowDropDown, contentDescription = null)
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
