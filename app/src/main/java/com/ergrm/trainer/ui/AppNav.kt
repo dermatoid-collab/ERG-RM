@@ -3,6 +3,7 @@ package com.ergrm.trainer.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -209,9 +210,11 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
     }
 }
 
-/** A top-bar icon with a rounded highlight behind it when [active] — independent of [tint], so
- *  Bluetooth's own green "connected" tint and the "you're on this page" highlight can both show
- *  at once without fighting over the same signal. */
+/** A top-bar icon with a thin underline mark when [active] — independent of [tint], so
+ *  Bluetooth's own green "connected" tint and the "you're on this page" indicator can both show
+ *  at once without fighting over the same signal. The underline carries no color meaning of its
+ *  own (just presence/absence) since color on these icons is already spoken for by Bluetooth's
+ *  connection-state tint. */
 @Composable
 private fun NavIcon(
     icon: ImageVector,
@@ -220,22 +223,16 @@ private fun NavIcon(
     onClick: () -> Unit,
     tint: Color = MaterialTheme.colorScheme.onSurface,
 ) {
-    // The highlight sits on its own inner Box instead of IconButton's own modifier — IconButton
-    // enforces Android's 48dp min touch target, so a background there always rendered as a
-    // ~44dp circle regardless of this size. Sizing it here shrinks the visible pill while the
-    // tappable area (and the icon's own 24dp glyph, which it still fully covers) stays the same.
-    IconButton(onClick = onClick) {
-        Box(
-            modifier = Modifier
-                .size(38.dp)
-                .clip(RoundedCornerShape(50))
-                // ErgSurface2 was nearly indistinguishable from the bar's own background — a
-                // translucent white lightens whatever's underneath instead, reading as a clearer
-                // highlight without needing its own fixed color.
-                .background(if (active) Color.White.copy(alpha = 0.12f) else Color.Transparent),
-            contentAlignment = Alignment.Center,
-        ) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        IconButton(onClick = onClick) {
             Icon(icon, contentDescription = contentDescription, tint = tint)
         }
+        Box(
+            modifier = Modifier
+                .padding(top = 1.dp)
+                .size(width = 20.dp, height = 2.5.dp)
+                .clip(RoundedCornerShape(50))
+                .background(if (active) Color.White.copy(alpha = 0.55f) else Color.Transparent),
+        )
     }
 }
