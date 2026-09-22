@@ -56,21 +56,23 @@ fun CalendarScreen(
             .fillMaxSize()
             .padding(16.dp),
     ) {
-        // Title on its own line — the two-row layout (rather than title + menu side by side)
-        // guarantees the full label never competes for width with "Other sources" + Refresh,
-        // which "Calendar (Intervals.icu)" at titleLarge realistically would on many phones,
-        // especially with a larger system font scale.
-        Text("Calendar (Intervals.icu)", style = MaterialTheme.typography.titleLarge)
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp, alignment = Alignment.End),
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            WorkoutSourceMenu(otherSources)
-            IconButton(onClick = { viewModel.fetchCalendarWorkouts() }) {
-                Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
+            Text(
+                "Calendar (Intervals.icu)",
+                style = MaterialTheme.typography.titleLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                WorkoutSourceMenu(otherSources)
+                IconButton(onClick = { viewModel.fetchCalendarWorkouts() }) {
+                    Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
+                }
             }
         }
 
