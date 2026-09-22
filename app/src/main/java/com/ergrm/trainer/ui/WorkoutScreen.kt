@@ -744,7 +744,7 @@ private fun ChartTimeAxis(zoom: ChartZoom, totalElapsedSec: Int, totalDurationSe
     Canvas(
         modifier = Modifier
             .fillMaxWidth()
-            .height(16.dp),
+            .height(20.dp),
     ) {
         if (totalDurationSec <= 0) return@Canvas
         val w = size.width
@@ -752,13 +752,26 @@ private fun ChartTimeAxis(zoom: ChartZoom, totalElapsedSec: Int, totalDurationSe
         val windowLen = (windowEnd - windowStart).coerceAtLeast(1)
         fun xAt(t: Int): Float = w * (t - windowStart) / windowLen.toFloat()
 
+        val tickHeight = 3.dp.toPx()
+        val tickToLabelGap = 2.dp.toPx()
         val intervalSec = axisLabelIntervalMin(zoom, totalDurationSec) * 60
         var tSec = ((windowStart + intervalSec - 1) / intervalSec) * intervalSec
         if (tSec <= windowStart) tSec += intervalSec
         while (tSec < windowEnd) {
             val x = xAt(tSec)
+            // Matches TrainerDay: a short tick marks the exact instant each label refers to,
+            // rather than leaving the number to imply its own position.
+            drawLine(
+                color = ErgOnSurface.copy(alpha = 0.35f),
+                start = Offset(x, 0f),
+                end = Offset(x, tickHeight),
+                strokeWidth = 1f,
+            )
             val label = textMeasurer.measure("${tSec / 60}", TextStyle(fontSize = 10.sp, color = ErgOnSurface.copy(alpha = 0.5f)))
-            drawText(label, topLeft = Offset((x - label.size.width / 2f).coerceIn(0f, w - label.size.width), 0f))
+            drawText(
+                label,
+                topLeft = Offset((x - label.size.width / 2f).coerceIn(0f, w - label.size.width), tickHeight + tickToLabelGap),
+            )
             tSec += intervalSec
         }
     }
