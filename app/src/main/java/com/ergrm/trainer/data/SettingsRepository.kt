@@ -23,6 +23,8 @@ data class AppSettings(
     val lastHrDeviceName: String? = null,
     val libraryFolderUri: String? = null,
     val libraryFolderName: String? = null,
+    val backupFolderUri: String? = null,
+    val backupFolderName: String? = null,
 ) {
     val intervalsConfigured: Boolean get() = intervalsApiKey.isNotBlank() && intervalsAthleteId.isNotBlank()
 }
@@ -40,6 +42,8 @@ class SettingsRepository(private val context: Context) {
         val HR_DEVICE_NAME = stringPreferencesKey("last_hr_device_name")
         val LIBRARY_FOLDER_URI = stringPreferencesKey("library_folder_uri")
         val LIBRARY_FOLDER_NAME = stringPreferencesKey("library_folder_name")
+        val BACKUP_FOLDER_URI = stringPreferencesKey("backup_folder_uri")
+        val BACKUP_FOLDER_NAME = stringPreferencesKey("backup_folder_name")
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { prefs ->
@@ -54,6 +58,8 @@ class SettingsRepository(private val context: Context) {
             lastHrDeviceName = prefs[Keys.HR_DEVICE_NAME],
             libraryFolderUri = prefs[Keys.LIBRARY_FOLDER_URI],
             libraryFolderName = prefs[Keys.LIBRARY_FOLDER_NAME],
+            backupFolderUri = prefs[Keys.BACKUP_FOLDER_URI],
+            backupFolderName = prefs[Keys.BACKUP_FOLDER_NAME],
         )
     }
 
@@ -93,6 +99,13 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
+    suspend fun setBackupFolder(uri: String, name: String) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.BACKUP_FOLDER_URI] = uri
+            prefs[Keys.BACKUP_FOLDER_NAME] = name
+        }
+    }
+
     /** Restores every field from a backup in one atomic write. Nullable fields are only written
      *  when present in the backup, so restoring an older backup (from before a field existed)
      *  can't clobber a value set since then with a null. */
@@ -108,6 +121,8 @@ class SettingsRepository(private val context: Context) {
             s.lastHrDeviceName?.let { prefs[Keys.HR_DEVICE_NAME] = it }
             s.libraryFolderUri?.let { prefs[Keys.LIBRARY_FOLDER_URI] = it }
             s.libraryFolderName?.let { prefs[Keys.LIBRARY_FOLDER_NAME] = it }
+            s.backupFolderUri?.let { prefs[Keys.BACKUP_FOLDER_URI] = it }
+            s.backupFolderName?.let { prefs[Keys.BACKUP_FOLDER_NAME] = it }
         }
     }
 }

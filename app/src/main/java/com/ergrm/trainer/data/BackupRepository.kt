@@ -1,6 +1,8 @@
 package com.ergrm.trainer.data
 
 import android.content.Context
+import android.net.Uri
+import androidx.documentfile.provider.DocumentFile
 import com.ergrm.trainer.history.SessionHistoryRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -30,19 +32,47 @@ class BackupRepository(
     private val settingsRepository: SettingsRepository,
     private val historyRepository: SessionHistoryRepository,
 ) {
+    private suspend fun buildGzippedBytes(): ByteArray {
+        val backup = AppBackup(
+            settings = settingsRepository.settings.first(),
+            history = historyRepository.listSessions(),
+        )
+        val out = java.io.ByteArrayOutputStream()
+        GZIPOutputStream(out).use { it.write(json.encodeToString(backup).toByteArray()) }
+        return out.toByteArray()
+    }
+
+    private fun backupFileName(): String {
+        val stamp = SimpleDateFormat("ddMMyy_HHmm", Locale.US).format(Date())
+        return "erg_rm_backup_$stamp.json.gz"
+    }
+
     /** Writes the current settings + history to a freshly timestamped backup file and returns
      *  it, ready to share via FileProvider — a new file per export (rather than one fixed name)
      *  so re-exporting to the same Drive folder doesn't collide with or silently replace the
      *  previous backup. */
     suspend fun exportFile(): File = withContext(Dispatchers.IO) {
-        val backup = AppBackup(
-            settings = settingsRepository.settings.first(),
-            history = historyRepository.listSessions(),
-        )
-        val stamp = SimpleDateFormat("ddMMyy_HHmm", Locale.US).format(Date())
-        val file = File(context.filesDir, "erg_rm_backup_$stamp.json.gz")
-        GZIPOutputStream(file.outputStream()).use { it.write(json.encodeToString(backup).toByteArray()) }
+        val file = File(context.filesDir, backupFileName())
+        file.writeBytes(buildGzippedBytes())
         file
+    }
+
+    /** Same backup, written straight into a SAF folder the user picked once (e.g. a Drive-synced
+     *  folder) instead of the app's own internal storage — the whole point being that it survives
+     *  an uninstall, unlike [exportFile]'s copy. Called automatically after every saved workout;
+     *  returns false (rather than throwing) if the folder is gone or permission was revoked, so
+     *  the caller can warn the rider instead of crashing on a routine save. */
+    suspend fun writeToFolder(folderUri: Uri): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val folder = DocumentFile.fromTreeUri(context, folderUri) ?: return@withContext false
+            if (!folder.exists() || !folder.isDirectory) return@withContext false
+            val target = folder.createFile("application/gzip", backupFileName()) ?: return@withContext false
+            val bytes = buildGzippedBytes()
+            context.contentResolver.openOutputStream(target.uri)?.use { it.write(bytes) } ?: return@withContext false
+            true
+        } catch (t: Exception) {
+            false
+        }
     }
 
     /** Same as [importFromJson], but for a file read as raw bytes — detects and transparently

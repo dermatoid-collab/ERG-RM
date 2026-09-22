@@ -526,6 +526,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     getApplication(),
                     "%d:%02d · avg %d W".format(minutes, seconds, session.avgWatts),
                 )
+                // Silent on success — a snackbar after every single ride would be noise once this
+                // is working. Only speaks up if it fails, since a silently-broken auto-backup is
+                // worse than the manual export it's meant to replace: the rider would only find
+                // out the hard way, exactly like the uninstall that prompted adding this at all.
+                val backupFolder = settings.value.backupFolderUri
+                if (backupFolder != null && !backupRepository.writeToFolder(Uri.parse(backupFolder))) {
+                    _snackbarMessages.emit("Auto-backup failed — check the backup folder in Settings")
+                }
             }
         }
         workoutExecutor.exit()
@@ -611,6 +619,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             settingsRepository.setLibraryFolder(uri.toString(), displayName)
             refreshLibrary()
+        }
+    }
+
+    /** Same as [onLibraryFolderPicked], but also takes the write permission — every saved
+     *  workout writes a fresh backup into this folder from then on, silently. */
+    fun onBackupFolderPicked(uri: Uri, displayName: String) {
+        getApplication<Application>().contentResolver.takePersistableUriPermission(
+            uri,
+            Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
+        )
+        viewModelScope.launch {
+            settingsRepository.setBackupFolder(uri.toString(), displayName)
         }
     }
 

@@ -50,6 +50,15 @@ fun SettingsScreen(
         ActivityResultContracts.GetContent(),
     ) { uri -> if (uri != null) pendingImportUri = uri }
 
+    val backupFolderPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocumentTree(),
+    ) { uri ->
+        if (uri != null) {
+            val name = uri.lastPathSegment?.substringAfterLast(':') ?: "Folder"
+            viewModel.onBackupFolderPicked(uri, name)
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -175,6 +184,24 @@ fun SettingsScreen(
                 .fillMaxWidth()
                 .padding(top = 8.dp),
         ) { Text("Import backup") }
+
+        Text(
+            if (settings.backupFolderUri == null) {
+                "Auto-backup is off. Pick a folder (e.g. one synced with Drive) and every " +
+                    "saved ride backs up there automatically — no need to remember to export."
+            } else {
+                "Auto-backup folder: ${settings.backupFolderName}. Every saved ride writes a " +
+                    "fresh backup there automatically."
+            },
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.padding(top = 16.dp, bottom = 8.dp),
+        )
+        OutlinedButton(
+            onClick = { backupFolderPicker.launch(null) },
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(if (settings.backupFolderUri == null) "Choose auto-backup folder" else "Change auto-backup folder")
+        }
 
         Text(
             "Build ${BuildConfig.GIT_SHA}",
