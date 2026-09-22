@@ -58,23 +58,15 @@ fun CalendarScreen(
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.End,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                "Calendar (Intervals.icu)",
-                style = MaterialTheme.typography.titleLarge,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false),
-            )
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                WorkoutSourceMenu(otherSources)
-                IconButton(onClick = { viewModel.fetchCalendarWorkouts() }) {
-                    Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
-                }
+            WorkoutSourceMenu(otherSources)
+            IconButton(onClick = { viewModel.fetchCalendarWorkouts() }) {
+                Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
             }
         }
+        Text("Calendar (Intervals.icu)", style = MaterialTheme.typography.titleLarge)
 
         if (!settings.intervalsConfigured) {
             Text(

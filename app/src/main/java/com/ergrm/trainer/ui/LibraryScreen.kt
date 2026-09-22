@@ -67,23 +67,15 @@ fun LibraryScreen(
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.End,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                "Workout Library",
-                style = MaterialTheme.typography.titleLarge,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false),
-            )
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                WorkoutSourceMenu(otherSources)
-                IconButton(onClick = { viewModel.refreshLibrary() }) {
-                    Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
-                }
+            WorkoutSourceMenu(otherSources)
+            IconButton(onClick = { viewModel.refreshLibrary() }) {
+                Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
             }
         }
+        Text("Workout Library", style = MaterialTheme.typography.titleLarge)
 
         Card(modifier = Modifier
             .fillMaxWidth()
@@ -170,7 +162,7 @@ internal fun WorkoutSourceMenu(items: List<Pair<String, () -> Unit>>) {
     var expanded by remember { mutableStateOf(false) }
     Box {
         TextButton(onClick = { expanded = true }) {
-            Text("Sources")
+            Text("Other sources")
             Icon(Icons.Filled.ArrowDropDown, contentDescription = null)
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
