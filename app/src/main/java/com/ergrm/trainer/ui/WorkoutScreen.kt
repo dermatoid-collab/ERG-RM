@@ -382,6 +382,23 @@ private enum class ChartZoom(val windowSec: Int?, val scrollThresholdSec: Int) {
     }
 }
 
+/** Spacing between minute labels on the axis below the chart. Fixed for the two zoomed-in
+ *  levels; at FULL it scales with the workout's own total length so a 3-hour plan doesn't end
+ *  up with 18 crowded labels the way a fixed 10-minute step would. */
+private fun axisLabelIntervalMin(zoom: ChartZoom, totalDurationSec: Int): Int = when (zoom) {
+    ChartZoom.FIVE_MIN -> 1
+    ChartZoom.TWENTY_MIN -> 4
+    ChartZoom.FULL -> {
+        val totalMin = totalDurationSec / 60
+        when {
+            totalMin <= 60 -> 10
+            totalMin <= 120 -> 15
+            totalMin <= 180 -> 20
+            else -> 30
+        }
+    }
+}
+
 /** The window [start, end) the chart currently shows, in elapsed seconds. In a zoomed level the
  *  progress line stays pinned [ChartZoom.scrollThresholdSec] from the window's left edge (or at
  *  elapsed time if less has passed) — i.e. it sits at the left edge until that much time has
@@ -549,8 +566,12 @@ private fun WorkoutProfileChart(
         ChartInputs(steps, currentStepIndex, totalElapsedSec, totalDurationSec, intensityPercent, ftpWatts),
     )
 
+    Column(modifier = modifier) {
     Canvas(
-        modifier = modifier.pointerInput(Unit) {
+        modifier = Modifier
+            .fillMaxWidth()
+            .weight(1f)
+            .pointerInput(Unit) {
             // detectTapGestures cancels the whole gesture if the finger drifts past touch slop
             // before lifting — fine for a big, imprecise target like the zoom band, but a tap
             // aimed at one specific interval column is exactly the kind of "precise" press that
@@ -708,6 +729,37 @@ private fun WorkoutProfileChart(
                 pillX += drawPill(durationText, pillX, pillY, ErgSurface2, ErgOnSurface, textMeasurer) + gap
                 drawPill(wattsText, pillX, pillY, selZone.color, Color.Black, textMeasurer)
             }
+        }
+    }
+    ChartTimeAxis(zoom = zoom, totalElapsedSec = totalElapsedSec, totalDurationSec = totalDurationSec)
+    }
+}
+
+/** Minute labels reclaimed from the chart's own weight(1f) allocation below it — everything else
+ *  about the chart (scale, colors, zoom-tap area, traces, tooltip) is untouched; this only adds
+ *  the axis strip and, by taking a fixed height for it, shortens the Canvas above by that much. */
+@Composable
+private fun ChartTimeAxis(zoom: ChartZoom, totalElapsedSec: Int, totalDurationSec: Int) {
+    val textMeasurer = rememberTextMeasurer()
+    Canvas(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(16.dp),
+    ) {
+        if (totalDurationSec <= 0) return@Canvas
+        val w = size.width
+        val (windowStart, windowEnd) = computeChartWindow(zoom, totalElapsedSec, totalDurationSec)
+        val windowLen = (windowEnd - windowStart).coerceAtLeast(1)
+        fun xAt(t: Int): Float = w * (t - windowStart) / windowLen.toFloat()
+
+        val intervalSec = axisLabelIntervalMin(zoom, totalDurationSec) * 60
+        var tSec = ((windowStart + intervalSec - 1) / intervalSec) * intervalSec
+        if (tSec <= windowStart) tSec += intervalSec
+        while (tSec < windowEnd) {
+            val x = xAt(tSec)
+            val label = textMeasurer.measure("${tSec / 60}", TextStyle(fontSize = 10.sp, color = ErgOnSurface.copy(alpha = 0.5f)))
+            drawText(label, topLeft = Offset((x - label.size.width / 2f).coerceIn(0f, w - label.size.width), 0f))
+            tSec += intervalSec
         }
     }
 }
