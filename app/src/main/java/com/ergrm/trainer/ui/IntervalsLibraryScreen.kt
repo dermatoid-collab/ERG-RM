@@ -82,23 +82,18 @@ fun IntervalsLibraryScreen(
             .fillMaxSize()
             .padding(16.dp),
     ) {
+        // Title on its own line — see CalendarScreen for why this isn't title + menu side by side.
+        Text("Library (Intervals.icu)", style = MaterialTheme.typography.titleLarge)
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp, alignment = Alignment.End),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                "Library (Intervals.icu)",
-                style = MaterialTheme.typography.titleLarge,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false),
-            )
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                WorkoutSourceMenu(otherSources)
-                IconButton(onClick = { viewModel.fetchIntervalsLibrary() }) {
-                    Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
-                }
+            WorkoutSourceMenu(otherSources)
+            IconButton(onClick = { viewModel.fetchIntervalsLibrary() }) {
+                Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
             }
         }
 

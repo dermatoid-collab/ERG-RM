@@ -65,23 +65,20 @@ fun LibraryScreen(
             .fillMaxSize()
             .padding(16.dp),
     ) {
+        // Title on its own line — see CalendarScreen for why this isn't title + menu side by
+        // side; "Workout Library" is short enough to fit either way, but kept consistent with
+        // the other two source screens rather than being the odd one out.
+        Text("Workout Library", style = MaterialTheme.typography.titleLarge)
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp, alignment = Alignment.End),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                "Workout Library",
-                style = MaterialTheme.typography.titleLarge,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false),
-            )
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                WorkoutSourceMenu(otherSources)
-                IconButton(onClick = { viewModel.refreshLibrary() }) {
-                    Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
-                }
+            WorkoutSourceMenu(otherSources)
+            IconButton(onClick = { viewModel.refreshLibrary() }) {
+                Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
             }
         }
 
