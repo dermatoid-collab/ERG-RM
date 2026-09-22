@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
@@ -48,7 +49,12 @@ fun HistoryScreen(viewModel: MainViewModel) {
     val sessions by viewModel.sessionHistory.collectAsState()
     var selectedSession by remember { mutableStateOf<WorkoutSession?>(null) }
 
-    LaunchedEffect(Unit) { viewModel.refreshHistory() }
+    LaunchedEffect(Unit) {
+        viewModel.refreshHistory()
+        // Silently pulls in anything backed up from another device or restored after a
+        // reinstall — see MainViewModel.syncHistoryFromBackupFolder for why this is cheap.
+        viewModel.syncHistoryFromBackupFolder()
+    }
 
     val selected = selectedSession
     if (selected != null) {
@@ -61,7 +67,16 @@ fun HistoryScreen(viewModel: MainViewModel) {
             .fillMaxSize()
             .padding(16.dp),
     ) {
-        Text("History", style = MaterialTheme.typography.titleLarge)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("History", style = MaterialTheme.typography.titleLarge)
+            IconButton(onClick = { viewModel.syncHistoryFromBackupFolder() }) {
+                Icon(Icons.Filled.Refresh, contentDescription = "Sync from backup folder")
+            }
+        }
 
         if (sessions.isEmpty()) {
             Text(

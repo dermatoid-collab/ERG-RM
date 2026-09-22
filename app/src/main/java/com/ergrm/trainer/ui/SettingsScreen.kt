@@ -149,14 +149,14 @@ fun SettingsScreen(
         }
 
         Text(
-            "Backup",
+            "Settings backup",
             style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.padding(top = 24.dp, bottom = 8.dp),
         )
         Text(
-            "Save everything on this screen plus your FTP/LTHR, remembered trainer and heart " +
-                "rate sensor, and your full workout history to one file — useful before " +
-                "reinstalling the app, since that wipes all of it.",
+            "Save your Intervals.icu credentials, FTP/LTHR, remembered trainer/HR sensor and " +
+                "library folder to one small file. Workout history isn't included here — it " +
+                "backs up separately and automatically, see below.",
             style = MaterialTheme.typography.bodySmall,
             modifier = Modifier.padding(bottom = 12.dp),
         )
@@ -186,15 +186,23 @@ fun SettingsScreen(
         ) { Text("Import backup") }
 
         Text(
+            "Workout history backup",
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(top = 24.dp, bottom = 8.dp),
+        )
+        Text(
             if (settings.backupFolderUri == null) {
-                "Auto-backup is off. Pick a folder (e.g. one synced with Drive) and every " +
-                    "saved ride backs up there automatically — no need to remember to export."
+                "Auto-backup is off. Pick a folder (e.g. one synced with Drive) and every saved " +
+                    "ride writes its own backup file there automatically — no need to remember " +
+                    "to export. The History screen pulls in anything it doesn't already have " +
+                    "from this folder, e.g. after a reinstall."
             } else {
-                "Auto-backup folder: ${settings.backupFolderName}. Every saved ride writes a " +
-                    "fresh backup there automatically."
+                "Auto-backup folder: ${settings.backupFolderName}. Every saved ride writes its " +
+                    "own backup file there automatically. The History screen pulls in anything " +
+                    "it doesn't already have from this folder, e.g. after a reinstall."
             },
             style = MaterialTheme.typography.bodySmall,
-            modifier = Modifier.padding(top = 16.dp, bottom = 8.dp),
+            modifier = Modifier.padding(bottom = 8.dp),
         )
         OutlinedButton(
             onClick = { backupFolderPicker.launch(null) },
@@ -216,9 +224,9 @@ fun SettingsScreen(
             title = { Text("Apply this backup?") },
             text = {
                 Text(
-                    "This overwrites your current API key, Athlete ID, FTP, LTHR, and " +
-                        "remembered trainer/HR sensor with what's in the file, and adds any " +
-                        "sessions from it to your history. This can't be undone.",
+                    "This overwrites your current API key, Athlete ID, FTP, LTHR, remembered " +
+                        "trainer/HR sensor and library folder with what's in the file. This " +
+                        "can't be undone.",
                 )
             },
             confirmButton = {

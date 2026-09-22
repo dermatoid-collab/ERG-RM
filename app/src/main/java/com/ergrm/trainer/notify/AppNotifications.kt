@@ -20,17 +20,10 @@ private const val NOTIFICATION_ID_WORKOUT_SAVED = 46
 object AppNotifications {
 
     fun notifyBackupExported(context: Context, fileName: String) =
-        post(context, NOTIFICATION_ID_BACKUP_EXPORTED, "Backup exported", fileName)
+        post(context, NOTIFICATION_ID_BACKUP_EXPORTED, "Settings backup exported", fileName)
 
-    fun notifyBackupImported(context: Context, sessionsAdded: Int, sessionsSkipped: Int) {
-        val addedText = "Imported $sessionsAdded new session${if (sessionsAdded == 1) "" else "s"}"
-        val text = if (sessionsSkipped > 0) {
-            "$addedText ($sessionsSkipped already present, skipped)"
-        } else {
-            addedText
-        }
-        post(context, NOTIFICATION_ID_BACKUP_IMPORTED, "Backup imported", text)
-    }
+    fun notifySettingsImported(context: Context) =
+        post(context, NOTIFICATION_ID_BACKUP_IMPORTED, "Settings imported", "Backup applied")
 
     fun notifyWorkoutSaved(context: Context, summary: String) =
         post(context, NOTIFICATION_ID_WORKOUT_SAVED, "Workout saved", summary)

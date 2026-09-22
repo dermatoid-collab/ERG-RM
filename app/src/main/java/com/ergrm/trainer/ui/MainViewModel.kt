@@ -531,7 +531,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 // worse than the manual export it's meant to replace: the rider would only find
                 // out the hard way, exactly like the uninstall that prompted adding this at all.
                 val backupFolder = settings.value.backupFolderUri
-                if (backupFolder != null && !backupRepository.writeToFolder(Uri.parse(backupFolder))) {
+                if (backupFolder != null && !backupRepository.writeSessionToFolder(Uri.parse(backupFolder), session)) {
                     _snackbarMessages.emit("Auto-backup failed — check the backup folder in Settings")
                 }
             }
@@ -542,6 +542,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun refreshHistory() {
         viewModelScope.launch {
             _sessionHistory.value = historyRepository.listSessions()
+        }
+    }
+
+    /** Pulls in any session backed up to the auto-backup folder that isn't already in local
+     *  history — e.g. after a reinstall, or one written from a different device sharing the same
+     *  folder. Called when History opens, and by its manual refresh action. No-op (and silent)
+     *  if no folder is configured or nothing new is found; only speaks up when it actually adds
+     *  something, since that's the interesting case. */
+    fun syncHistoryFromBackupFolder() {
+        val folderUri = settings.value.backupFolderUri ?: return
+        viewModelScope.launch {
+            val added = backupRepository.syncSessionsFromFolder(Uri.parse(folderUri))
+            if (added > 0) {
+                refreshHistory()
+                _snackbarMessages.emit("Synced $added session${if (added == 1) "" else "s"} from backup folder")
+            }
         }
     }
 
@@ -561,23 +577,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** Writes a fresh backup file (settings + history), confirms it with a snackbar exactly like
-     *  a saved session, and hands the file to [onReady] for the UI to share via FileProvider — a
-     *  suspend write, so this goes through viewModelScope rather than returning the file directly. */
+    /** Writes a fresh settings-only backup file, confirms it with a snackbar, and hands the file
+     *  to [onReady] for the UI to share via FileProvider — a suspend write, so this goes through
+     *  viewModelScope rather than returning the file directly. Workout history has its own,
+     *  automatic backup path — see [writeSessionToBackupFolder] and [syncHistoryFromBackupFolder]. */
     fun exportBackup(onReady: (File) -> Unit) {
         viewModelScope.launch {
-            val file = backupRepository.exportFile()
-            _snackbarMessages.emit("Backup saved")
+            val file = backupRepository.exportSettingsFile()
+            _snackbarMessages.emit("Settings backup saved")
             AppNotifications.notifyBackupExported(getApplication(), file.name)
             onReady(file)
         }
     }
 
-    /** Restores settings and merges history from a previously exported backup (picked via SAF).
-     *  Safe to import the same file more than once — sessions already present (by id) are
-     *  skipped rather than duplicated, and settings are simply overwritten with the backup's.
-     *  Reads raw bytes (not text) since a backup file may be gzip-compressed — see
-     *  [BackupRepository.importFromBytes]. */
+    /** Restores settings from a previously exported backup (picked via SAF) — workout history
+     *  isn't part of this file; see [syncHistoryFromBackupFolder] for that. Reads raw bytes (not
+     *  text) since a backup file may be gzip-compressed — see [BackupRepository.importFromBytes]. */
     fun importBackup(uri: Uri) {
         viewModelScope.launch {
             val bytes = try {
@@ -590,14 +605,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 return@launch
             }
             backupRepository.importFromBytes(bytes)
-                .onSuccess { result ->
-                    refreshHistory()
-                    val count = result.sessionsAdded
-                    _snackbarMessages.emit(
-                        "Backup applied — added $count new session${if (count == 1) "" else "s"}",
-                    )
-                    val skipped = result.backup.history.size - count
-                    AppNotifications.notifyBackupImported(getApplication(), count, skipped)
+                .onSuccess {
+                    _snackbarMessages.emit("Settings restored")
+                    AppNotifications.notifySettingsImported(getApplication())
                 }
                 .onFailure {
                     _snackbarMessages.emit("That file isn't a valid backup")
