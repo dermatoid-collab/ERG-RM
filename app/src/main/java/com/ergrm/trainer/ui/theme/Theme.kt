@@ -28,6 +28,11 @@ val ErgHrPlus = Color(0xFFE6598A)
 // from both ErgWarn/Z4 amber and ErgHrPlus/Z7's brighter pink and bordeaux respectively.
 val ErgIntensityUp = Color(0xFFB8863A)
 val ErgIntensityDown = Color(0xFFA8446E)
+// Dedicated, more vivid colors reused across the live chart and history detail: kept separate
+// from ErgAboveTarget/ErgAccent (which mean "above target power" and "at target"/theme-primary
+// respectively) so brightening the HR trace or the ERG mode tag doesn't shift those other meanings.
+val ErgHrLine = Color(0xFFFF5252)
+val ErgModeErg = Color(0xFF2ECC71)
 
 private val ErgColorScheme = darkColorScheme(
     background = ErgBackground,

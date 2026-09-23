@@ -39,7 +39,7 @@ import com.ergrm.trainer.history.SessionSample
 import com.ergrm.trainer.history.SessionStats
 import com.ergrm.trainer.history.WorkoutSession
 import com.ergrm.trainer.history.computeSessionStats
-import com.ergrm.trainer.ui.theme.ErgAboveTarget
+import com.ergrm.trainer.ui.theme.ErgHrLine
 import com.ergrm.trainer.ui.theme.ErgOnSurface
 import com.ergrm.trainer.ui.theme.ErgProgressLine
 import com.ergrm.trainer.ui.theme.ErgSurface
@@ -128,7 +128,7 @@ private fun ChartLegend(hasHr: Boolean, hasCadence: Boolean) {
             .padding(top = 6.dp, bottom = 6.dp),
     ) {
         LegendEntry("Watts", Color.White)
-        if (hasHr) LegendEntry("HR", ErgAboveTarget)
+        if (hasHr) LegendEntry("HR", ErgHrLine)
         if (hasCadence) LegendEntry("Cadence", ErgProgressLine)
     }
 }
@@ -168,7 +168,7 @@ private fun SessionDetailChart(samples: List<SessionSample>, modifier: Modifier 
             val hrRange = (hrs.max() - hrMin).coerceAtLeast(1)
             fun yHr(v: Int) = h - h * ((v - hrMin).toFloat() / hrRange).coerceIn(0f, 1f)
             val points = samples.mapIndexedNotNull { i, s -> s.hrBpm?.let { Offset(x(i), yHr(it)) } }
-            drawPoints(points = points, pointMode = PointMode.Polygon, color = ErgAboveTarget, strokeWidth = 3f, cap = StrokeCap.Round)
+            drawPoints(points = points, pointMode = PointMode.Polygon, color = ErgHrLine, strokeWidth = 3f, cap = StrokeCap.Round)
         }
 
         val cadences = samples.mapNotNull { it.cadenceRpm }
@@ -196,11 +196,11 @@ private fun StatsGrid(session: WorkoutSession, stats: SessionStats) {
             DetailTile("Work", "${stats.totalKj}", unit = "kJ", modifier = Modifier.weight(1f))
             DetailTile(
                 "Avg HR", stats.avgHrBpm?.let { "$it" } ?: "n/a", unit = "bpm", modifier = Modifier.weight(1f),
-                valueColor = if (stats.avgHrBpm != null) ErgAboveTarget else ErgOnSurface,
+                valueColor = if (stats.avgHrBpm != null) ErgHrLine else ErgOnSurface,
             )
             DetailTile(
                 "Max HR", stats.maxHrBpm?.let { "$it" } ?: "n/a", unit = "bpm", modifier = Modifier.weight(1f),
-                valueColor = if (stats.maxHrBpm != null) ErgAboveTarget else ErgOnSurface,
+                valueColor = if (stats.maxHrBpm != null) ErgHrLine else ErgOnSurface,
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {

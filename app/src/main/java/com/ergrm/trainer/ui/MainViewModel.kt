@@ -350,6 +350,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         heartRateConnection.disconnect()
     }
 
+    fun setDeviceNickname(nickname: String) {
+        viewModelScope.launch { settingsRepository.setDeviceNickname(nickname) }
+    }
+
+    fun setHrDeviceNickname(nickname: String) {
+        viewModelScope.launch { settingsRepository.setHrDeviceNickname(nickname) }
+    }
+
     fun saveIntervalsSettings(apiKey: String, athleteId: String, ftpWatts: Int, lthrBpm: Int) {
         viewModelScope.launch {
             settingsRepository.updateIntervalsCredentials(apiKey, athleteId)

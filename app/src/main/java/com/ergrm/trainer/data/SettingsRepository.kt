@@ -19,8 +19,10 @@ data class AppSettings(
     val lthrBpm: Int = 174,
     val lastDeviceAddress: String? = null,
     val lastDeviceName: String? = null,
+    val lastDeviceNickname: String? = null,
     val lastHrDeviceAddress: String? = null,
     val lastHrDeviceName: String? = null,
+    val lastHrDeviceNickname: String? = null,
     val libraryFolderUri: String? = null,
     val libraryFolderName: String? = null,
     val backupFolderUri: String? = null,
@@ -38,8 +40,10 @@ class SettingsRepository(private val context: Context) {
         val LTHR = intPreferencesKey("lthr_bpm")
         val DEVICE_ADDRESS = stringPreferencesKey("last_device_address")
         val DEVICE_NAME = stringPreferencesKey("last_device_name")
+        val DEVICE_NICKNAME = stringPreferencesKey("last_device_nickname")
         val HR_DEVICE_ADDRESS = stringPreferencesKey("last_hr_device_address")
         val HR_DEVICE_NAME = stringPreferencesKey("last_hr_device_name")
+        val HR_DEVICE_NICKNAME = stringPreferencesKey("last_hr_device_nickname")
         val LIBRARY_FOLDER_URI = stringPreferencesKey("library_folder_uri")
         val LIBRARY_FOLDER_NAME = stringPreferencesKey("library_folder_name")
         val BACKUP_FOLDER_URI = stringPreferencesKey("backup_folder_uri")
@@ -54,8 +58,10 @@ class SettingsRepository(private val context: Context) {
             lthrBpm = prefs[Keys.LTHR] ?: 174,
             lastDeviceAddress = prefs[Keys.DEVICE_ADDRESS],
             lastDeviceName = prefs[Keys.DEVICE_NAME],
+            lastDeviceNickname = prefs[Keys.DEVICE_NICKNAME],
             lastHrDeviceAddress = prefs[Keys.HR_DEVICE_ADDRESS],
             lastHrDeviceName = prefs[Keys.HR_DEVICE_NAME],
+            lastHrDeviceNickname = prefs[Keys.HR_DEVICE_NICKNAME],
             libraryFolderUri = prefs[Keys.LIBRARY_FOLDER_URI],
             libraryFolderName = prefs[Keys.LIBRARY_FOLDER_NAME],
             backupFolderUri = prefs[Keys.BACKUP_FOLDER_URI],
@@ -78,8 +84,12 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit { prefs -> prefs[Keys.LTHR] = lthrBpm }
     }
 
+    /** A nickname belongs to the device it was set on — reconnecting to the *same* address keeps
+     *  it, but connecting to a *different* one clears it rather than carrying it over onto a
+     *  device it was never set for. */
     suspend fun rememberDevice(address: String, name: String) {
         context.dataStore.edit { prefs ->
+            if (prefs[Keys.DEVICE_ADDRESS] != address) prefs.remove(Keys.DEVICE_NICKNAME)
             prefs[Keys.DEVICE_ADDRESS] = address
             prefs[Keys.DEVICE_NAME] = name
         }
@@ -87,8 +97,23 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun rememberHrDevice(address: String, name: String) {
         context.dataStore.edit { prefs ->
+            if (prefs[Keys.HR_DEVICE_ADDRESS] != address) prefs.remove(Keys.HR_DEVICE_NICKNAME)
             prefs[Keys.HR_DEVICE_ADDRESS] = address
             prefs[Keys.HR_DEVICE_NAME] = name
+        }
+    }
+
+    /** Blank clears the nickname (falls back to the device's standard BLE name everywhere it's
+     *  shown), rather than storing an empty string as if it were a real one. */
+    suspend fun setDeviceNickname(nickname: String) {
+        context.dataStore.edit { prefs ->
+            if (nickname.isBlank()) prefs.remove(Keys.DEVICE_NICKNAME) else prefs[Keys.DEVICE_NICKNAME] = nickname
+        }
+    }
+
+    suspend fun setHrDeviceNickname(nickname: String) {
+        context.dataStore.edit { prefs ->
+            if (nickname.isBlank()) prefs.remove(Keys.HR_DEVICE_NICKNAME) else prefs[Keys.HR_DEVICE_NICKNAME] = nickname
         }
     }
 
@@ -117,8 +142,10 @@ class SettingsRepository(private val context: Context) {
             prefs[Keys.LTHR] = s.lthrBpm
             s.lastDeviceAddress?.let { prefs[Keys.DEVICE_ADDRESS] = it }
             s.lastDeviceName?.let { prefs[Keys.DEVICE_NAME] = it }
+            s.lastDeviceNickname?.let { prefs[Keys.DEVICE_NICKNAME] = it }
             s.lastHrDeviceAddress?.let { prefs[Keys.HR_DEVICE_ADDRESS] = it }
             s.lastHrDeviceName?.let { prefs[Keys.HR_DEVICE_NAME] = it }
+            s.lastHrDeviceNickname?.let { prefs[Keys.HR_DEVICE_NICKNAME] = it }
             s.libraryFolderUri?.let { prefs[Keys.LIBRARY_FOLDER_URI] = it }
             s.libraryFolderName?.let { prefs[Keys.LIBRARY_FOLDER_NAME] = it }
             s.backupFolderUri?.let { prefs[Keys.BACKUP_FOLDER_URI] = it }

@@ -70,9 +70,11 @@ import com.ergrm.trainer.ui.theme.ErgAtTarget
 import com.ergrm.trainer.ui.theme.ErgBelowTarget
 import com.ergrm.trainer.ui.theme.ErgCadenceLine
 import com.ergrm.trainer.ui.theme.ErgDivider
+import com.ergrm.trainer.ui.theme.ErgHrLine
 import com.ergrm.trainer.ui.theme.ErgHrPlus
 import com.ergrm.trainer.ui.theme.ErgIntensityDown
 import com.ergrm.trainer.ui.theme.ErgIntensityUp
+import com.ergrm.trainer.ui.theme.ErgModeErg
 import com.ergrm.trainer.ui.theme.ErgOnSurface
 import com.ergrm.trainer.ui.theme.ErgProgressLine
 import com.ergrm.trainer.ui.theme.ErgSurface
@@ -415,7 +417,7 @@ private enum class ChartZoom(val windowSec: Int?, val scrollThresholdSec: Int) {
  *  up with 18 crowded labels the way a fixed 10-minute step would. */
 private fun axisLabelIntervalMin(zoom: ChartZoom, totalDurationSec: Int): Int = when (zoom) {
     ChartZoom.FIVE_MIN -> 1
-    ChartZoom.TWENTY_MIN -> 4
+    ChartZoom.TWENTY_MIN -> 5
     ChartZoom.FULL -> {
         val totalMin = totalDurationSec / 60
         when {
@@ -685,7 +687,7 @@ private fun WorkoutProfileChart(
                 drawPoints(
                     points = hrPoints,
                     pointMode = PointMode.Polygon,
-                    color = ErgAboveTarget,
+                    color = ErgHrLine,
                     strokeWidth = 4f,
                     cap = StrokeCap.Round,
                 )
@@ -720,7 +722,7 @@ private fun WorkoutProfileChart(
             drawLine(color = ErgOnSurface.copy(alpha = 0.12f), start = Offset(0f, y), end = Offset(w, y), strokeWidth = 1f)
             val wattsLabelResult = textMeasurer.measure("$watts", TextStyle(fontSize = 10.sp, color = ErgOnSurface.copy(alpha = 0.85f)))
             drawText(wattsLabelResult, topLeft = Offset(4.dp.toPx(), y - wattsLabelResult.size.height - 2f))
-            val bpmLabelResult = textMeasurer.measure("${bpmTicks[i]}", TextStyle(fontSize = 10.sp, color = ErgAboveTarget))
+            val bpmLabelResult = textMeasurer.measure("${bpmTicks[i]}", TextStyle(fontSize = 10.sp, color = ErgHrLine))
             drawText(bpmLabelResult, topLeft = Offset(w - bpmLabelResult.size.width - 4.dp.toPx(), y - bpmLabelResult.size.height - 2f))
         }
 
@@ -796,7 +798,7 @@ private fun ChartTimeAxis(zoom: ChartZoom, totalElapsedSec: Int, totalDurationSe
                 end = Offset(x, tickHeight),
                 strokeWidth = 1.5.dp.toPx(),
             )
-            val label = textMeasurer.measure("${tSec / 60}", TextStyle(fontSize = 10.sp, color = ErgOnSurface.copy(alpha = 0.5f)))
+            val label = textMeasurer.measure("${tSec / 60}", TextStyle(fontSize = 10.sp, color = ErgOnSurface.copy(alpha = 0.6f)))
             drawText(
                 label,
                 topLeft = Offset((x - label.size.width / 2f).coerceIn(0f, w - label.size.width), tickHeight + tickToLabelGap),
@@ -1052,7 +1054,7 @@ private fun IntensityRow(
     onToggleMode: () -> Unit,
 ) {
     val isHrPlus = controlMode == ControlMode.HR_PLUS
-    val modeColor = if (isHrPlus) ErgHrPlus else ErgAccent
+    val modeColor = if (isHrPlus) ErgHrPlus else ErgModeErg
     // Not ErgAccent (the mode tag right next to it is already green in ERG, so a modified %
     // in the same green blended together) and not ErgWarn either — amber already means
     // "warning" for the Z4 zone chip, and a changed % isn't a warning. Split by direction so
