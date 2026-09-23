@@ -59,6 +59,8 @@ fun ConnectScreen(viewModel: MainViewModel) {
     val hrScanResults by viewModel.hrScanResults.collectAsState()
     val isHrScanning by viewModel.isHrScanning.collectAsState()
 
+    val settings by viewModel.settings.collectAsState()
+
     val enableBtLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { viewModel.startScan() }
@@ -99,7 +101,7 @@ fun ConnectScreen(viewModel: MainViewModel) {
             modifier = Modifier.padding(top = 24.dp, bottom = 8.dp),
         )
         Text(
-            text = connectionLabel(connectionState),
+            text = connectionLabel(connectionState, settings.lastDeviceName),
             style = MaterialTheme.typography.titleMedium,
         )
 
@@ -141,7 +143,7 @@ fun ConnectScreen(viewModel: MainViewModel) {
             modifier = Modifier.padding(top = 32.dp, bottom = 8.dp),
         )
         Text(
-            text = hrConnectionLabel(hrConnectionState),
+            text = hrConnectionLabel(hrConnectionState, settings.lastHrDeviceName),
             style = MaterialTheme.typography.titleMedium,
         )
 
@@ -196,19 +198,19 @@ private fun DeviceRow(result: DiscoveredDevice, onConnect: () -> Unit) {
     }
 }
 
-private fun connectionLabel(state: TrainerConnectionState): String = when (state) {
+private fun connectionLabel(state: TrainerConnectionState, deviceName: String?): String = when (state) {
     is TrainerConnectionState.Disconnected -> "No trainer connected"
     is TrainerConnectionState.Connecting -> "Connecting…"
     is TrainerConnectionState.DiscoveringServices -> "Discovering FTMS services…"
     is TrainerConnectionState.RequestingControl -> "Requesting ERG control…"
-    is TrainerConnectionState.Ready -> "Connected"
+    is TrainerConnectionState.Ready -> if (deviceName != null) "Connected to $deviceName" else "Connected"
     is TrainerConnectionState.Failed -> "Error: ${state.message}"
 }
 
-private fun hrConnectionLabel(state: HrConnectionState): String = when (state) {
+private fun hrConnectionLabel(state: HrConnectionState, deviceName: String?): String = when (state) {
     is HrConnectionState.Disconnected -> "No heart rate sensor connected"
     is HrConnectionState.Connecting -> "Connecting…"
     is HrConnectionState.DiscoveringServices -> "Discovering heart rate service…"
-    is HrConnectionState.Ready -> "Connected"
+    is HrConnectionState.Ready -> if (deviceName != null) "Connected to $deviceName" else "Connected"
     is HrConnectionState.Failed -> "Error: ${state.message}"
 }
