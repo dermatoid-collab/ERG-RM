@@ -2,6 +2,7 @@ package com.ergrm.trainer.ui
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -81,6 +82,7 @@ import com.ergrm.trainer.ui.theme.ErgIntensityUp
 import com.ergrm.trainer.ui.theme.ErgModeErg
 import com.ergrm.trainer.ui.theme.ErgOnSurface
 import com.ergrm.trainer.ui.theme.ErgProgressLine
+import com.ergrm.trainer.ui.theme.ErgSkinTemp
 import com.ergrm.trainer.ui.theme.ErgSurface
 import com.ergrm.trainer.ui.theme.ErgSurface2
 import com.ergrm.trainer.ui.theme.ErgWarn
@@ -134,7 +136,7 @@ fun WorkoutScreen(
         }
         WorkoutStatusLine(loadState)
 
-        StatTileGrid(live, workoutState, settings.ftpWatts, settings.lthrBpm, coreReading)
+        StatTileGrid(live, workoutState, settings.ftpWatts, settings.lthrBpm)
 
         ControlsRow(
             hasWorkout = workoutState.steps.isNotEmpty(),
@@ -217,6 +219,7 @@ fun WorkoutScreen(
             ftpWatts = settings.ftpWatts,
             lthrBpm = settings.lthrBpm,
             intensityPercent = workoutState.intensityPercent,
+            coreReading = coreReading,
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
@@ -257,7 +260,6 @@ private fun StatTileGrid(
     workoutState: WorkoutRunState,
     ftpWatts: Int,
     lthrBpm: Int,
-    coreReading: CoreTempReading?,
 ) {
     val actual = live.powerWatts ?: 0
     val target = workoutState.currentTargetWatts
@@ -373,8 +375,6 @@ private fun StatTileGrid(
                 )
             }
         }
-
-        CoreTempTileRow(coreReading)
     }
 }
 
@@ -447,26 +447,26 @@ private fun hsiColor(hsi: Float): Color = when {
     else -> ZONE_MAX.color
 }
 
-/** Core/skin temperature and Heat Strain Index from an optional CORE sensor — always shown, "--"
- *  when nothing is connected yet, same as every other live tile on this screen. Deliberately
- *  smaller than [StatTile]: three tiles in a row need to give up some of the two-tile rows' width,
- *  and none of these three numbers needs 34sp to stay readable at a glance. */
+/** Core/skin temperature and Heat Strain Index from an optional CORE sensor, laid over the
+ *  chart's own reserved top headroom (see [CHART_TOP_HEADROOM]) instead of taking a row of their
+ *  own — that headroom is where a trace almost never reaches, and the pills sit just below the
+ *  axis's top corner labels so the two never collide. Always shown, "--" when nothing is
+ *  connected yet, same as every other live reading on this screen. */
 @Composable
-private fun CoreTempTileRow(reading: CoreTempReading?) {
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
-        SmallStatTile(
-            label = "Core temp",
-            value = reading?.coreTempC?.let { "%.1f".format(it) } ?: "--",
-            unit = "°C",
+private fun CoreTempPillRow(reading: CoreTempReading?, modifier: Modifier = Modifier) {
+    Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        CoreTempPill(
+            label = "CORE",
+            value = reading?.coreTempC?.let { "%.1f°".format(it) } ?: "--",
             modifier = Modifier.weight(1f),
         )
-        SmallStatTile(
-            label = "Skin temp",
-            value = reading?.skinTempC?.let { "%.1f".format(it) } ?: "--",
-            unit = "°C",
+        CoreTempPill(
+            label = "SKIN",
+            value = reading?.skinTempC?.let { "%.1f°".format(it) } ?: "--",
+            valueColor = ErgSkinTemp,
             modifier = Modifier.weight(1f),
         )
-        SmallStatTile(
+        CoreTempPill(
             label = "HSI",
             value = reading?.heatStrainIndex?.let { "%.1f".format(it) } ?: "--",
             valueColor = reading?.heatStrainIndex?.let { hsiColor(it) } ?: ErgOnSurface,
@@ -476,43 +476,34 @@ private fun CoreTempTileRow(reading: CoreTempReading?) {
 }
 
 @Composable
-private fun SmallStatTile(
+private fun CoreTempPill(
     label: String,
     value: String,
     modifier: Modifier = Modifier,
     valueColor: Color = ErgOnSurface,
-    unit: String? = null,
 ) {
-    Column(
+    Row(
         modifier = modifier
-            .background(ErgSurface, RoundedCornerShape(11.dp))
+            .background(ErgSurface.copy(alpha = 0.75f), RoundedCornerShape(50))
+            .border(1.dp, Color.White.copy(alpha = 0.07f), RoundedCornerShape(50))
             .padding(horizontal = 10.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.Center,
     ) {
         Text(
-            label.uppercase(),
-            style = MaterialTheme.typography.labelSmall,
-            fontSize = 10.sp,
+            label,
+            fontSize = 9.sp,
+            fontWeight = FontWeight.Bold,
             color = ErgOnSurface.copy(alpha = 0.6f),
-            maxLines = 1,
+            modifier = Modifier.alignByBaseline(),
         )
-        Row {
-            Text(
-                value,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = valueColor,
-                modifier = Modifier.alignByBaseline(),
-            )
-            if (unit != null) {
-                Text(
-                    unit,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = valueColor.copy(alpha = 0.6f),
-                    modifier = Modifier.alignByBaseline().padding(start = 2.dp),
-                )
-            }
-        }
+        Spacer(modifier = Modifier.width(5.dp))
+        Text(
+            value,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = valueColor,
+            modifier = Modifier.alignByBaseline(),
+        )
     }
 }
 
@@ -623,6 +614,7 @@ private fun ChartCard(
     ftpWatts: Int,
     lthrBpm: Int,
     intensityPercent: Int,
+    coreReading: CoreTempReading?,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -639,6 +631,7 @@ private fun ChartCard(
             ftpWatts = ftpWatts,
             lthrBpm = lthrBpm,
             intensityPercent = intensityPercent,
+            coreReading = coreReading,
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
@@ -694,6 +687,7 @@ private fun WorkoutProfileChart(
     ftpWatts: Int,
     lthrBpm: Int,
     intensityPercent: Int,
+    coreReading: CoreTempReading?,
     modifier: Modifier = Modifier,
 ) {
     // Divide by (1 - headroom) so the ceiling reaches only that fraction of the height, leaving
@@ -718,10 +712,10 @@ private fun WorkoutProfileChart(
     )
 
     Column(modifier = modifier) {
+    Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
     Canvas(
         modifier = Modifier
-            .fillMaxWidth()
-            .weight(1f)
+            .fillMaxSize()
             .pointerInput(Unit) {
             // detectTapGestures cancels the whole gesture if the finger drifts past touch slop
             // before lifting — fine for a big, imprecise target like the zoom band, but a tap
@@ -881,6 +875,17 @@ private fun WorkoutProfileChart(
                 drawPill(wattsText, pillX, pillY, selZone.color, Color.Black, textMeasurer)
             }
         }
+    }
+    // Sits in the chart's own top headroom (see CHART_TOP_HEADROOM) — a trace almost never
+    // reaches there — just below the axis's top corner labels (drawn a few dp from the very top
+    // edge, regardless of the chart's actual height) so the two never overlap.
+    CoreTempPillRow(
+        reading = coreReading,
+        modifier = Modifier
+            .align(Alignment.TopCenter)
+            .fillMaxWidth()
+            .padding(horizontal = 10.dp, top = 26.dp),
+    )
     }
     ChartTimeAxis(zoom = zoom, totalElapsedSec = totalElapsedSec, totalDurationSec = totalDurationSec)
     }

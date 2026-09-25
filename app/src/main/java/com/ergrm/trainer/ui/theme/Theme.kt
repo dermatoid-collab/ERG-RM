@@ -33,6 +33,9 @@ val ErgIntensityDown = Color(0xFFA8446E)
 // respectively) so brightening the HR trace or the ERG mode tag doesn't shift those other meanings.
 val ErgHrLine = Color(0xFFFC2121)
 val ErgModeErg = Color(0xFF2ECC71)
+// The CORE sensor's skin-temperature pill value, chosen distinct from ErgHrLine/ErgWarn/
+// ZONE_MAX.color — the other three colors in the same pill row — so all three stay tellable apart.
+val ErgSkinTemp = Color(0xFFFFB5D5)
 
 private val ErgColorScheme = darkColorScheme(
     background = ErgBackground,
