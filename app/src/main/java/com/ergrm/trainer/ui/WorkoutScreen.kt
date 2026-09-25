@@ -884,7 +884,7 @@ private fun WorkoutProfileChart(
         modifier = Modifier
             .align(Alignment.TopCenter)
             .fillMaxWidth()
-            .padding(horizontal = 10.dp, top = 26.dp),
+            .padding(start = 10.dp, top = 26.dp, end = 10.dp),
     )
     }
     ChartTimeAxis(zoom = zoom, totalElapsedSec = totalElapsedSec, totalDurationSec = totalDurationSec)
