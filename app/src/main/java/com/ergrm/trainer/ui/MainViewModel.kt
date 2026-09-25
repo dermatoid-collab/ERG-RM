@@ -16,6 +16,8 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.ergrm.trainer.ble.BleScanner
+import com.ergrm.trainer.ble.CoreTempConnection
+import com.ergrm.trainer.ble.CoreTempProfile
 import com.ergrm.trainer.ble.DiscoveredDevice
 import com.ergrm.trainer.ble.DiscoveredTrainer
 import com.ergrm.trainer.ble.Ftms
@@ -108,9 +110,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     val trainerConnection = TrainerConnection(application, viewModelScope)
     val heartRateConnection = HeartRateConnection(application)
+    val coreTempConnection = CoreTempConnection(application)
 
     val connectionState = trainerConnection.connectionState
     val hrConnectionState = heartRateConnection.connectionState
+    val coreConnectionState = coreTempConnection.connectionState
+    val coreTempReading = coreTempConnection.reading
 
     // A standalone HR sensor's reading takes priority over whatever heart rate the trainer
     // itself might be forwarding (some trainers bridge an ANT+ strap over FTMS). WorkoutExecutor
@@ -142,6 +147,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val isHrScanning: StateFlow<Boolean> = _isHrScanning.asStateFlow()
 
     private var hrScanJob: Job? = null
+
+    private val _coreScanResults = MutableStateFlow<List<DiscoveredDevice>>(emptyList())
+    val coreScanResults: StateFlow<List<DiscoveredDevice>> = _coreScanResults.asStateFlow()
+
+    private val _isCoreScanning = MutableStateFlow(false)
+    val isCoreScanning: StateFlow<Boolean> = _isCoreScanning.asStateFlow()
+
+    private var coreScanJob: Job? = null
 
     private val _workoutLoadState = MutableStateFlow<WorkoutLoadState>(WorkoutLoadState.Idle)
     val workoutLoadState: StateFlow<WorkoutLoadState> = _workoutLoadState.asStateFlow()
@@ -251,6 +264,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     heartRateConnection.connect(device, autoConnect = true)
                 }
             }
+            s.lastCoreDeviceAddress?.let { address ->
+                runCatching { adapter.getRemoteDevice(address) }.getOrNull()?.let { device ->
+                    coreTempConnection.connect(device, autoConnect = true)
+                }
+            }
         }
     }
 
@@ -350,12 +368,49 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         heartRateConnection.disconnect()
     }
 
+    fun startCoreScan() {
+        val adapter = bluetoothAdapter ?: return
+        if (!adapter.isEnabled) return
+        _coreScanResults.value = emptyList()
+        _isCoreScanning.value = true
+        coreScanJob?.cancel()
+        coreScanJob = viewModelScope.launch {
+            BleScanner(adapter).scan(CoreTempProfile.SERVICE_CORE_TEMP)
+                .catch { _isCoreScanning.value = false }
+                .collect { found ->
+                    _coreScanResults.value = (_coreScanResults.value + found).distinctBy { it.device.address }
+                }
+        }
+    }
+
+    fun stopCoreScan() {
+        coreScanJob?.cancel()
+        coreScanJob = null
+        _isCoreScanning.value = false
+    }
+
+    fun connectCoreSensor(discovered: DiscoveredDevice) {
+        stopCoreScan()
+        coreTempConnection.connect(discovered.device)
+        viewModelScope.launch {
+            settingsRepository.rememberCoreDevice(discovered.device.address, discovered.name)
+        }
+    }
+
+    fun disconnectCoreSensor() {
+        coreTempConnection.disconnect()
+    }
+
     fun setDeviceNickname(nickname: String) {
         viewModelScope.launch { settingsRepository.setDeviceNickname(nickname) }
     }
 
     fun setHrDeviceNickname(nickname: String) {
         viewModelScope.launch { settingsRepository.setHrDeviceNickname(nickname) }
+    }
+
+    fun setCoreDeviceNickname(nickname: String) {
+        viewModelScope.launch { settingsRepository.setCoreDeviceNickname(nickname) }
     }
 
     fun saveIntervalsSettings(apiKey: String, athleteId: String, ftpWatts: Int, lthrBpm: Int) {
@@ -699,8 +754,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     override fun onCleared() {
         stopScan()
         stopHrScan()
+        stopCoreScan()
         trainerConnection.disconnect()
         heartRateConnection.disconnect()
+        coreTempConnection.disconnect()
         stopTrainerService()
         super.onCleared()
     }

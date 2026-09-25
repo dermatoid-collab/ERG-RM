@@ -23,6 +23,9 @@ data class AppSettings(
     val lastHrDeviceAddress: String? = null,
     val lastHrDeviceName: String? = null,
     val lastHrDeviceNickname: String? = null,
+    val lastCoreDeviceAddress: String? = null,
+    val lastCoreDeviceName: String? = null,
+    val lastCoreDeviceNickname: String? = null,
     val libraryFolderUri: String? = null,
     val libraryFolderName: String? = null,
     val backupFolderUri: String? = null,
@@ -44,6 +47,9 @@ class SettingsRepository(private val context: Context) {
         val HR_DEVICE_ADDRESS = stringPreferencesKey("last_hr_device_address")
         val HR_DEVICE_NAME = stringPreferencesKey("last_hr_device_name")
         val HR_DEVICE_NICKNAME = stringPreferencesKey("last_hr_device_nickname")
+        val CORE_DEVICE_ADDRESS = stringPreferencesKey("last_core_device_address")
+        val CORE_DEVICE_NAME = stringPreferencesKey("last_core_device_name")
+        val CORE_DEVICE_NICKNAME = stringPreferencesKey("last_core_device_nickname")
         val LIBRARY_FOLDER_URI = stringPreferencesKey("library_folder_uri")
         val LIBRARY_FOLDER_NAME = stringPreferencesKey("library_folder_name")
         val BACKUP_FOLDER_URI = stringPreferencesKey("backup_folder_uri")
@@ -62,6 +68,9 @@ class SettingsRepository(private val context: Context) {
             lastHrDeviceAddress = prefs[Keys.HR_DEVICE_ADDRESS],
             lastHrDeviceName = prefs[Keys.HR_DEVICE_NAME],
             lastHrDeviceNickname = prefs[Keys.HR_DEVICE_NICKNAME],
+            lastCoreDeviceAddress = prefs[Keys.CORE_DEVICE_ADDRESS],
+            lastCoreDeviceName = prefs[Keys.CORE_DEVICE_NAME],
+            lastCoreDeviceNickname = prefs[Keys.CORE_DEVICE_NICKNAME],
             libraryFolderUri = prefs[Keys.LIBRARY_FOLDER_URI],
             libraryFolderName = prefs[Keys.LIBRARY_FOLDER_NAME],
             backupFolderUri = prefs[Keys.BACKUP_FOLDER_URI],
@@ -103,6 +112,14 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
+    suspend fun rememberCoreDevice(address: String, name: String) {
+        context.dataStore.edit { prefs ->
+            if (prefs[Keys.CORE_DEVICE_ADDRESS] != address) prefs.remove(Keys.CORE_DEVICE_NICKNAME)
+            prefs[Keys.CORE_DEVICE_ADDRESS] = address
+            prefs[Keys.CORE_DEVICE_NAME] = name
+        }
+    }
+
     /** Blank clears the nickname (falls back to the device's standard BLE name everywhere it's
      *  shown), rather than storing an empty string as if it were a real one. */
     suspend fun setDeviceNickname(nickname: String) {
@@ -114,6 +131,12 @@ class SettingsRepository(private val context: Context) {
     suspend fun setHrDeviceNickname(nickname: String) {
         context.dataStore.edit { prefs ->
             if (nickname.isBlank()) prefs.remove(Keys.HR_DEVICE_NICKNAME) else prefs[Keys.HR_DEVICE_NICKNAME] = nickname
+        }
+    }
+
+    suspend fun setCoreDeviceNickname(nickname: String) {
+        context.dataStore.edit { prefs ->
+            if (nickname.isBlank()) prefs.remove(Keys.CORE_DEVICE_NICKNAME) else prefs[Keys.CORE_DEVICE_NICKNAME] = nickname
         }
     }
 
@@ -146,6 +169,9 @@ class SettingsRepository(private val context: Context) {
             s.lastHrDeviceAddress?.let { prefs[Keys.HR_DEVICE_ADDRESS] = it }
             s.lastHrDeviceName?.let { prefs[Keys.HR_DEVICE_NAME] = it }
             s.lastHrDeviceNickname?.let { prefs[Keys.HR_DEVICE_NICKNAME] = it }
+            s.lastCoreDeviceAddress?.let { prefs[Keys.CORE_DEVICE_ADDRESS] = it }
+            s.lastCoreDeviceName?.let { prefs[Keys.CORE_DEVICE_NAME] = it }
+            s.lastCoreDeviceNickname?.let { prefs[Keys.CORE_DEVICE_NICKNAME] = it }
             s.libraryFolderUri?.let { prefs[Keys.LIBRARY_FOLDER_URI] = it }
             s.libraryFolderName?.let { prefs[Keys.LIBRARY_FOLDER_NAME] = it }
             s.backupFolderUri?.let { prefs[Keys.BACKUP_FOLDER_URI] = it }

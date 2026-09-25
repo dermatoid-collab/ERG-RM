@@ -28,10 +28,13 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -63,6 +66,7 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ergrm.trainer.ble.CoreTempReading
 import com.ergrm.trainer.ble.TrainerSample
 import com.ergrm.trainer.ui.theme.ErgAboveTarget
 import com.ergrm.trainer.ui.theme.ErgAccent
@@ -94,6 +98,7 @@ fun WorkoutScreen(
     otherSources: List<Pair<String, () -> Unit>> = emptyList(),
 ) {
     val live by viewModel.liveData.collectAsState()
+    val coreReading by viewModel.coreTempReading.collectAsState()
     val workoutState by viewModel.workoutState.collectAsState()
     val loadState by viewModel.workoutLoadState.collectAsState()
     val samples by viewModel.sampleHistory.collectAsState()
@@ -129,7 +134,7 @@ fun WorkoutScreen(
         }
         WorkoutStatusLine(loadState)
 
-        StatTileGrid(live, workoutState, settings.ftpWatts, settings.lthrBpm)
+        StatTileGrid(live, workoutState, settings.ftpWatts, settings.lthrBpm, coreReading)
 
         ControlsRow(
             hasWorkout = workoutState.steps.isNotEmpty(),
@@ -148,13 +153,20 @@ fun WorkoutScreen(
                 title = { Text("Stop workout?") },
                 text = { Text("This will save the workout to history and end the session.") },
                 confirmButton = {
-                    TextButton(onClick = {
-                        showStopConfirm = false
-                        viewModel.exitWorkout()
-                    }) { Text("Save") }
+                    Button(
+                        onClick = {
+                            showStopConfirm = false
+                            viewModel.exitWorkout()
+                        },
+                        shape = RoundedCornerShape(50),
+                        colors = ButtonDefaults.buttonColors(containerColor = ErgAccent, contentColor = Color.Black),
+                    ) { Text("Save", fontSize = 16.sp, fontWeight = FontWeight.Bold) }
                 },
                 dismissButton = {
-                    TextButton(onClick = { showStopConfirm = false }) { Text("Cancel") }
+                    OutlinedButton(
+                        onClick = { showStopConfirm = false },
+                        shape = RoundedCornerShape(50),
+                    ) { Text("Cancel", fontSize = 16.sp, fontWeight = FontWeight.Bold) }
                 },
             )
         }
@@ -240,7 +252,13 @@ private fun WorkoutStatusLine(loadState: WorkoutLoadState) {
  *  Target watts/Watts flips both together between absolute watts and %FTP, since they show the
  *  same underlying pair of numbers in two units. */
 @Composable
-private fun StatTileGrid(live: TrainerSample, workoutState: WorkoutRunState, ftpWatts: Int, lthrBpm: Int) {
+private fun StatTileGrid(
+    live: TrainerSample,
+    workoutState: WorkoutRunState,
+    ftpWatts: Int,
+    lthrBpm: Int,
+    coreReading: CoreTempReading?,
+) {
     val actual = live.powerWatts ?: 0
     val target = workoutState.currentTargetWatts
     val powerColor = when {
@@ -297,13 +315,19 @@ private fun StatTileGrid(live: TrainerSample, workoutState: WorkoutRunState, ftp
         // (corrected toward the HR target), so Watts stays worth seeing, and duplicating HR
         // instead of showing it would leave nothing telling the rider what power they're on.
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
-            StatTile("Cadence", live.cadenceRpm?.let { "${it.toInt()}" } ?: "--", Modifier.weight(1f))
+            StatTile(
+                label = "Cadence",
+                value = live.cadenceRpm?.let { "${it.toInt()}" } ?: "--",
+                modifier = Modifier.weight(1f),
+                unit = "rpm",
+            )
             if (isHrPlus) {
                 StatTile(
                     label = if (showPercentFtp) "% FTP" else "Watts",
                     value = if (showPercentFtp) percentOfFtp(actual, ftpWatts) else "$actual",
                     modifier = Modifier.weight(1f),
                     valueColor = wattsColor,
+                    unit = if (showPercentFtp) null else "W",
                     onClick = { showPercentFtp = !showPercentFtp },
                 )
             } else {
@@ -312,6 +336,7 @@ private fun StatTileGrid(live: TrainerSample, workoutState: WorkoutRunState, ftp
                     value = live.heartRateBpm?.let { "$it" } ?: "--",
                     modifier = Modifier.weight(1f),
                     valueColor = hrColor,
+                    unit = "bpm",
                 )
             }
         }
@@ -324,6 +349,7 @@ private fun StatTileGrid(live: TrainerSample, workoutState: WorkoutRunState, ftp
                     else -> "$target"
                 },
                 modifier = Modifier.weight(1f),
+                unit = when { isHrPlus -> "bpm"; showPercentFtp -> null; else -> "W" },
                 zoneLabel = zone.label,
                 zoneColor = zone.color,
                 onClick = { showPercentFtp = !showPercentFtp },
@@ -334,6 +360,7 @@ private fun StatTileGrid(live: TrainerSample, workoutState: WorkoutRunState, ftp
                     value = live.heartRateBpm?.let { "$it" } ?: "--",
                     modifier = Modifier.weight(1f),
                     valueColor = hrColor,
+                    unit = "bpm",
                 )
             } else {
                 StatTile(
@@ -341,10 +368,13 @@ private fun StatTileGrid(live: TrainerSample, workoutState: WorkoutRunState, ftp
                     value = if (showPercentFtp) percentOfFtp(actual, ftpWatts) else "$actual",
                     modifier = Modifier.weight(1f),
                     valueColor = wattsColor,
+                    unit = if (showPercentFtp) null else "W",
                     onClick = { showPercentFtp = !showPercentFtp },
                 )
             }
         }
+
+        CoreTempTileRow(coreReading)
     }
 }
 
@@ -357,6 +387,7 @@ private fun StatTile(
     value: String,
     modifier: Modifier = Modifier,
     valueColor: Color = ErgOnSurface,
+    unit: String? = null,
     zoneLabel: String? = null,
     zoneColor: Color = ErgOnSurface,
     onClick: (() -> Unit)? = null,
@@ -385,13 +416,103 @@ private fun StatTile(
                 )
             }
         }
-        Text(
-            value,
-            fontSize = 34.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = valueColor,
-            modifier = Modifier.padding(top = 1.dp),
+        Row(modifier = Modifier.padding(top = 1.dp)) {
+            Text(
+                value,
+                fontSize = 34.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = valueColor,
+                modifier = Modifier.alignByBaseline(),
+            )
+            if (unit != null) {
+                Text(
+                    unit,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = valueColor.copy(alpha = 0.6f),
+                    modifier = Modifier.alignByBaseline().padding(start = 3.dp),
+                )
+            }
+        }
+    }
+}
+
+/** Green/yellow/red/purple, matching the same escalating-severity palette used for HR and power
+ *  zones elsewhere on this screen (at-target green, warning amber, above-target/thermal red, and
+ *  the max-zone purple) rather than inventing new colors for a fourth kind of zone. */
+private fun hsiColor(hsi: Float): Color = when {
+    hsi <= 0.9f -> ErgAccent
+    hsi <= 2.9f -> ErgWarn
+    hsi <= 6.9f -> ErgHrLine
+    else -> ZONE_MAX.color
+}
+
+/** Core/skin temperature and Heat Strain Index from an optional CORE sensor — always shown, "--"
+ *  when nothing is connected yet, same as every other live tile on this screen. Deliberately
+ *  smaller than [StatTile]: three tiles in a row need to give up some of the two-tile rows' width,
+ *  and none of these three numbers needs 34sp to stay readable at a glance. */
+@Composable
+private fun CoreTempTileRow(reading: CoreTempReading?) {
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+        SmallStatTile(
+            label = "Core temp",
+            value = reading?.coreTempC?.let { "%.1f".format(it) } ?: "--",
+            unit = "°C",
+            modifier = Modifier.weight(1f),
         )
+        SmallStatTile(
+            label = "Skin temp",
+            value = reading?.skinTempC?.let { "%.1f".format(it) } ?: "--",
+            unit = "°C",
+            modifier = Modifier.weight(1f),
+        )
+        SmallStatTile(
+            label = "HSI",
+            value = reading?.heatStrainIndex?.let { "%.1f".format(it) } ?: "--",
+            valueColor = reading?.heatStrainIndex?.let { hsiColor(it) } ?: ErgOnSurface,
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+@Composable
+private fun SmallStatTile(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier,
+    valueColor: Color = ErgOnSurface,
+    unit: String? = null,
+) {
+    Column(
+        modifier = modifier
+            .background(ErgSurface, RoundedCornerShape(11.dp))
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+    ) {
+        Text(
+            label.uppercase(),
+            style = MaterialTheme.typography.labelSmall,
+            fontSize = 10.sp,
+            color = ErgOnSurface.copy(alpha = 0.6f),
+            maxLines = 1,
+        )
+        Row {
+            Text(
+                value,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = valueColor,
+                modifier = Modifier.alignByBaseline(),
+            )
+            if (unit != null) {
+                Text(
+                    unit,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = valueColor.copy(alpha = 0.6f),
+                    modifier = Modifier.alignByBaseline().padding(start = 2.dp),
+                )
+            }
+        }
     }
 }
 
@@ -719,7 +840,7 @@ private fun WorkoutProfileChart(
         val bpmTicks = listOf(0.25f, 0.5f, 0.75f, 1f).map { (bpmMin + bpmRange * it).roundToInt() }
         wattsTicks.forEachIndexed { i, watts ->
             val y = yWatts(watts)
-            drawLine(color = ErgOnSurface.copy(alpha = 0.12f), start = Offset(0f, y), end = Offset(w, y), strokeWidth = 1f)
+            drawLine(color = ErgOnSurface.copy(alpha = 0.12f), start = Offset(0f, y), end = Offset(w, y), strokeWidth = 1.5f)
             val wattsLabelResult = textMeasurer.measure("$watts", TextStyle(fontSize = 10.sp, color = ErgOnSurface.copy(alpha = 0.85f)))
             drawText(wattsLabelResult, topLeft = Offset(4.dp.toPx(), y - wattsLabelResult.size.height - 2f))
             val bpmLabelResult = textMeasurer.measure("${bpmTicks[i]}", TextStyle(fontSize = 10.sp, color = ErgHrLine))

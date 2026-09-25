@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Thermostat
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -37,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.ergrm.trainer.ble.CoreTempConnectionState
 import com.ergrm.trainer.ble.DiscoveredDevice
 import com.ergrm.trainer.ble.HrConnectionState
 import com.ergrm.trainer.ble.TrainerConnectionState
@@ -67,6 +69,10 @@ fun ConnectScreen(viewModel: MainViewModel) {
     val hrScanResults by viewModel.hrScanResults.collectAsState()
     val isHrScanning by viewModel.isHrScanning.collectAsState()
 
+    val coreConnectionState by viewModel.coreConnectionState.collectAsState()
+    val coreScanResults by viewModel.coreScanResults.collectAsState()
+    val isCoreScanning by viewModel.isCoreScanning.collectAsState()
+
     val settings by viewModel.settings.collectAsState()
     var editingNicknameFor by remember { mutableStateOf<DeviceKind?>(null) }
 
@@ -93,6 +99,15 @@ fun ConnectScreen(viewModel: MainViewModel) {
         val requiredGranted = requiredBluetoothPermissions.all { grants[it] == true }
         if (requiredGranted) {
             viewModel.startHrScan()
+        }
+    }
+
+    val corePermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { grants ->
+        val requiredGranted = requiredBluetoothPermissions.all { grants[it] == true }
+        if (requiredGranted) {
+            viewModel.startCoreScan()
         }
     }
 
@@ -191,31 +206,91 @@ fun ConnectScreen(viewModel: MainViewModel) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 16.dp, bottom = 16.dp),
+                .padding(top = 16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             hrScanResults.forEach { result ->
                 DeviceRow(result) { viewModel.connectHrSensor(result) }
             }
         }
+
+        Icon(
+            imageVector = Icons.Filled.Thermostat,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(top = 32.dp, bottom = 8.dp),
+        )
+        ConnectionStatusRow(
+            label = coreConnectionLabel(coreConnectionState, settings.lastCoreDeviceNickname ?: settings.lastCoreDeviceName),
+            subtitle = if (coreConnectionState is CoreTempConnectionState.Ready && settings.lastCoreDeviceNickname != null) {
+                settings.lastCoreDeviceName
+            } else {
+                null
+            },
+            showEdit = coreConnectionState is CoreTempConnectionState.Ready,
+            onEditClick = { editingNicknameFor = DeviceKind.CORE_TEMP },
+        )
+
+        if (coreConnectionState is CoreTempConnectionState.Ready) {
+            OutlinedButton(
+                onClick = { viewModel.disconnectCoreSensor() },
+                modifier = Modifier.padding(top = 16.dp),
+            ) {
+                Text("Disconnect CORE sensor")
+            }
+        } else {
+            Button(
+                onClick = { corePermissionLauncher.launch(bluetoothPermissions) },
+                modifier = Modifier.padding(top = 16.dp),
+            ) {
+                Text(if (isCoreScanning) "Scanning…" else "Search for CORE sensor")
+            }
+        }
+
+        if (isCoreScanning) {
+            CircularProgressIndicator(modifier = Modifier.padding(top = 16.dp))
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 16.dp, bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            coreScanResults.forEach { result ->
+                DeviceRow(result) { viewModel.connectCoreSensor(result) }
+            }
+        }
     }
 
     editingNicknameFor?.let { kind ->
-        val currentNickname = if (kind == DeviceKind.TRAINER) settings.lastDeviceNickname else settings.lastHrDeviceNickname
-        val standardName = if (kind == DeviceKind.TRAINER) settings.lastDeviceName else settings.lastHrDeviceName
+        val currentNickname = when (kind) {
+            DeviceKind.TRAINER -> settings.lastDeviceNickname
+            DeviceKind.HR -> settings.lastHrDeviceNickname
+            DeviceKind.CORE_TEMP -> settings.lastCoreDeviceNickname
+        }
+        val standardName = when (kind) {
+            DeviceKind.TRAINER -> settings.lastDeviceName
+            DeviceKind.HR -> settings.lastHrDeviceName
+            DeviceKind.CORE_TEMP -> settings.lastCoreDeviceName
+        }
         NicknameDialog(
             currentNickname = currentNickname,
             standardName = standardName,
             onDismiss = { editingNicknameFor = null },
             onSave = { nickname ->
-                if (kind == DeviceKind.TRAINER) viewModel.setDeviceNickname(nickname) else viewModel.setHrDeviceNickname(nickname)
+                when (kind) {
+                    DeviceKind.TRAINER -> viewModel.setDeviceNickname(nickname)
+                    DeviceKind.HR -> viewModel.setHrDeviceNickname(nickname)
+                    DeviceKind.CORE_TEMP -> viewModel.setCoreDeviceNickname(nickname)
+                }
                 editingNicknameFor = null
             },
         )
     }
 }
 
-private enum class DeviceKind { TRAINER, HR }
+private enum class DeviceKind { TRAINER, HR, CORE_TEMP }
 
 /** The connected-device label plus, once a nickname is set, the standard BLE name underneath it
  *  in smaller muted text — so the device stays recognizable while scanning even after it's been
@@ -310,4 +385,12 @@ private fun hrConnectionLabel(state: HrConnectionState, deviceName: String?): St
     is HrConnectionState.DiscoveringServices -> "Discovering heart rate service…"
     is HrConnectionState.Ready -> if (deviceName != null) "Connected to $deviceName" else "Connected"
     is HrConnectionState.Failed -> "Error: ${state.message}"
+}
+
+private fun coreConnectionLabel(state: CoreTempConnectionState, deviceName: String?): String = when (state) {
+    is CoreTempConnectionState.Disconnected -> "No CORE sensor connected"
+    is CoreTempConnectionState.Connecting -> "Connecting…"
+    is CoreTempConnectionState.DiscoveringServices -> "Discovering Core Body Temperature service…"
+    is CoreTempConnectionState.Ready -> if (deviceName != null) "Connected to $deviceName" else "Connected"
+    is CoreTempConnectionState.Failed -> "Error: ${state.message}"
 }
