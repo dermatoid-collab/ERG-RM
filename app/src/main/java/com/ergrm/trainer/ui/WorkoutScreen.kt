@@ -17,17 +17,27 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.HourglassBottom
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Thermostat
+import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.TrackChanges
+import androidx.compose.material.icons.filled.WaterDrop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -77,8 +87,10 @@ import com.ergrm.trainer.ui.theme.ErgCadenceLine
 import com.ergrm.trainer.ui.theme.ErgDivider
 import com.ergrm.trainer.ui.theme.ErgHrLine
 import com.ergrm.trainer.ui.theme.ErgHrPlus
-import com.ergrm.trainer.ui.theme.ErgIntensityDown
-import com.ergrm.trainer.ui.theme.ErgIntensityUp
+import com.ergrm.trainer.ui.theme.ErgIconAmber
+import com.ergrm.trainer.ui.theme.ErgIconBlue
+import com.ergrm.trainer.ui.theme.ErgIconGreen
+import com.ergrm.trainer.ui.theme.ErgIconPink
 import com.ergrm.trainer.ui.theme.ErgModeErg
 import com.ergrm.trainer.ui.theme.ErgOnSurface
 import com.ergrm.trainer.ui.theme.ErgProgressLine
@@ -297,18 +309,34 @@ private fun StatTileGrid(
     var totalShowElapsed by remember { mutableStateOf(false) }
     var showPercentFtp by remember { mutableStateOf(false) }
 
+    // Progress bars always fill by elapsed-time fraction, independent of each tile's own
+    // elapsed/remaining display toggle above.
+    val stepDurationSec = workoutState.currentStep?.durationSec ?: 0
+    val intervalProgress = if (stepDurationSec > 0) workoutState.elapsedInStepSec / stepDurationSec.toFloat() else 0f
+    val totalProgress = if (workoutState.totalDurationSec > 0) {
+        workoutState.totalElapsedSec / workoutState.totalDurationSec.toFloat()
+    } else {
+        0f
+    }
+
     Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
             StatTile(
                 label = "Interval",
                 value = formatTime(if (intervalShowElapsed) workoutState.elapsedInStepSec else workoutState.remainingInStepSec),
                 modifier = Modifier.weight(1f),
+                icon = Icons.Filled.Timer,
+                iconTint = ErgIconBlue,
+                progress = intervalProgress,
                 onClick = { intervalShowElapsed = !intervalShowElapsed },
             )
             StatTile(
                 label = "Total",
                 value = formatTime(if (totalShowElapsed) workoutState.totalElapsedSec else workoutState.totalRemainingSec),
                 modifier = Modifier.weight(1f),
+                icon = Icons.Filled.HourglassBottom,
+                iconTint = ErgIconBlue,
+                progress = totalProgress,
                 onClick = { totalShowElapsed = !totalShowElapsed },
             )
         }
@@ -322,6 +350,8 @@ private fun StatTileGrid(
                 value = live.cadenceRpm?.let { "${it.toInt()}" } ?: "--",
                 modifier = Modifier.weight(1f),
                 unit = "rpm",
+                icon = Icons.Filled.Speed,
+                iconTint = ErgIconGreen,
             )
             if (isHrPlus) {
                 StatTile(
@@ -330,6 +360,8 @@ private fun StatTileGrid(
                     modifier = Modifier.weight(1f),
                     valueColor = wattsColor,
                     unit = if (showPercentFtp) null else "W",
+                    icon = Icons.Filled.Bolt,
+                    iconTint = ErgIconAmber,
                     onClick = { showPercentFtp = !showPercentFtp },
                 )
             } else {
@@ -339,6 +371,8 @@ private fun StatTileGrid(
                     modifier = Modifier.weight(1f),
                     valueColor = hrColor,
                     unit = "bpm",
+                    icon = Icons.Filled.Favorite,
+                    iconTint = ErgIconPink,
                 )
             }
         }
@@ -354,6 +388,8 @@ private fun StatTileGrid(
                 unit = when { isHrPlus -> "bpm"; showPercentFtp -> null; else -> "W" },
                 zoneLabel = zone.label,
                 zoneColor = zone.color,
+                icon = Icons.Filled.TrackChanges,
+                iconTint = ErgIconBlue,
                 onClick = { showPercentFtp = !showPercentFtp },
             )
             if (isHrPlus) {
@@ -363,6 +399,8 @@ private fun StatTileGrid(
                     modifier = Modifier.weight(1f),
                     valueColor = hrColor,
                     unit = "bpm",
+                    icon = Icons.Filled.Favorite,
+                    iconTint = ErgIconPink,
                 )
             } else {
                 StatTile(
@@ -371,6 +409,8 @@ private fun StatTileGrid(
                     modifier = Modifier.weight(1f),
                     valueColor = wattsColor,
                     unit = if (showPercentFtp) null else "W",
+                    icon = Icons.Filled.Bolt,
+                    iconTint = ErgIconAmber,
                     onClick = { showPercentFtp = !showPercentFtp },
                 )
             }
@@ -390,6 +430,12 @@ private fun StatTile(
     unit: String? = null,
     zoneLabel: String? = null,
     zoneColor: Color = ErgOnSurface,
+    icon: ImageVector? = null,
+    iconTint: Color = ErgOnSurface,
+    // Fraction of elapsed time within the interval/workout, always filling by elapsed time
+    // regardless of whether the tile currently *displays* elapsed or remaining (its tap-toggle
+    // only changes the number shown, never what the bar tracks).
+    progress: Float? = null,
     onClick: (() -> Unit)? = null,
 ) {
     Column(
@@ -399,6 +445,14 @@ private fun StatTile(
             .padding(horizontal = 12.dp, vertical = 8.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            if (icon != null) {
+                Icon(
+                    icon,
+                    contentDescription = null,
+                    tint = iconTint,
+                    modifier = Modifier.size(13.dp).padding(end = 4.dp),
+                )
+            }
             Text(
                 label.uppercase(),
                 style = MaterialTheme.typography.labelSmall,
@@ -434,6 +488,24 @@ private fun StatTile(
                 )
             }
         }
+        if (progress != null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 6.dp)
+                    .height(4.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(ErgSurface2),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(progress.coerceIn(0f, 1f))
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(50))
+                        .background(iconTint),
+                )
+            }
+        }
     }
 }
 
@@ -458,18 +530,24 @@ private fun CoreTempPillRow(reading: CoreTempReading?, modifier: Modifier = Modi
         CoreTempPill(
             label = "CORE",
             value = reading?.coreTempC?.let { "%.1f°".format(it) } ?: "--",
+            icon = Icons.Filled.Thermostat,
+            iconTint = ErgIconPink,
             modifier = Modifier.weight(1f),
         )
         CoreTempPill(
             label = "SKIN",
             value = reading?.skinTempC?.let { "%.1f°".format(it) } ?: "--",
             valueColor = ErgSkinTemp,
+            icon = Icons.Filled.WaterDrop,
+            iconTint = ErgIconBlue,
             modifier = Modifier.weight(1f),
         )
         CoreTempPill(
             label = "HSI",
             value = reading?.heatStrainIndex?.let { "%.1f".format(it) } ?: "--",
             valueColor = reading?.heatStrainIndex?.let { hsiColor(it) } ?: ErgOnSurface,
+            icon = Icons.Filled.LocalFireDepartment,
+            iconTint = ErgIconAmber,
             modifier = Modifier.weight(1f),
         )
     }
@@ -481,14 +559,25 @@ private fun CoreTempPill(
     value: String,
     modifier: Modifier = Modifier,
     valueColor: Color = ErgOnSurface,
+    icon: ImageVector? = null,
+    iconTint: Color = ErgOnSurface,
 ) {
     Row(
         modifier = modifier
-            .background(ErgSurface.copy(alpha = 0.75f), RoundedCornerShape(50))
-            .border(1.dp, Color.White.copy(alpha = 0.07f), RoundedCornerShape(50))
+            .background(ErgSurface2, RoundedCornerShape(50))
+            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(50))
             .padding(horizontal = 10.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
+        if (icon != null) {
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = iconTint,
+                modifier = Modifier.size(11.dp).padding(end = 3.dp),
+            )
+        }
         Text(
             label,
             fontSize = 9.sp,
@@ -835,9 +924,9 @@ private fun WorkoutProfileChart(
         wattsTicks.forEachIndexed { i, watts ->
             val y = yWatts(watts)
             drawLine(color = ErgOnSurface.copy(alpha = 0.12f), start = Offset(0f, y), end = Offset(w, y), strokeWidth = 1.5f)
-            val wattsLabelResult = textMeasurer.measure("$watts", TextStyle(fontSize = 10.sp, color = ErgOnSurface.copy(alpha = 0.85f)))
+            val wattsLabelResult = textMeasurer.measure("$watts W", TextStyle(fontSize = 10.sp, color = ErgOnSurface.copy(alpha = 0.85f)))
             drawText(wattsLabelResult, topLeft = Offset(4.dp.toPx(), y - wattsLabelResult.size.height - 2f))
-            val bpmLabelResult = textMeasurer.measure("${bpmTicks[i]}", TextStyle(fontSize = 10.sp, color = ErgHrLine))
+            val bpmLabelResult = textMeasurer.measure("${bpmTicks[i]} bpm", TextStyle(fontSize = 10.sp, color = ErgHrLine))
             drawText(bpmLabelResult, topLeft = Offset(w - bpmLabelResult.size.width - 4.dp.toPx(), y - bpmLabelResult.size.height - 2f))
         }
 
@@ -900,7 +989,7 @@ private fun ChartTimeAxis(zoom: ChartZoom, totalElapsedSec: Int, totalDurationSe
     Canvas(
         modifier = Modifier
             .fillMaxWidth()
-            .height(20.dp),
+            .height(32.dp),
     ) {
         if (totalDurationSec <= 0) return@Canvas
         val w = size.width
@@ -931,6 +1020,14 @@ private fun ChartTimeAxis(zoom: ChartZoom, totalElapsedSec: Int, totalDurationSe
             )
             tSec += intervalSec
         }
+
+        // Axis caption, centered under the minute ticks — purely a label for the unit already
+        // implied by the numbers above it, so it takes the same muted color, not a new one.
+        val caption = textMeasurer.measure(
+            "Tempo (min)",
+            TextStyle(fontSize = 9.sp, color = ErgOnSurface.copy(alpha = 0.45f)),
+        )
+        drawText(caption, topLeft = Offset((w - caption.size.width) / 2f, tickHeight + tickToLabelGap + 12.dp.toPx()))
     }
 }
 
@@ -1009,6 +1106,15 @@ private fun IntervalDetailsSection(
             .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // A left accent bar plus blue label/time text mark "Now" as the live block, distinct from
+        // the merely-upcoming "Next" one — the zone chip stays its own zone color either way.
+        Box(
+            modifier = Modifier
+                .width(3.dp)
+                .height(22.dp)
+                .clip(RoundedCornerShape(50))
+                .background(ErgIconBlue),
+        )
         IntervalDetailBlock(
             label = "Now",
             step = current,
@@ -1017,6 +1123,7 @@ private fun IntervalDetailsSection(
             lthrBpm = lthrBpm,
             intensityPercent = intensityPercent,
             controlMode = controlMode,
+            accentColor = ErgIconBlue,
             modifier = Modifier.weight(1f),
         )
         if (next != null) {
@@ -1051,6 +1158,7 @@ private fun IntervalDetailBlock(
     lthrBpm: Int,
     intensityPercent: Int,
     controlMode: ControlMode,
+    accentColor: Color? = null,
     modifier: Modifier = Modifier,
 ) {
     val scaledStart = (step.startWatts * intensityPercent / 100f).roundToInt()
@@ -1066,8 +1174,13 @@ private fun IntervalDetailBlock(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(label, style = MaterialTheme.typography.labelSmall, color = ErgOnSurface, maxLines = 1)
-        Text(formatMinSec(remainingSec), style = MaterialTheme.typography.bodyMedium, maxLines = 1)
+        Text(label, style = MaterialTheme.typography.labelSmall, color = accentColor ?: ErgOnSurface, maxLines = 1)
+        Text(
+            formatMinSec(remainingSec),
+            style = MaterialTheme.typography.bodyMedium,
+            color = accentColor ?: Color.Unspecified,
+            maxLines = 1,
+        )
         // The label/time/zone chip are always short and fixed-width; the value is the one piece
         // that can genuinely run long (a three-digit bpm range like "150–220 bpm" is wider than
         // any watt range ever was). weight(fill = false) reserves the fixed pieces' space first
@@ -1181,15 +1294,15 @@ private fun IntensityRow(
 ) {
     val isHrPlus = controlMode == ControlMode.HR_PLUS
     val modeColor = if (isHrPlus) ErgHrPlus else ErgModeErg
-    // Not ErgAccent (the mode tag right next to it is already green in ERG, so a modified %
-    // in the same green blended together) and not ErgWarn either — amber already means
-    // "warning" for the Z4 zone chip, and a changed % isn't a warning. Split by direction so
-    // "pushed harder" and "eased off" read differently at a glance, not just "not 100%".
-    val pillColor = when {
-        intensityPercent > 100 -> ErgIntensityUp
-        intensityPercent < 100 -> ErgIntensityDown
-        else -> ErgSurface2
+    // The pill's background no longer recolors by direction — it stays the app's fixed pill
+    // color, and a small triangle next to the percentage carries that signal instead: ▼ blue
+    // below target, ▲ amber above, no glyph at exactly 100%.
+    val intensityGlyph = when {
+        intensityPercent > 100 -> "▲"
+        intensityPercent < 100 -> "▼"
+        else -> null
     }
+    val intensityGlyphColor = if (intensityPercent > 100) ErgIconAmber else ErgIconBlue
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         PillIconButton(
             icon = Icons.Filled.KeyboardArrowDown,
@@ -1203,7 +1316,7 @@ private fun IntensityRow(
                 .weight(1f)
                 .height(48.dp)
                 .clip(RoundedCornerShape(50))
-                .background(pillColor),
+                .background(ErgSurface2),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Row(
@@ -1223,14 +1336,16 @@ private fun IntensityRow(
                 )
             }
             Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                Text(
-                    "$intensityPercent%",
-                    fontWeight = FontWeight.Bold,
-                    // Both ErgIntensityUp/Down are dark enough to need light text, unlike the
-                    // brighter amber/lavender this pill used before — so unlike the mode tag
-                    // (still black-on-bright), this text stays ErgOnSurface in every state.
-                    color = ErgOnSurface,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (intensityGlyph != null) {
+                        Text(intensityGlyph, fontSize = 12.sp, color = intensityGlyphColor)
+                    }
+                    Text(
+                        "$intensityPercent%",
+                        fontWeight = FontWeight.Bold,
+                        color = ErgOnSurface,
+                    )
+                }
             }
         }
         PillIconButton(
