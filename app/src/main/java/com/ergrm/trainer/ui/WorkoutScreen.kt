@@ -54,6 +54,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PointMode
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -202,7 +203,6 @@ fun WorkoutScreen(
 
         IntervalDetailsSection(
             current = workoutState.currentStep,
-            currentRemainingSec = workoutState.remainingInStepSec,
             next = workoutState.nextStep,
             ftpWatts = settings.ftpWatts,
             lthrBpm = settings.lthrBpm,
@@ -491,17 +491,21 @@ private fun CoreTempPill(
     ) {
         Text(
             label,
-            fontSize = 9.sp,
+            fontSize = 10.sp,
             fontWeight = FontWeight.Bold,
             color = ErgOnSurface.copy(alpha = 0.6f),
+            maxLines = 1,
+            overflow = TextOverflow.Clip,
             modifier = Modifier.alignByBaseline(),
         )
-        Spacer(modifier = Modifier.width(5.dp))
+        Spacer(modifier = Modifier.width(4.dp))
         Text(
             value,
-            fontSize = 15.sp,
+            fontSize = 16.sp,
             fontWeight = FontWeight.SemiBold,
             color = valueColor,
+            maxLines = 1,
+            overflow = TextOverflow.Clip,
             modifier = Modifier.alignByBaseline(),
         )
     }
@@ -757,7 +761,7 @@ private fun WorkoutProfileChart(
         fun yCad(rpm: Int): Float = h - h * (rpm.toFloat() / cadScale).coerceIn(0f, 1f)
 
         var acc = 0
-        var previousBarHeight = 0f
+        var previousEndBarHeight = 0f
         steps.forEachIndexed { index, step ->
             val stepStart = acc
             val stepEnd = acc + step.durationSec
@@ -768,18 +772,30 @@ private fun WorkoutProfileChart(
             val x1 = xAt(stepEnd).coerceIn(0f, w)
             val dispStart = displayWatts(step.startWatts, index, currentStepIndex, intensityPercent)
             val dispEnd = displayWatts(step.endWatts, index, currentStepIndex, intensityPercent)
-            val barHeight = h * (max(dispStart, dispEnd).toFloat() / wattsScale).coerceIn(0.05f, 1f)
+            // A ramp's start/end differ, so the bar is a sloped trapezoid instead of a flat
+            // rectangle — a steady step just has startBarHeight == endBarHeight, which draws the
+            // same flat shape as before.
+            val startBarHeight = h * (dispStart.toFloat() / wattsScale).coerceIn(0.05f, 1f)
+            val endBarHeight = h * (dispEnd.toFloat() / wattsScale).coerceIn(0.05f, 1f)
             val zone = zoneFor(max(dispStart, dispEnd), ftpWatts)
             val color = mutedZoneColor(zone.color, active = index == currentStepIndex)
-            drawRect(color = color, topLeft = Offset(x0, h - barHeight), size = Size((x1 - x0).coerceAtLeast(1f), barHeight))
+            val barPath = Path().apply {
+                moveTo(x0, h - startBarHeight)
+                lineTo(x1, h - endBarHeight)
+                lineTo(x1, h)
+                lineTo(x0, h)
+                close()
+            }
+            drawPath(path = barPath, color = color)
 
             // Thin light-blue divider between consecutive intervals — stops at the top of the
-            // taller of the two adjacent bars instead of running into the empty area above them.
+            // taller of the two bar edges meeting at this boundary instead of running into the
+            // empty area above them.
             if (stepStart in windowStart..windowEnd && index > 0) {
-                val dividerHeight = max(previousBarHeight, barHeight)
+                val dividerHeight = max(previousEndBarHeight, startBarHeight)
                 drawLine(color = ErgDivider, start = Offset(x0, h - dividerHeight), end = Offset(x0, h), strokeWidth = 0.75f)
             }
-            previousBarHeight = barHeight
+            previousEndBarHeight = endBarHeight
         }
 
         // Live traces recorded during the workout: cadence under HR under power.
@@ -994,7 +1010,6 @@ private fun bpmLabel(startWatts: Int, endWatts: Int, ftpWatts: Int, lthrBpm: Int
 @Composable
 private fun IntervalDetailsSection(
     current: WorkoutStep?,
-    currentRemainingSec: Int,
     next: WorkoutStep?,
     ftpWatts: Int,
     lthrBpm: Int,
@@ -1012,7 +1027,6 @@ private fun IntervalDetailsSection(
         IntervalDetailBlock(
             label = "Now",
             step = current,
-            remainingSec = currentRemainingSec,
             ftpWatts = ftpWatts,
             lthrBpm = lthrBpm,
             intensityPercent = intensityPercent,
@@ -1029,7 +1043,6 @@ private fun IntervalDetailsSection(
             IntervalDetailBlock(
                 label = "Next",
                 step = next,
-                remainingSec = next.durationSec,
                 ftpWatts = ftpWatts,
                 lthrBpm = lthrBpm,
                 intensityPercent = intensityPercent,
@@ -1046,7 +1059,6 @@ private fun IntervalDetailsSection(
 private fun IntervalDetailBlock(
     label: String,
     step: WorkoutStep,
-    remainingSec: Int,
     ftpWatts: Int,
     lthrBpm: Int,
     intensityPercent: Int,
@@ -1067,7 +1079,10 @@ private fun IntervalDetailBlock(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(label, style = MaterialTheme.typography.labelSmall, color = ErgOnSurface, maxLines = 1)
-        Text(formatMinSec(remainingSec), style = MaterialTheme.typography.bodyMedium, maxLines = 1)
+        // Fixed interval duration, not a live countdown — "Now" used to show its step's
+        // remaining time ticking down every second, the only number on this row that changed
+        // while everything else (label, zone chip, "Next") stayed put.
+        Text(formatMinSec(step.durationSec), style = MaterialTheme.typography.bodyMedium, maxLines = 1)
         // The label/time/zone chip are always short and fixed-width; the value is the one piece
         // that can genuinely run long (a three-digit bpm range like "150–220 bpm" is wider than
         // any watt range ever was). weight(fill = false) reserves the fixed pieces' space first
