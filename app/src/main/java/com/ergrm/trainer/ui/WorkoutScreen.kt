@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -1275,17 +1276,23 @@ private fun IntensityRow(
             enabled = enabled,
             modifier = Modifier.width(50.dp),
         )
-        Row(
+        // A single Box, not a Row: the mode tag, the percentage and the triangle are each
+        // independently positioned against the pill's own bounds, so none of them can push
+        // the others around. In particular the percentage is centered on the WHOLE pill
+        // (mode tag included) and never moves, whatever the mode tag's width or whether the
+        // triangle is showing — unlike a Row, where every sibling's position depends on its
+        // neighbors' sizes.
+        Box(
             modifier = Modifier
                 .weight(1f)
                 .height(48.dp)
                 .clip(RoundedCornerShape(50))
                 .background(ErgSurface2),
-            verticalAlignment = Alignment.CenterVertically,
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxHeight()
+                    .align(Alignment.CenterStart)
                     .clip(RoundedCornerShape(50))
                     .background(modeColor)
                     .clickable(enabled = enabled, onClick = onToggleMode)
@@ -1301,25 +1308,24 @@ private fun IntensityRow(
                     color = Color.Black,
                 )
             }
-            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    // A fixed-width slot for the glyph — always laid out, whether or not it's
-                    // showing a triangle — so the Row's total width never changes and the
-                    // percentage's own centered position stays put as the triangle appears or
-                    // disappears, instead of the whole group re-centering around a wider Row.
-                    Text(
-                        intensityGlyph ?: "",
-                        fontSize = 24.sp,
-                        color = intensityGlyphColor,
-                        modifier = Modifier.width(18.dp).alignByBaseline(),
-                    )
-                    Text(
-                        "$intensityPercent%",
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White,
-                        modifier = Modifier.alignByBaseline(),
-                    )
-                }
+            Text(
+                "$intensityPercent%",
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                modifier = Modifier.align(Alignment.Center),
+            )
+            if (intensityGlyph != null) {
+                // Offset a fixed distance left of dead center — clear of even the widest
+                // realistic percentage text — rather than a sibling in a Row, so appearing or
+                // disappearing can never touch the percentage's own position.
+                Text(
+                    intensityGlyph,
+                    fontSize = 24.sp,
+                    color = intensityGlyphColor,
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .offset(x = (-34).dp),
+                )
             }
         }
         PillIconButton(
