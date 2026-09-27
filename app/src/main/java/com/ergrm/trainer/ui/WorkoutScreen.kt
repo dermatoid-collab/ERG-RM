@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -174,6 +175,12 @@ fun WorkoutScreen(
                                 .fillMaxWidth()
                                 .padding(top = 20.dp),
                         ) {
+                            // Material3's default button contentPadding (24dp horizontal) is
+                            // sized for a single full-width button, not a 3-way equal split —
+                            // at this width it left "Discard"/"Cancel" too little room and
+                            // wrapped mid-word. Shrinking the padding (not the font) reclaims
+                            // that space instead.
+                            val pillPadding = PaddingValues(horizontal = 4.dp, vertical = 12.dp)
                             OutlinedButton(
                                 onClick = {
                                     showStopConfirm = false
@@ -181,13 +188,15 @@ fun WorkoutScreen(
                                 },
                                 shape = RoundedCornerShape(50),
                                 colors = ButtonDefaults.outlinedButtonColors(contentColor = ErgAboveTarget),
+                                contentPadding = pillPadding,
                                 modifier = Modifier.weight(1f),
-                            ) { Text("Discard", fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+                            ) { Text("Discard", fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1) }
                             OutlinedButton(
                                 onClick = { showStopConfirm = false },
                                 shape = RoundedCornerShape(50),
+                                contentPadding = pillPadding,
                                 modifier = Modifier.weight(1f),
-                            ) { Text("Cancel", fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+                            ) { Text("Cancel", fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1) }
                             Button(
                                 onClick = {
                                     showStopConfirm = false
@@ -195,8 +204,9 @@ fun WorkoutScreen(
                                 },
                                 shape = RoundedCornerShape(50),
                                 colors = ButtonDefaults.buttonColors(containerColor = ErgAccent, contentColor = Color.Black),
+                                contentPadding = pillPadding,
                                 modifier = Modifier.weight(1f),
-                            ) { Text("Save", fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+                            ) { Text("Save", fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1) }
                         }
                     }
                 }
@@ -1293,11 +1303,16 @@ private fun IntensityRow(
             }
             Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    if (intensityGlyph != null) {
-                        // alignByBaseline (not CenterVertically) lines up the glyph's bottom edge
-                        // with the percentage's, without moving the percentage itself.
-                        Text(intensityGlyph, fontSize = 24.sp, color = intensityGlyphColor, modifier = Modifier.alignByBaseline())
-                    }
+                    // A fixed-width slot for the glyph — always laid out, whether or not it's
+                    // showing a triangle — so the Row's total width never changes and the
+                    // percentage's own centered position stays put as the triangle appears or
+                    // disappears, instead of the whole group re-centering around a wider Row.
+                    Text(
+                        intensityGlyph ?: "",
+                        fontSize = 24.sp,
+                        color = intensityGlyphColor,
+                        modifier = Modifier.width(18.dp).alignByBaseline(),
+                    )
                     Text(
                         "$intensityPercent%",
                         fontWeight = FontWeight.Bold,
