@@ -1315,11 +1315,15 @@ private fun IntensityRow(
                 }
             }
             if (intensityGlyph != null) {
-                // Same 14dp inset as ERG/HR+'s own text, mirrored to the right edge.
-                Text(
-                    intensityGlyph,
-                    fontSize = 24.sp,
+                // Drawn directly rather than as a "▲"/"▼" glyph: a Text's own vertical centering
+                // centers its font-metrics box (ascent to descent), not the triangle's actual
+                // ink, which sits noticeably higher within that box — the glyph visibly floated
+                // above the pill's true center. Drawing it ourselves makes the triangle's visual
+                // center exactly the Canvas's center, which CenterEnd then centers on the pill.
+                IntensityTriangle(
+                    pointingUp = intensityPercent > 100,
                     color = intensityGlyphColor,
+                    // Same 14dp inset as ERG/HR+'s own text, mirrored to the right edge.
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
                         .padding(end = 14.dp),
@@ -1333,6 +1337,30 @@ private fun IntensityRow(
             enabled = enabled,
             modifier = Modifier.width(50.dp),
         )
+    }
+}
+
+/** A solid triangle drawn from scratch instead of a "▲"/"▼" glyph, so its own visual center is
+ *  exactly the center of this composable's box — unlike a Text, whose vertical centering is
+ *  based on font ascent/descent rather than the triangle's actual ink. */
+@Composable
+private fun IntensityTriangle(pointingUp: Boolean, color: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier.size(18.dp)) {
+        val w = size.width
+        val h = size.height
+        val path = Path().apply {
+            if (pointingUp) {
+                moveTo(w / 2f, 0f)
+                lineTo(w, h)
+                lineTo(0f, h)
+            } else {
+                moveTo(0f, 0f)
+                lineTo(w, 0f)
+                lineTo(w / 2f, h)
+            }
+            close()
+        }
+        drawPath(path, color = color)
     }
 }
 
