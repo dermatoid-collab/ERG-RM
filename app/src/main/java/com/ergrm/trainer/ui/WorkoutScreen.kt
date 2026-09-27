@@ -2,7 +2,6 @@ package com.ergrm.trainer.ui
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -17,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -36,6 +36,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -68,6 +69,7 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import com.ergrm.trainer.ble.CoreTempReading
 import com.ergrm.trainer.ble.TrainerSample
 import com.ergrm.trainer.ui.theme.ErgAboveTarget
@@ -78,8 +80,8 @@ import com.ergrm.trainer.ui.theme.ErgCadenceLine
 import com.ergrm.trainer.ui.theme.ErgDivider
 import com.ergrm.trainer.ui.theme.ErgHrLine
 import com.ergrm.trainer.ui.theme.ErgHrPlus
-import com.ergrm.trainer.ui.theme.ErgIntensityDown
-import com.ergrm.trainer.ui.theme.ErgIntensityUp
+import com.ergrm.trainer.ui.theme.ErgIntensityDownGlyph
+import com.ergrm.trainer.ui.theme.ErgIntensityUpGlyph
 import com.ergrm.trainer.ui.theme.ErgModeErg
 import com.ergrm.trainer.ui.theme.ErgOnSurface
 import com.ergrm.trainer.ui.theme.ErgProgressLine
@@ -107,6 +109,7 @@ fun WorkoutScreen(
     val samples by viewModel.sampleHistory.collectAsState()
     val settings by viewModel.settings.collectAsState()
     var showStopConfirm by remember { mutableStateOf(false) }
+    var showDiscardConfirm by remember { mutableStateOf(false) }
     var autoBackupDialogReason by remember { mutableStateOf<AutoBackupNeededReason?>(null) }
 
     LaunchedEffect(Unit) {
@@ -139,6 +142,8 @@ fun WorkoutScreen(
 
         StatTileGrid(live, workoutState, settings.ftpWatts, settings.lthrBpm)
 
+        CoreTempTileRow(reading = coreReading)
+
         ControlsRow(
             hasWorkout = workoutState.steps.isNotEmpty(),
             isRunning = workoutState.isRunning,
@@ -151,25 +156,79 @@ fun WorkoutScreen(
         )
 
         if (showStopConfirm) {
+            // A plain Dialog instead of AlertDialog: AlertDialog only has 2 button slots
+            // (confirm/dismiss), and this one needs 3 — Discard, Cancel, Save.
+            Dialog(onDismissRequest = { showStopConfirm = false }) {
+                Surface(shape = RoundedCornerShape(20.dp), color = ErgSurface2) {
+                    Column(modifier = Modifier.padding(20.dp)) {
+                        Text("Stop workout?", style = MaterialTheme.typography.titleLarge)
+                        Text(
+                            "This will save the workout to history and end the session.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(top = 8.dp),
+                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 20.dp),
+                        ) {
+                            OutlinedButton(
+                                onClick = {
+                                    showStopConfirm = false
+                                    showDiscardConfirm = true
+                                },
+                                shape = RoundedCornerShape(50),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = ErgAboveTarget),
+                                modifier = Modifier.weight(1f),
+                            ) { Text("Discard", fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+                            OutlinedButton(
+                                onClick = { showStopConfirm = false },
+                                shape = RoundedCornerShape(50),
+                                modifier = Modifier.weight(1f),
+                            ) { Text("Cancel", fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+                            Button(
+                                onClick = {
+                                    showStopConfirm = false
+                                    viewModel.exitWorkout()
+                                },
+                                shape = RoundedCornerShape(50),
+                                colors = ButtonDefaults.buttonColors(containerColor = ErgAccent, contentColor = Color.Black),
+                                modifier = Modifier.weight(1f),
+                            ) { Text("Save", fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (showDiscardConfirm) {
             AlertDialog(
-                onDismissRequest = { showStopConfirm = false },
-                title = { Text("Stop workout?") },
-                text = { Text("This will save the workout to history and end the session.") },
+                // Backing out (tap outside, back button) returns to the Discard/Cancel/Save
+                // dialog rather than closing everything, same as tapping "No" below.
+                onDismissRequest = {
+                    showDiscardConfirm = false
+                    showStopConfirm = true
+                },
+                title = { Text("Are you sure you want to discard?") },
                 confirmButton = {
                     Button(
                         onClick = {
-                            showStopConfirm = false
-                            viewModel.exitWorkout()
+                            showDiscardConfirm = false
+                            viewModel.discardWorkout()
                         },
                         shape = RoundedCornerShape(50),
-                        colors = ButtonDefaults.buttonColors(containerColor = ErgAccent, contentColor = Color.Black),
-                    ) { Text("Save", fontSize = 16.sp, fontWeight = FontWeight.Bold) }
+                        colors = ButtonDefaults.buttonColors(containerColor = ErgAboveTarget, contentColor = Color.Black),
+                    ) { Text("Yes", fontSize = 16.sp, fontWeight = FontWeight.Bold) }
                 },
                 dismissButton = {
                     OutlinedButton(
-                        onClick = { showStopConfirm = false },
+                        onClick = {
+                            showDiscardConfirm = false
+                            showStopConfirm = true
+                        },
                         shape = RoundedCornerShape(50),
-                    ) { Text("Cancel", fontSize = 16.sp, fontWeight = FontWeight.Bold) }
+                    ) { Text("No", fontSize = 16.sp, fontWeight = FontWeight.Bold) }
                 },
             )
         }
@@ -219,7 +278,6 @@ fun WorkoutScreen(
             ftpWatts = settings.ftpWatts,
             lthrBpm = settings.lthrBpm,
             intensityPercent = workoutState.intensityPercent,
-            coreReading = coreReading,
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
@@ -447,26 +505,26 @@ private fun hsiColor(hsi: Float): Color = when {
     else -> ZONE_MAX.color
 }
 
-/** Core/skin temperature and Heat Strain Index from an optional CORE sensor, laid over the
- *  chart's own reserved top headroom (see [CHART_TOP_HEADROOM]) instead of taking a row of their
- *  own — that headroom is where a trace almost never reaches, and the pills sit just below the
- *  axis's top corner labels so the two never collide. Always shown, "--" when nothing is
- *  connected yet, same as every other live reading on this screen. */
+/** Core/skin temperature and Heat Strain Index from an optional CORE sensor, as a row of 3 tiles
+ *  between the 3rd StatTileGrid row and the controls — out of the chart entirely. Label+value
+ *  stay on a single line each (unlike the other StatTiles' label-above-value layout) to keep
+ *  these tiles short. Always shown, "--" when nothing is connected yet, same as every other live
+ *  reading on this screen. */
 @Composable
-private fun CoreTempPillRow(reading: CoreTempReading?, modifier: Modifier = Modifier) {
+private fun CoreTempTileRow(reading: CoreTempReading?, modifier: Modifier = Modifier) {
     Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        CoreTempPill(
+        CoreTempTile(
             label = "CORE",
             value = reading?.coreTempC?.let { "%.1f°".format(it) } ?: "--",
             modifier = Modifier.weight(1f),
         )
-        CoreTempPill(
+        CoreTempTile(
             label = "SKIN",
             value = reading?.skinTempC?.let { "%.1f°".format(it) } ?: "--",
             valueColor = ErgSkinTemp,
             modifier = Modifier.weight(1f),
         )
-        CoreTempPill(
+        CoreTempTile(
             label = "HSI",
             value = reading?.heatStrainIndex?.let { "%.1f".format(it) } ?: "--",
             valueColor = reading?.heatStrainIndex?.let { hsiColor(it) } ?: ErgOnSurface,
@@ -476,7 +534,7 @@ private fun CoreTempPillRow(reading: CoreTempReading?, modifier: Modifier = Modi
 }
 
 @Composable
-private fun CoreTempPill(
+private fun CoreTempTile(
     label: String,
     value: String,
     modifier: Modifier = Modifier,
@@ -484,9 +542,8 @@ private fun CoreTempPill(
 ) {
     Row(
         modifier = modifier
-            .background(ErgSurface.copy(alpha = 0.75f), RoundedCornerShape(50))
-            .border(1.dp, Color.White.copy(alpha = 0.07f), RoundedCornerShape(50))
-            .padding(horizontal = 10.dp, vertical = 6.dp),
+            .background(ErgSurface, RoundedCornerShape(13.dp))
+            .padding(horizontal = 10.dp, vertical = 9.dp),
         horizontalArrangement = Arrangement.Center,
     ) {
         Text(
@@ -498,7 +555,7 @@ private fun CoreTempPill(
             overflow = TextOverflow.Clip,
             modifier = Modifier.alignByBaseline(),
         )
-        Spacer(modifier = Modifier.width(4.dp))
+        Spacer(modifier = Modifier.width(5.dp))
         Text(
             value,
             fontSize = 16.sp,
@@ -618,7 +675,6 @@ private fun ChartCard(
     ftpWatts: Int,
     lthrBpm: Int,
     intensityPercent: Int,
-    coreReading: CoreTempReading?,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -635,7 +691,6 @@ private fun ChartCard(
             ftpWatts = ftpWatts,
             lthrBpm = lthrBpm,
             intensityPercent = intensityPercent,
-            coreReading = coreReading,
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
@@ -660,10 +715,10 @@ private const val CHART_ZOOM_TAP_FRACTION = 0.75f
  * raising or lowering the live %FTP intensity actually changes bar heights against a stable
  * reference instead of the axis rescaling to compensate and hiding the change.
  */
-private fun chartMaxWatts(ftpWatts: Int): Float = if (ftpWatts > 0) 2f * ftpWatts else 550f
+private fun chartMaxWatts(ftpWatts: Int): Float = if (ftpWatts > 0) 1.8f * ftpWatts else 550f
 
 /** HR ceiling, fixed relative to LTHR for the same reason [chartMaxWatts] is fixed to FTP. */
-private fun chartMaxBpm(lthrBpm: Int): Float = if (lthrBpm > 0) 1.2f * lthrBpm else 210f
+private fun chartMaxBpm(lthrBpm: Int): Float = if (lthrBpm > 0) 1.1f * lthrBpm else 210f
 
 private const val CHART_BPM_MIN = 50f
 private const val CHART_MAX_CADENCE = 140f
@@ -691,12 +746,11 @@ private fun WorkoutProfileChart(
     ftpWatts: Int,
     lthrBpm: Int,
     intensityPercent: Int,
-    coreReading: CoreTempReading?,
     modifier: Modifier = Modifier,
 ) {
     // Divide by (1 - headroom) so the ceiling reaches only that fraction of the height, leaving
     // CHART_TOP_HEADROOM free at the top. A bar or trace above the ceiling (e.g. a high intensity
-    // multiplier pushed it past 2x FTP) is simply clipped rather than rescaling the whole axis —
+    // multiplier pushed it past 1.8x FTP) is simply clipped rather than rescaling the whole axis —
     // that's the point: the axis stays put so intensity changes are visible.
     val wattsScale = chartMaxWatts(ftpWatts) / (1f - CHART_TOP_HEADROOM)
     // Right (HR) axis lines up with the left (watts) axis's 4 gridlines, both topping out with
@@ -716,10 +770,10 @@ private fun WorkoutProfileChart(
     )
 
     Column(modifier = modifier) {
-    Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
     Canvas(
         modifier = Modifier
-            .fillMaxSize()
+            .fillMaxWidth()
+            .weight(1f)
             .pointerInput(Unit) {
             // detectTapGestures cancels the whole gesture if the finger drifts past touch slop
             // before lifting — fine for a big, imprecise target like the zoom band, but a tap
@@ -891,17 +945,6 @@ private fun WorkoutProfileChart(
                 drawPill(wattsText, pillX, pillY, selZone.color, Color.Black, textMeasurer)
             }
         }
-    }
-    // Sits in the chart's own top headroom (see CHART_TOP_HEADROOM) — a trace almost never
-    // reaches there — just below the axis's top corner labels (drawn a few dp from the very top
-    // edge, regardless of the chart's actual height) so the two never overlap.
-    CoreTempPillRow(
-        reading = coreReading,
-        modifier = Modifier
-            .align(Alignment.TopCenter)
-            .fillMaxWidth()
-            .padding(start = 10.dp, top = 26.dp, end = 10.dp),
-    )
     }
     ChartTimeAxis(zoom = zoom, totalElapsedSec = totalElapsedSec, totalDurationSec = totalDurationSec)
     }
@@ -1178,6 +1221,9 @@ private fun PillIconButton(
             icon,
             contentDescription = contentDescription,
             tint = if (enabled) iconColor else iconColor.copy(alpha = 0.4f),
+            // Matched to the surrounding text's height instead of the default 24dp Material icon
+            // size, which read as visibly taller than the "100%"/"ERG" text next to it.
+            modifier = Modifier.size(18.dp),
         )
     }
 }
@@ -1196,15 +1242,15 @@ private fun IntensityRow(
 ) {
     val isHrPlus = controlMode == ControlMode.HR_PLUS
     val modeColor = if (isHrPlus) ErgHrPlus else ErgModeErg
-    // Not ErgAccent (the mode tag right next to it is already green in ERG, so a modified %
-    // in the same green blended together) and not ErgWarn either — amber already means
-    // "warning" for the Z4 zone chip, and a changed % isn't a warning. Split by direction so
-    // "pushed harder" and "eased off" read differently at a glance, not just "not 100%".
-    val pillColor = when {
-        intensityPercent > 100 -> ErgIntensityUp
-        intensityPercent < 100 -> ErgIntensityDown
-        else -> ErgSurface2
+    // The pill's background is now fixed — direction lives entirely in a small triangle next to
+    // the percentage instead of recoloring the whole pill: ▼ blue below target, ▲ amber above,
+    // no glyph exactly at 100%.
+    val intensityGlyph = when {
+        intensityPercent > 100 -> "▲"
+        intensityPercent < 100 -> "▼"
+        else -> null
     }
+    val intensityGlyphColor = if (intensityPercent > 100) ErgIntensityUpGlyph else ErgIntensityDownGlyph
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         PillIconButton(
             icon = Icons.Filled.KeyboardArrowDown,
@@ -1218,7 +1264,7 @@ private fun IntensityRow(
                 .weight(1f)
                 .height(48.dp)
                 .clip(RoundedCornerShape(50))
-                .background(pillColor),
+                .background(ErgSurface2),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Row(
@@ -1238,14 +1284,16 @@ private fun IntensityRow(
                 )
             }
             Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                Text(
-                    "$intensityPercent%",
-                    fontWeight = FontWeight.Bold,
-                    // Both ErgIntensityUp/Down are dark enough to need light text, unlike the
-                    // brighter amber/lavender this pill used before — so unlike the mode tag
-                    // (still black-on-bright), this text stays ErgOnSurface in every state.
-                    color = ErgOnSurface,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (intensityGlyph != null) {
+                        Text(intensityGlyph, fontSize = 12.sp, color = intensityGlyphColor)
+                    }
+                    Text(
+                        "$intensityPercent%",
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                    )
+                }
             }
         }
         PillIconButton(

@@ -28,6 +28,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.ergrm.trainer.intervals.CalendarWorkout
@@ -216,7 +217,9 @@ private fun CalendarWorkoutRow(
                 Text(
                     workout.name,
                     style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = alpha),
+                    // Past days stay the dimmed onSurface grey; today and future days are pure
+                    // white instead of onSurface's light grey, at full opacity.
+                    color = if (isPast) MaterialTheme.colorScheme.onSurface.copy(alpha = alpha) else Color.White,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier

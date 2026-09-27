@@ -614,6 +614,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         workoutExecutor.exit()
     }
 
+    /** Stop without saving: skips exitWorkout()'s history/backup entirely — used by the Stop
+     *  dialog's Discard path, after its own "are you sure" confirmation. */
+    fun discardWorkout() {
+        workoutExecutor.exit()
+    }
+
     fun refreshHistory() {
         viewModelScope.launch {
             _sessionHistory.value = historyRepository.listSessions()
