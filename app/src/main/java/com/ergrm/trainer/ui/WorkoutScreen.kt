@@ -1221,9 +1221,7 @@ private fun PillIconButton(
             icon,
             contentDescription = contentDescription,
             tint = if (enabled) iconColor else iconColor.copy(alpha = 0.4f),
-            // Matched to the surrounding text's height instead of the default 24dp Material icon
-            // size, which read as visibly taller than the "100%"/"ERG" text next to it.
-            modifier = Modifier.size(18.dp),
+            modifier = Modifier.size(36.dp),
         )
     }
 }
@@ -1286,7 +1284,7 @@ private fun IntensityRow(
             Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     if (intensityGlyph != null) {
-                        Text(intensityGlyph, fontSize = 12.sp, color = intensityGlyphColor)
+                        Text(intensityGlyph, fontSize = 24.sp, color = intensityGlyphColor)
                     }
                     Text(
                         "$intensityPercent%",
