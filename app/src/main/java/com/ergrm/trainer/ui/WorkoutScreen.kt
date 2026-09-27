@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -1276,12 +1275,11 @@ private fun IntensityRow(
             enabled = enabled,
             modifier = Modifier.width(50.dp),
         )
-        // A single Box, not a Row: the mode tag, the percentage and the triangle are each
-        // independently positioned against the pill's own bounds, so none of them can push
-        // the others around. In particular the percentage is centered on the WHOLE pill
-        // (mode tag included) and never moves, whatever the mode tag's width or whether the
-        // triangle is showing — unlike a Row, where every sibling's position depends on its
-        // neighbors' sizes.
+        // The triangle sits on the opposite side of the pill from ERG/HR+ (mirroring it, not
+        // sitting next to the percentage), so it can never touch or shift the percentage —
+        // they're not even siblings in the same layout pass. The percentage itself is centered
+        // only in the space to the right of the mode tag (a plain Row + weight(1f) Box), the
+        // same as before the triangle existed.
         Box(
             modifier = Modifier
                 .weight(1f)
@@ -1289,42 +1287,42 @@ private fun IntensityRow(
                 .clip(RoundedCornerShape(50))
                 .background(ErgSurface2),
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .align(Alignment.CenterStart)
-                    .clip(RoundedCornerShape(50))
-                    .background(modeColor)
-                    .clickable(enabled = enabled, onClick = onToggleMode)
-                    .padding(horizontal = 14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    // No explicit fontSize: inherits the same ambient text style as the
-                    // percentage below, so the two stay equal regardless of theme changes
-                    // instead of two separately hand-picked sizes drifting apart.
-                    if (isHrPlus) "HR+" else "ERG",
-                    fontWeight = FontWeight.Black,
-                    color = Color.Black,
-                )
+            Row(modifier = Modifier.matchParentSize(), verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(50))
+                        .background(modeColor)
+                        .clickable(enabled = enabled, onClick = onToggleMode)
+                        .padding(horizontal = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        // No explicit fontSize: inherits the same ambient text style as the
+                        // percentage below, so the two stay equal regardless of theme changes
+                        // instead of two separately hand-picked sizes drifting apart.
+                        if (isHrPlus) "HR+" else "ERG",
+                        fontWeight = FontWeight.Black,
+                        color = Color.Black,
+                    )
+                }
+                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                    Text(
+                        "$intensityPercent%",
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                    )
+                }
             }
-            Text(
-                "$intensityPercent%",
-                fontWeight = FontWeight.Bold,
-                color = Color.White,
-                modifier = Modifier.align(Alignment.Center),
-            )
             if (intensityGlyph != null) {
-                // Offset a fixed distance left of dead center — clear of even the widest
-                // realistic percentage text — rather than a sibling in a Row, so appearing or
-                // disappearing can never touch the percentage's own position.
+                // Same 14dp inset as ERG/HR+'s own text, mirrored to the right edge.
                 Text(
                     intensityGlyph,
                     fontSize = 24.sp,
                     color = intensityGlyphColor,
                     modifier = Modifier
-                        .align(Alignment.Center)
-                        .offset(x = (-34).dp),
+                        .align(Alignment.CenterEnd)
+                        .padding(end = 14.dp),
                 )
             }
         }
