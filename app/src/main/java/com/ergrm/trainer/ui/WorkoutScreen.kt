@@ -67,6 +67,7 @@ import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -547,9 +548,10 @@ private fun CoreTempTile(
         horizontalArrangement = Arrangement.Center,
     ) {
         Text(
-            label,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Bold,
+            label.uppercase(),
+            // Same label style as every other StatTile ("Target watts" included), not a smaller
+            // custom size — this tile just keeps label+value on one line instead of two.
+            style = MaterialTheme.typography.labelSmall,
             color = ErgOnSurface.copy(alpha = 0.6f),
             maxLines = 1,
             overflow = TextOverflow.Clip,
@@ -1180,6 +1182,7 @@ private fun ControlsRow(
             onClick = mainAction,
             enabled = hasWorkout,
             containerColor = mainContainerColor,
+            iconSize = 28.dp,
             modifier = Modifier.weight(1f),
         )
         PillIconButton(
@@ -1187,6 +1190,7 @@ private fun ControlsRow(
             contentDescription = "Add 5 minutes to the interval",
             onClick = onExtend,
             enabled = hasWorkout,
+            iconSize = 28.dp,
             modifier = Modifier.width(60.dp),
         )
         PillIconButton(
@@ -1194,6 +1198,7 @@ private fun ControlsRow(
             contentDescription = "Skip step",
             onClick = onSkip,
             enabled = hasWorkout,
+            iconSize = 28.dp,
             modifier = Modifier.weight(1f),
         )
     }
@@ -1208,6 +1213,9 @@ private fun PillIconButton(
     enabled: Boolean = true,
     containerColor: Color = ErgSurface2,
     iconColor: Color = ErgOnSurface,
+    // The ERG% pill's own up/down arrows stay at the larger default; only the Start/+5/Skip
+    // controls below pass a smaller size.
+    iconSize: Dp = 36.dp,
 ) {
     Box(
         modifier = modifier
@@ -1221,7 +1229,7 @@ private fun PillIconButton(
             icon,
             contentDescription = contentDescription,
             tint = if (enabled) iconColor else iconColor.copy(alpha = 0.4f),
-            modifier = Modifier.size(36.dp),
+            modifier = Modifier.size(iconSize),
         )
     }
 }
@@ -1275,21 +1283,26 @@ private fun IntensityRow(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
+                    // No explicit fontSize: inherits the same ambient text style as the
+                    // percentage below, so the two stay equal regardless of theme changes
+                    // instead of two separately hand-picked sizes drifting apart.
                     if (isHrPlus) "HR+" else "ERG",
                     fontWeight = FontWeight.Black,
-                    fontSize = 12.sp,
                     color = Color.Black,
                 )
             }
             Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     if (intensityGlyph != null) {
-                        Text(intensityGlyph, fontSize = 24.sp, color = intensityGlyphColor)
+                        // alignByBaseline (not CenterVertically) lines up the glyph's bottom edge
+                        // with the percentage's, without moving the percentage itself.
+                        Text(intensityGlyph, fontSize = 24.sp, color = intensityGlyphColor, modifier = Modifier.alignByBaseline())
                     }
                     Text(
                         "$intensityPercent%",
                         fontWeight = FontWeight.Bold,
                         color = Color.White,
+                        modifier = Modifier.alignByBaseline(),
                     )
                 }
             }
