@@ -9,8 +9,8 @@ import androidx.compose.ui.graphics.Color
 // TrainerDay-style palette: dark background, high-contrast power readout,
 // green/gray/red to signal below/at/above target power.
 val ErgBackground = Color(0xFF070D13)
-val ErgSurface = Color(0xFF0D1822)
-val ErgSurface2 = Color(0xFF0D1822)
+val ErgSurface = Color(0xFF1B1F26)
+val ErgSurface2 = Color(0xFF20252D)
 val ErgOnSurface = Color(0xFFE8EAED)
 val ErgAccent = Color(0xFF3DDC84)
 val ErgBelowTarget = Color(0xFF5AA9E6)
@@ -24,7 +24,7 @@ val ErgHrPlus = Color(0xFFE6598A)
 // Dedicated, more vivid colors reused across the live chart and history detail: kept separate
 // from ErgAboveTarget/ErgAccent (which mean "above target power" and "at target"/theme-primary
 // respectively) so brightening the HR trace or the ERG mode tag doesn't shift those other meanings.
-val ErgHrLine = Color(0xFFFC2121)
+val ErgHrLine = Color(0xFFFF0000)
 val ErgModeErg = Color(0xFF2ECC71)
 // The CORE sensor's skin-temperature pill value, chosen distinct from ErgHrLine/ErgWarn/
 // ZONE_MAX.color — the other three colors in the same pill row — so all three stay tellable apart.
@@ -34,6 +34,9 @@ val ErgSkinTemp = Color(0xFFFFB5D5)
 // direction lives entirely in this small glyph's color.
 val ErgIntensityDownGlyph = Color(0xFF00B3FF)
 val ErgIntensityUpGlyph = Color(0xFFFFC233)
+// "Live/in-progress" accent: the Interval/Total progress bar fill and the "Now" row's accent
+// bar + text, so both read as the same "this is happening right now" signal.
+val ErgLiveAccent = Color(0xFF00B3FF)
 
 private val ErgColorScheme = darkColorScheme(
     background = ErgBackground,

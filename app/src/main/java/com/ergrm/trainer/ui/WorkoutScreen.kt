@@ -84,6 +84,7 @@ import com.ergrm.trainer.ui.theme.ErgHrLine
 import com.ergrm.trainer.ui.theme.ErgHrPlus
 import com.ergrm.trainer.ui.theme.ErgIntensityDownGlyph
 import com.ergrm.trainer.ui.theme.ErgIntensityUpGlyph
+import com.ergrm.trainer.ui.theme.ErgLiveAccent
 import com.ergrm.trainer.ui.theme.ErgModeErg
 import com.ergrm.trainer.ui.theme.ErgOnSurface
 import com.ergrm.trainer.ui.theme.ErgProgressLine
@@ -366,18 +367,26 @@ private fun StatTileGrid(
     var totalShowElapsed by remember { mutableStateOf(false) }
     var showPercentFtp by remember { mutableStateOf(false) }
 
+    // Always fills by elapsed-time fraction, regardless of whether the tile itself is currently
+    // showing elapsed or remaining via its own tap-toggle above.
+    val stepDurationSec = workoutState.currentStep?.durationSec ?: 0
+    val intervalProgress = if (stepDurationSec > 0) workoutState.elapsedInStepSec / stepDurationSec.toFloat() else 0f
+    val totalProgress = if (workoutState.totalDurationSec > 0) workoutState.totalElapsedSec / workoutState.totalDurationSec.toFloat() else 0f
+
     Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
             StatTile(
                 label = "Interval",
                 value = formatTime(if (intervalShowElapsed) workoutState.elapsedInStepSec else workoutState.remainingInStepSec),
                 modifier = Modifier.weight(1f),
+                progress = intervalProgress,
                 onClick = { intervalShowElapsed = !intervalShowElapsed },
             )
             StatTile(
                 label = "Total",
                 value = formatTime(if (totalShowElapsed) workoutState.totalElapsedSec else workoutState.totalRemainingSec),
                 modifier = Modifier.weight(1f),
+                progress = totalProgress,
                 onClick = { totalShowElapsed = !totalShowElapsed },
             )
         }
@@ -459,6 +468,7 @@ private fun StatTile(
     unit: String? = null,
     zoneLabel: String? = null,
     zoneColor: Color = ErgOnSurface,
+    progress: Float? = null,
     onClick: (() -> Unit)? = null,
 ) {
     Column(
@@ -503,6 +513,24 @@ private fun StatTile(
                 )
             }
         }
+        if (progress != null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 6.dp)
+                    .height(2.5.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(ErgSurface2),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(progress.coerceIn(0f, 1f))
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(50))
+                        .background(ErgLiveAccent),
+                )
+            }
+        }
     }
 }
 
@@ -513,6 +541,16 @@ private fun hsiColor(hsi: Float): Color = when {
     hsi <= 0.9f -> ErgAccent
     hsi <= 2.9f -> ErgWarn
     hsi <= 6.9f -> ErgHrLine
+    else -> ZONE_MAX.color
+}
+
+/** Core temperature thresholds, same escalating-severity palette as [hsiColor] but with a blue
+ *  "below normal" band instead of green, since core temp has no healthy-at-target reading the
+ *  way HSI's 0 does. */
+private fun coreColor(coreTempC: Float): Color = when {
+    coreTempC <= 38.2f -> ErgBelowTarget
+    coreTempC <= 38.5f -> ErgWarn
+    coreTempC <= 38.9f -> ErgHrLine
     else -> ZONE_MAX.color
 }
 
@@ -527,6 +565,7 @@ private fun CoreTempTileRow(reading: CoreTempReading?, modifier: Modifier = Modi
         CoreTempTile(
             label = "CORE",
             value = reading?.coreTempC?.let { "%.1f°".format(it) } ?: "--",
+            valueColor = reading?.coreTempC?.let { coreColor(it) } ?: ErgOnSurface,
             modifier = Modifier.weight(1f),
         )
         CoreTempTile(
@@ -1079,6 +1118,13 @@ private fun IntervalDetailsSection(
             .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        Box(
+            modifier = Modifier
+                .width(3.dp)
+                .height(22.dp)
+                .clip(RoundedCornerShape(50))
+                .background(ErgLiveAccent),
+        )
         IntervalDetailBlock(
             label = "Now",
             step = current,
@@ -1086,6 +1132,7 @@ private fun IntervalDetailsSection(
             lthrBpm = lthrBpm,
             intensityPercent = intensityPercent,
             controlMode = controlMode,
+            accentColor = ErgLiveAccent,
             modifier = Modifier.weight(1f),
         )
         if (next != null) {
@@ -1118,6 +1165,7 @@ private fun IntervalDetailBlock(
     lthrBpm: Int,
     intensityPercent: Int,
     controlMode: ControlMode,
+    accentColor: Color? = null,
     modifier: Modifier = Modifier,
 ) {
     val scaledStart = (step.startWatts * intensityPercent / 100f).roundToInt()
@@ -1133,11 +1181,16 @@ private fun IntervalDetailBlock(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(label, style = MaterialTheme.typography.labelSmall, color = ErgOnSurface, maxLines = 1)
+        Text(label, style = MaterialTheme.typography.labelSmall, color = accentColor ?: ErgOnSurface, maxLines = 1)
         // Fixed interval duration, not a live countdown — "Now" used to show its step's
         // remaining time ticking down every second, the only number on this row that changed
         // while everything else (label, zone chip, "Next") stayed put.
-        Text(formatMinSec(step.durationSec), style = MaterialTheme.typography.bodyMedium, maxLines = 1)
+        Text(
+            formatMinSec(step.durationSec),
+            style = MaterialTheme.typography.bodyMedium,
+            color = accentColor ?: Color.Unspecified,
+            maxLines = 1,
+        )
         // The label/time/zone chip are always short and fixed-width; the value is the one piece
         // that can genuinely run long (a three-digit bpm range like "150–220 bpm" is wider than
         // any watt range ever was). weight(fill = false) reserves the fixed pieces' space first
@@ -1226,10 +1279,11 @@ private fun PillIconButton(
     // The ERG% pill's own up/down arrows stay at the larger default; only the Start/+5/Skip
     // controls below pass a smaller size.
     iconSize: Dp = 36.dp,
+    height: Dp = 48.dp,
 ) {
     Box(
         modifier = modifier
-            .height(48.dp)
+            .height(height)
             .clip(RoundedCornerShape(50))
             .background(if (enabled) containerColor else containerColor.copy(alpha = 0.4f))
             .clickable(enabled = enabled, onClick = onClick),
@@ -1273,7 +1327,9 @@ private fun IntensityRow(
             contentDescription = "Decrease intensity",
             onClick = onDecrease,
             enabled = enabled,
-            modifier = Modifier.width(50.dp),
+            iconSize = 28.8.dp,
+            height = 38.4.dp,
+            modifier = Modifier.width(40.dp),
         )
         // The triangle sits on the opposite side of the pill from ERG/HR+ (mirroring it, not
         // sitting next to the percentage), so it can never touch or shift the percentage —
@@ -1283,7 +1339,7 @@ private fun IntensityRow(
         Box(
             modifier = Modifier
                 .weight(1f)
-                .height(48.dp)
+                .height(38.4.dp)
                 .clip(RoundedCornerShape(50))
                 .background(ErgSurface2),
         ) {
@@ -1294,14 +1350,15 @@ private fun IntensityRow(
                         .clip(RoundedCornerShape(50))
                         .background(modeColor)
                         .clickable(enabled = enabled, onClick = onToggleMode)
-                        .padding(horizontal = 14.dp),
+                        .padding(horizontal = 11.2.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        // No explicit fontSize: inherits the same ambient text style as the
-                        // percentage below, so the two stay equal regardless of theme changes
-                        // instead of two separately hand-picked sizes drifting apart.
+                        // Explicit fontSize (x0.8 of the 16sp default bodyLarge these inherited
+                        // before), so the two stay equal to each other while both shrinking with
+                        // the rest of this row.
                         if (isHrPlus) "HR+" else "ERG",
+                        fontSize = 12.8.sp,
                         fontWeight = FontWeight.Black,
                         color = Color.Black,
                     )
@@ -1309,6 +1366,7 @@ private fun IntensityRow(
                 Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
                     Text(
                         "$intensityPercent%",
+                        fontSize = 12.8.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White,
                     )
@@ -1323,10 +1381,11 @@ private fun IntensityRow(
                 IntensityTriangle(
                     pointingUp = intensityPercent > 100,
                     color = intensityGlyphColor,
-                    // Same 14dp inset as ERG/HR+'s own text, mirrored to the right edge.
+                    sizeDp = 14.4.dp,
+                    // Same inset as ERG/HR+'s own text, mirrored to the right edge.
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
-                        .padding(end = 14.dp),
+                        .padding(end = 11.2.dp),
                 )
             }
         }
@@ -1335,7 +1394,9 @@ private fun IntensityRow(
             contentDescription = "Increase intensity",
             onClick = onIncrease,
             enabled = enabled,
-            modifier = Modifier.width(50.dp),
+            iconSize = 28.8.dp,
+            height = 38.4.dp,
+            modifier = Modifier.width(40.dp),
         )
     }
 }
@@ -1344,8 +1405,8 @@ private fun IntensityRow(
  *  exactly the center of this composable's box — unlike a Text, whose vertical centering is
  *  based on font ascent/descent rather than the triangle's actual ink. */
 @Composable
-private fun IntensityTriangle(pointingUp: Boolean, color: Color, modifier: Modifier = Modifier) {
-    Canvas(modifier = modifier.size(18.dp)) {
+private fun IntensityTriangle(pointingUp: Boolean, color: Color, sizeDp: Dp = 18.dp, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier.size(sizeDp)) {
         val w = size.width
         val h = size.height
         val path = Path().apply {
