@@ -62,6 +62,8 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
@@ -96,6 +98,7 @@ import com.ergrm.trainer.workout.ControlMode
 import com.ergrm.trainer.workout.SamplePoint
 import com.ergrm.trainer.workout.WorkoutRunState
 import com.ergrm.trainer.workout.WorkoutStep
+import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.roundToInt
 
@@ -518,9 +521,9 @@ private fun StatTile(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 6.dp)
-                    .height(2.5.dp)
+                    .height(3.dp)
                     .clip(RoundedCornerShape(50))
-                    .background(ErgSurface2),
+                    .background(ErgOnSurface.copy(alpha = 0.18f)),
             ) {
                 Box(
                     modifier = Modifier
@@ -533,6 +536,13 @@ private fun StatTile(
         }
     }
 }
+
+/** Floors to the same 1-decimal precision the CORE/HSI tiles display ("%.1f"), so the displayed
+ *  number and the color threshold it's checked against always agree — checking the sensor's full
+ *  raw precision against these thresholds let e.g. a raw 38.24 (displayed as "38.2°") land in the
+ *  38.3-38.5 band, showing the same on-screen number in two different colors depending on the
+ *  hidden decimals. */
+private fun floorToOneDecimal(value: Float): Float = floor(value * 10) / 10f
 
 /** Green/yellow/red/purple, matching the same escalating-severity palette used for HR and power
  *  zones elsewhere on this screen (at-target green, warning amber, above-target/thermal red, and
@@ -561,13 +571,10 @@ private fun coreColor(coreTempC: Float): Color = when {
  *  reading on this screen. */
 @Composable
 private fun CoreTempTileRow(reading: CoreTempReading?, modifier: Modifier = Modifier) {
+    val flooredCore = reading?.coreTempC?.let { floorToOneDecimal(it) }
+    val flooredHsi = reading?.heatStrainIndex?.let { floorToOneDecimal(it) }
+    // SKIN, then CORE (the center tile), then HSI.
     Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        CoreTempTile(
-            label = "CORE",
-            value = reading?.coreTempC?.let { "%.1f°".format(it) } ?: "--",
-            valueColor = reading?.coreTempC?.let { coreColor(it) } ?: ErgOnSurface,
-            modifier = Modifier.weight(1f),
-        )
         CoreTempTile(
             label = "SKIN",
             value = reading?.skinTempC?.let { "%.1f°".format(it) } ?: "--",
@@ -575,9 +582,15 @@ private fun CoreTempTileRow(reading: CoreTempReading?, modifier: Modifier = Modi
             modifier = Modifier.weight(1f),
         )
         CoreTempTile(
+            label = "CORE",
+            value = flooredCore?.let { "%.1f°".format(it) } ?: "--",
+            valueColor = flooredCore?.let { coreColor(it) } ?: ErgOnSurface,
+            modifier = Modifier.weight(1f),
+        )
+        CoreTempTile(
             label = "HSI",
-            value = reading?.heatStrainIndex?.let { "%.1f".format(it) } ?: "--",
-            valueColor = reading?.heatStrainIndex?.let { hsiColor(it) } ?: ErgOnSurface,
+            value = flooredHsi?.let { "%.1f".format(it) } ?: "--",
+            valueColor = flooredHsi?.let { hsiColor(it) } ?: ErgOnSurface,
             modifier = Modifier.weight(1f),
         )
     }
@@ -598,9 +611,9 @@ private fun CoreTempTile(
     ) {
         Text(
             label.uppercase(),
-            // Same label style as every other StatTile ("Target watts" included), not a smaller
-            // custom size — this tile just keeps label+value on one line instead of two.
-            style = MaterialTheme.typography.labelSmall,
+            // Same label style as every other StatTile ("Target watts" included), just x1.1 —
+            // this tile just keeps label+value on one line instead of two.
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.1.sp),
             color = ErgOnSurface.copy(alpha = 0.6f),
             maxLines = 1,
             overflow = TextOverflow.Clip,
@@ -609,7 +622,7 @@ private fun CoreTempTile(
         Spacer(modifier = Modifier.width(5.dp))
         Text(
             value,
-            fontSize = 16.sp,
+            fontSize = 17.6.sp,
             fontWeight = FontWeight.SemiBold,
             color = valueColor,
             maxLines = 1,
@@ -1321,6 +1334,11 @@ private fun IntensityRow(
         else -> null
     }
     val intensityGlyphColor = if (intensityPercent > 100) ErgIntensityUpGlyph else ErgIntensityDownGlyph
+    // Measured so the triangle's center-from-the-right-edge can mirror the ERG/HR+ text's own
+    // center-from-the-left-edge exactly, regardless of "ERG" vs "HR+" having different widths —
+    // a fixed offset would only be symmetric for whichever label happens to be showing.
+    var modeTagWidthPx by remember { mutableStateOf(0) }
+    val density = LocalDensity.current
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         PillIconButton(
             icon = Icons.Filled.KeyboardArrowDown,
@@ -1350,6 +1368,10 @@ private fun IntensityRow(
                         .clip(RoundedCornerShape(50))
                         .background(modeColor)
                         .clickable(enabled = enabled, onClick = onToggleMode)
+                        // Measures the tag's total width (text + padding on both sides) — placed
+                        // before .padding() in the chain so the reported size includes it, since
+                        // this is the same full colored capsule the triangle needs to mirror.
+                        .onGloballyPositioned { modeTagWidthPx = it.size.width }
                         .padding(horizontal = 11.2.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -1366,7 +1388,7 @@ private fun IntensityRow(
                 Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
                     Text(
                         "$intensityPercent%",
-                        fontSize = 12.8.sp,
+                        fontSize = 14.1.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White,
                     )
@@ -1378,14 +1400,21 @@ private fun IntensityRow(
                 // ink, which sits noticeably higher within that box — the glyph visibly floated
                 // above the pill's true center. Drawing it ourselves makes the triangle's visual
                 // center exactly the Canvas's center, which CenterEnd then centers on the pill.
+                val triangleSizeDp = 14.4.dp
+                // ERG/HR+'s text sits exactly at tagWidth/2 from the pill's left edge (the
+                // 11.2dp padding is equal on both sides of it inside the tag). Placing the
+                // triangle's own center at that same distance from the right edge makes the two
+                // exactly symmetric regardless of whether "ERG" or "HR+" (different widths) is
+                // showing.
+                val modeTagWidthDp = with(density) { modeTagWidthPx.toDp() }
+                val triangleEndPadding = ((modeTagWidthDp - triangleSizeDp) / 2).coerceAtLeast(0.dp)
                 IntensityTriangle(
                     pointingUp = intensityPercent > 100,
                     color = intensityGlyphColor,
-                    sizeDp = 14.4.dp,
-                    // Same inset as ERG/HR+'s own text, mirrored to the right edge.
+                    sizeDp = triangleSizeDp,
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
-                        .padding(end = 11.2.dp),
+                        .padding(end = triangleEndPadding),
                 )
             }
         }
