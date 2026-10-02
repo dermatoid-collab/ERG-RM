@@ -39,5 +39,9 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ergrm-debug-apk
+          # The run number in the artifact name makes it the zip's own filename when downloaded
+          # from the Actions UI (e.g. ergrm-debug-apk-build89.zip), so the build is identifiable
+          # without having to open the run page — same run number build.gradle.kts bakes into
+          # versionCode, so this always matches what's installed on the device.
+          name: ergrm-debug-apk-build${{ github.run_number }}
           path: app/build/outputs/apk/debug/*.apk
