@@ -28,7 +28,7 @@ val ErgHrLine = Color(0xFFFF0000)
 val ErgModeErg = Color(0xFF2ECC71)
 // The CORE sensor's skin-temperature pill value, chosen distinct from ErgHrLine/ErgWarn/
 // ZONE_MAX.color — the other three colors in the same pill row — so all three stay tellable apart.
-val ErgSkinTemp = Color(0xFFFFB5D5)
+val ErgSkinTemp = Color(0xFFEBA4A4)
 // The intensity pill's directional triangle (below/above target) — the pill's background used to
 // carry this meaning via ErgIntensityUp/Down, but that's now a fixed color instead, so the
 // direction lives entirely in this small glyph's color.
