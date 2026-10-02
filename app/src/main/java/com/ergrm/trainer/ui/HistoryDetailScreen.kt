@@ -3,6 +3,7 @@ package com.ergrm.trainer.ui
 import android.content.Intent
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,15 +26,24 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PointMode
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import com.ergrm.trainer.history.SessionSample
 import com.ergrm.trainer.history.SessionStats
@@ -46,6 +56,7 @@ import com.ergrm.trainer.ui.theme.ErgSurface
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.roundToInt
 
 /** Opened from a History row: the full recorded trace plus a summary stats grid. No colored
  *  zone bars — a session only stores what was recorded (watts/HR/cadence/speed), not the
@@ -152,7 +163,25 @@ private fun LegendEntry(label: String, color: Color) {
 
 @Composable
 private fun SessionDetailChart(samples: List<SessionSample>, modifier: Modifier = Modifier) {
-    Canvas(modifier = modifier) {
+    // Which sample the scrub line/tooltip currently points at — set on first touch, updated as
+    // the finger drags, and then left as-is (not cleared) until the next touch moves it again.
+    var selectedIndex by remember(samples) { mutableStateOf<Int?>(null) }
+    val textMeasurer = rememberTextMeasurer()
+
+    Canvas(
+        modifier = modifier.pointerInput(samples) {
+            val lastIndex = samples.size - 1
+            if (lastIndex < 1) return@pointerInput
+            fun indexAt(touchX: Float) = (touchX / size.width * lastIndex).roundToInt().coerceIn(0, lastIndex)
+            detectDragGestures(
+                onDragStart = { offset -> selectedIndex = indexAt(offset.x) },
+                onDrag = { change, _ ->
+                    change.consume()
+                    selectedIndex = indexAt(change.position.x)
+                },
+            )
+        },
+    ) {
         val n = samples.size
         if (n < 2) return@Canvas
         val w = size.width
@@ -181,8 +210,39 @@ private fun SessionDetailChart(samples: List<SessionSample>, modifier: Modifier 
 
         val wattsPoints = samples.mapIndexed { i, s -> Offset(x(i), yWatts(s.watts)) }
         drawPoints(points = wattsPoints, pointMode = PointMode.Polygon, color = Color.White, strokeWidth = 3f, cap = StrokeCap.Round)
+
+        // Scrub indicator: vertical line at the selected sample + a tooltip box with that
+        // sample's time, watts, HR and cadence, each colored to match its own trace above.
+        selectedIndex?.let { idx ->
+            val sample = samples.getOrNull(idx) ?: return@let
+            val lineX = x(idx)
+            drawLine(color = ErgOnSurface.copy(alpha = 0.5f), start = Offset(lineX, 0f), end = Offset(lineX, h), strokeWidth = 1.5f)
+
+            val lines = buildList {
+                add(formatScrubTime(sample.tSec) to ErgOnSurface)
+                add("${sample.watts}W" to Color.White)
+                sample.hrBpm?.let { add("$it bpm" to ErgHrLine) }
+                sample.cadenceRpm?.let { add("$it rpm" to ErgProgressLine) }
+            }
+            val measured = lines.map { (text, color) -> textMeasurer.measure(text, TextStyle(fontSize = 11.sp, color = color)) }
+            val padding = 6.dp.toPx()
+            val rowHeight = measured.maxOf { it.size.height }
+            val boxWidth = measured.maxOf { it.size.width } + padding * 2
+            val boxHeight = rowHeight * measured.size + padding * 2
+            // Tooltip sits to the right of the line, flipping to the left once there's no room —
+            // never lets it run off either edge of the chart.
+            val gap = 4.dp.toPx()
+            val boxX = if (lineX + gap + boxWidth > w) lineX - gap - boxWidth else lineX + gap
+            val boxXClamped = boxX.coerceIn(0f, (w - boxWidth).coerceAtLeast(0f))
+            drawRect(color = ErgSurface, topLeft = Offset(boxXClamped, 0f), size = Size(boxWidth, boxHeight))
+            measured.forEachIndexed { i, result ->
+                drawText(result, topLeft = Offset(boxXClamped + padding, padding + rowHeight * i))
+            }
+        }
     }
 }
+
+private fun formatScrubTime(totalSeconds: Int): String = "%d:%02d".format(totalSeconds / 60, totalSeconds % 60)
 
 @Composable
 private fun StatsGrid(session: WorkoutSession, stats: SessionStats) {
