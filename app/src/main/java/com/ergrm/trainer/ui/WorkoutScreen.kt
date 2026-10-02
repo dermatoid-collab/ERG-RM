@@ -1,7 +1,9 @@
 package com.ergrm.trainer.ui
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -1170,6 +1172,7 @@ private fun IntervalDetailsSection(
 
 /** Layout and zone tag are identical in ERG and HR+ — see [zoneFor], always power-based — only
  *  the numeric value's unit switches from watts to the LTHR-derived bpm in HR+. */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun IntervalDetailBlock(
     label: String,
@@ -1207,14 +1210,17 @@ private fun IntervalDetailBlock(
         // The label/time/zone chip are always short and fixed-width; the value is the one piece
         // that can genuinely run long (a three-digit bpm range like "150–220 bpm" is wider than
         // any watt range ever was). weight(fill = false) reserves the fixed pieces' space first
-        // and only lets the value claim what's left, ellipsizing instead of pushing the zone chip
-        // off the edge of the screen — the worst case degrades gracefully instead of overflowing.
+        // and only lets the value claim what's left; basicMarquee scrolls it in a continuous loop
+        // instead of ellipsizing, so the full range stays readable without shrinking the font or
+        // pushing the zone chip off the edge of the screen.
         Text(
             valueLabel,
             style = MaterialTheme.typography.bodyMedium,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f, fill = false),
+            overflow = TextOverflow.Clip,
+            modifier = Modifier
+                .weight(1f, fill = false)
+                .basicMarquee(),
         )
         Text(
             zone.label,
