@@ -888,20 +888,45 @@ private fun WorkoutProfileChart(
             acc = stepEnd
             if (stepEnd < windowStart || stepStart > windowEnd) return@forEachIndexed
 
-            val x0 = xAt(stepStart).coerceIn(0f, w)
-            val x1 = xAt(stepEnd).coerceIn(0f, w)
             val dispStart = displayWatts(step.startWatts, index, currentStepIndex, intensityPercent)
             val dispEnd = displayWatts(step.endWatts, index, currentStepIndex, intensityPercent)
             // A ramp's start/end differ, so the bar is a sloped trapezoid instead of a flat
             // rectangle — a steady step just has startBarHeight == endBarHeight, which draws the
-            // same flat shape as before.
+            // same flat shape as before. These are the TRUE heights at the step's real
+            // boundaries, used below only for the inter-step divider bookkeeping.
             val startBarHeight = h * (dispStart.toFloat() / wattsScale).coerceIn(0.05f, 1f)
             val endBarHeight = h * (dispEnd.toFloat() / wattsScale).coerceIn(0.05f, 1f)
+
+            // When a zoomed-in window truncates this step (a ramp scrolled partway off-screen),
+            // the trapezoid's visible edge needs the ramp's actual interpolated value at that
+            // truncation point, not the value at the step's real start/end — otherwise the edge
+            // doesn't line up with the power line it's meant to sit under (only noticeable at
+            // 20min/5min zoom, not at "fit" where every step boundary is already on-screen).
+            val durationSec = step.durationSec.coerceAtLeast(1)
+            fun wattsAt(tSec: Int): Float {
+                val frac = (tSec - stepStart).toFloat() / durationSec
+                return dispStart + (dispEnd - dispStart) * frac
+            }
+            val visibleStart = stepStart.coerceAtLeast(windowStart)
+            val visibleEnd = stepEnd.coerceAtMost(windowEnd)
+            val x0 = xAt(visibleStart).coerceIn(0f, w)
+            val x1 = xAt(visibleEnd).coerceIn(0f, w)
+            val drawStartHeight = if (visibleStart == stepStart) {
+                startBarHeight
+            } else {
+                h * (wattsAt(visibleStart) / wattsScale).coerceIn(0.05f, 1f)
+            }
+            val drawEndHeight = if (visibleEnd == stepEnd) {
+                endBarHeight
+            } else {
+                h * (wattsAt(visibleEnd) / wattsScale).coerceIn(0.05f, 1f)
+            }
+
             val zone = zoneFor(max(dispStart, dispEnd), ftpWatts)
             val color = mutedZoneColor(zone.color, active = index == currentStepIndex)
             val barPath = Path().apply {
-                moveTo(x0, h - startBarHeight)
-                lineTo(x1, h - endBarHeight)
+                moveTo(x0, h - drawStartHeight)
+                lineTo(x1, h - drawEndHeight)
                 lineTo(x1, h)
                 lineTo(x0, h)
                 close()
