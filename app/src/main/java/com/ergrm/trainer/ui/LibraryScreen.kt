@@ -43,8 +43,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.documentfile.provider.DocumentFile
 import com.ergrm.trainer.library.LibraryWorkoutFile
 import com.ergrm.trainer.ui.theme.ErgOnSurface
 import com.ergrm.trainer.workout.WorkoutStep
@@ -60,11 +62,16 @@ fun LibraryScreen(
     var searchQuery by remember { mutableStateOf("") }
     var searchActive by remember { mutableStateOf(false) }
 
+    val context = LocalContext.current
     val folderPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocumentTree()
     ) { uri ->
         if (uri != null) {
-            val name = uri.lastPathSegment?.substringAfterLast(':') ?: "Folder"
+            // The tree URI's own last path segment is the provider's internal document ID (for
+            // Google Drive, an opaque encoded token, not a human name) — DocumentFile queries the
+            // provider for its real display name instead. Only the folder's own name, though: SAF
+            // doesn't expose the chain of parent folder names, so this can't show a full path.
+            val name = DocumentFile.fromTreeUri(context, uri)?.name ?: "Folder"
             viewModel.onLibraryFolderPicked(uri, name)
         }
     }
@@ -96,16 +103,9 @@ fun LibraryScreen(
                         modifier = Modifier.padding(start = 8.dp),
                     )
                 }
-                Text(
-                    "Choose a folder (e.g. synced with Google Drive via the Drive app) " +
-                        "containing .zwo, .erg or .mrc files. Import happens on request, not in the background.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = ErgOnSurface,
-                    modifier = Modifier.padding(top = 6.dp, bottom = 10.dp),
-                )
                 OutlinedButton(
                     onClick = { folderPicker.launch(null) },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
                 ) {
                     Text(if (settings.libraryFolderUri == null) "Choose folder" else "Change folder")
                 }
