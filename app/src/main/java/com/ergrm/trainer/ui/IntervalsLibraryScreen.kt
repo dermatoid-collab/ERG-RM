@@ -24,12 +24,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -68,6 +66,8 @@ fun IntervalsLibraryScreen(
     // Which folders are expanded — session-only (resets to all-collapsed whenever this
     // composable enters composition fresh), not persisted to disk.
     var expandedFolders by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var searchQuery by remember { mutableStateOf("") }
+    var searchActive by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) { viewModel.fetchIntervalsLibrary() }
 
@@ -83,16 +83,14 @@ fun IntervalsLibraryScreen(
             .fillMaxSize()
             .padding(16.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            WorkoutSourceMenu(otherSources)
-            IconButton(onClick = { viewModel.fetchIntervalsLibrary() }) {
-                Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
-            }
-        }
+        SearchableHeaderRow(
+            query = searchQuery,
+            onQueryChange = { searchQuery = it },
+            active = searchActive,
+            onActiveChange = { searchActive = it },
+            onRefresh = { viewModel.fetchIntervalsLibrary() },
+            otherSources = otherSources,
+        )
         Text("Library (Intervals.icu)", style = MaterialTheme.typography.titleLarge)
 
         if (!settings.intervalsConfigured) {
@@ -117,6 +115,27 @@ fun IntervalsLibraryScreen(
                 )
             }
             is IntervalsLibraryUiState.Loaded -> {
+                val sortedFolders = remember(s.folders) { s.folders.sortedBy { it.name.lowercase() } }
+                // While searching, scan every folder regardless of its collapsed state (all
+                // workouts are already loaded in memory) and show only matches; a folder with no
+                // matches drops out of the list entirely instead of appearing empty. The real,
+                // manually-set expandedFolders is left untouched, so clearing the query restores
+                // exactly what the user had open before searching.
+                val displayFolders = remember(sortedFolders, searchQuery) {
+                    if (searchQuery.isBlank()) {
+                        sortedFolders
+                    } else {
+                        sortedFolders.mapNotNull { folder ->
+                            val matches = folder.workouts.filter { it.name.contains(searchQuery, ignoreCase = true) }
+                            if (matches.isEmpty()) null else folder.copy(workouts = matches)
+                        }
+                    }
+                }
+                val effectiveExpanded = if (searchQuery.isBlank()) {
+                    expandedFolders
+                } else {
+                    displayFolders.map { it.name }.toSet()
+                }
                 if (s.folders.isEmpty()) {
                     Text(
                         "No saved workouts found in your Intervals.icu library.",
@@ -124,10 +143,16 @@ fun IntervalsLibraryScreen(
                         color = ErgOnSurface,
                         modifier = Modifier.padding(top = 16.dp),
                     )
+                } else if (displayFolders.isEmpty()) {
+                    Text(
+                        "No results for \"$searchQuery\".",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = ErgOnSurface,
+                        modifier = Modifier.padding(top = 16.dp),
+                    )
                 } else {
-                    val sortedFolders = remember(s.folders) { s.folders.sortedBy { it.name.lowercase() } }
-                    val rows = remember(sortedFolders, expandedFolders) {
-                        buildLibraryRows(sortedFolders, expandedFolders)
+                    val rows = remember(displayFolders, effectiveExpanded) {
+                        buildLibraryRows(displayFolders, effectiveExpanded)
                     }
                     val listState = rememberLazyListState()
 
@@ -143,7 +168,7 @@ fun IntervalsLibraryScreen(
                                 when (row) {
                                     is LibraryRow.Header -> FolderHeader(
                                         name = row.folderName,
-                                        expanded = row.folderName in expandedFolders,
+                                        expanded = row.folderName in effectiveExpanded,
                                         onToggle = {
                                             expandedFolders = if (row.folderName in expandedFolders) {
                                                 expandedFolders - row.folderName

@@ -14,8 +14,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
@@ -27,6 +29,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -36,6 +40,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -51,6 +57,8 @@ fun LibraryScreen(
 ) {
     val settings by viewModel.settings.collectAsState()
     val libraryState by viewModel.libraryState.collectAsState()
+    var searchQuery by remember { mutableStateOf("") }
+    var searchActive by remember { mutableStateOf(false) }
 
     val folderPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocumentTree()
@@ -66,16 +74,14 @@ fun LibraryScreen(
             .fillMaxSize()
             .padding(16.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            WorkoutSourceMenu(otherSources)
-            IconButton(onClick = { viewModel.refreshLibrary() }) {
-                Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
-            }
-        }
+        SearchableHeaderRow(
+            query = searchQuery,
+            onQueryChange = { searchQuery = it },
+            active = searchActive,
+            onActiveChange = { searchActive = it },
+            onRefresh = { viewModel.refreshLibrary() },
+            otherSources = otherSources,
+        )
         Text("Workout Library", style = MaterialTheme.typography.titleLarge)
 
         Card(modifier = Modifier
@@ -121,9 +127,23 @@ fun LibraryScreen(
                 )
             }
             is LibraryUiState.Loaded -> {
+                val visibleFiles = remember(state.files, searchQuery) {
+                    if (searchQuery.isBlank()) {
+                        state.files
+                    } else {
+                        state.files.filter { it.name.contains(searchQuery, ignoreCase = true) }
+                    }
+                }
                 if (state.files.isEmpty()) {
                     Text(
                         "No .zwo, .erg or .mrc file found in this folder.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = ErgOnSurface,
+                        modifier = Modifier.padding(top = 16.dp),
+                    )
+                } else if (visibleFiles.isEmpty()) {
+                    Text(
+                        "No results for \"$searchQuery\".",
                         style = MaterialTheme.typography.bodyMedium,
                         color = ErgOnSurface,
                         modifier = Modifier.padding(top = 16.dp),
@@ -135,7 +155,7 @@ fun LibraryScreen(
                             .padding(top = 12.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        items(state.files, key = { it.uri.toString() }) { file ->
+                        items(visibleFiles, key = { it.uri.toString() }) { file ->
                             LibraryFileRow(
                                 file = file,
                                 ftpWatts = settings.ftpWatts,
@@ -175,6 +195,60 @@ internal fun WorkoutSourceMenu(items: List<Pair<String, () -> Unit>>) {
                         action()
                     },
                 )
+            }
+        }
+    }
+}
+
+/** Same search affordance reused on every workout-source list screen (Library, Calendar,
+ *  Intervals.icu Library): a magnifying-glass icon between "Other sources" and Refresh that
+ *  expands into a full-width text field in their place, with a close button to collapse it and
+ *  clear the query. This only owns the icon/field chrome and the query text — filtering the list
+ *  by that query is each screen's own job. */
+@Composable
+internal fun SearchableHeaderRow(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    active: Boolean,
+    onActiveChange: (Boolean) -> Unit,
+    onRefresh: () -> Unit,
+    otherSources: List<Pair<String, () -> Unit>>,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.End,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (active) {
+            val focusRequester = remember { FocusRequester() }
+            LaunchedEffect(Unit) { focusRequester.requestFocus() }
+            TextField(
+                value = query,
+                onValueChange = onQueryChange,
+                modifier = Modifier
+                    .weight(1f)
+                    .focusRequester(focusRequester),
+                placeholder = { Text("Search") },
+                singleLine = true,
+                colors = TextFieldDefaults.colors(
+                    unfocusedContainerColor = Color.Transparent,
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedIndicatorColor = ErgOnSurface.copy(alpha = 0.3f),
+                ),
+            )
+            IconButton(onClick = {
+                onQueryChange("")
+                onActiveChange(false)
+            }) {
+                Icon(Icons.Filled.Close, contentDescription = "Close search")
+            }
+        } else {
+            WorkoutSourceMenu(otherSources)
+            IconButton(onClick = { onActiveChange(true) }) {
+                Icon(Icons.Filled.Search, contentDescription = "Search")
+            }
+            IconButton(onClick = onRefresh) {
+                Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
             }
         }
     }

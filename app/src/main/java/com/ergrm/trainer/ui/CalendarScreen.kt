@@ -10,13 +10,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -49,6 +45,8 @@ fun CalendarScreen(
 ) {
     val settings by viewModel.settings.collectAsState()
     val calendarState by viewModel.calendarState.collectAsState()
+    var searchQuery by remember { mutableStateOf("") }
+    var searchActive by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) { viewModel.fetchCalendarWorkouts() }
 
@@ -57,16 +55,14 @@ fun CalendarScreen(
             .fillMaxSize()
             .padding(16.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            WorkoutSourceMenu(otherSources)
-            IconButton(onClick = { viewModel.fetchCalendarWorkouts() }) {
-                Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
-            }
-        }
+        SearchableHeaderRow(
+            query = searchQuery,
+            onQueryChange = { searchQuery = it },
+            active = searchActive,
+            onActiveChange = { searchActive = it },
+            onRefresh = { viewModel.fetchCalendarWorkouts() },
+            otherSources = otherSources,
+        )
         Text("Calendar (Intervals.icu)", style = MaterialTheme.typography.titleLarge)
 
         if (!settings.intervalsConfigured) {
@@ -91,6 +87,13 @@ fun CalendarScreen(
                 )
             }
             is CalendarUiState.Loaded -> {
+                val visibleWorkouts = remember(state.workouts, searchQuery) {
+                    if (searchQuery.isBlank()) {
+                        state.workouts
+                    } else {
+                        state.workouts.filter { it.name.contains(searchQuery, ignoreCase = true) }
+                    }
+                }
                 if (state.workouts.isEmpty()) {
                     Text(
                         "No planned bike workouts this week or next.",
@@ -98,9 +101,16 @@ fun CalendarScreen(
                         color = ErgOnSurface,
                         modifier = Modifier.padding(top = 16.dp),
                     )
+                } else if (visibleWorkouts.isEmpty()) {
+                    Text(
+                        "No results for \"$searchQuery\".",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = ErgOnSurface,
+                        modifier = Modifier.padding(top = 16.dp),
+                    )
                 } else {
                     CalendarWorkoutList(
-                        workouts = state.workouts,
+                        workouts = visibleWorkouts,
                         ftpWatts = settings.ftpWatts,
                         fetchPreview = viewModel::fetchCalendarWorkoutPreview,
                         onPick = { workout ->
