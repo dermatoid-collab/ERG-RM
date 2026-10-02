@@ -999,7 +999,7 @@ private fun WorkoutProfileChart(
         val bpmTicks = listOf(0.25f, 0.5f, 0.75f, 1f).map { (bpmMin + bpmRange * it).roundToInt() }
         wattsTicks.forEachIndexed { i, watts ->
             val y = yWatts(watts)
-            drawLine(color = ErgOnSurface.copy(alpha = 0.12f), start = Offset(0f, y), end = Offset(w, y), strokeWidth = 1.5f)
+            drawLine(color = ErgOnSurface.copy(alpha = 0.12f), start = Offset(0f, y), end = Offset(w, y), strokeWidth = 2.25f)
             val wattsLabelResult = textMeasurer.measure("$watts", TextStyle(fontSize = 10.sp, color = ErgOnSurface.copy(alpha = 0.85f)))
             drawText(wattsLabelResult, topLeft = Offset(4.dp.toPx(), y - wattsLabelResult.size.height - 2f))
             val bpmLabelResult = textMeasurer.measure("${bpmTicks[i]}", TextStyle(fontSize = 10.sp, color = ErgHrLine))
