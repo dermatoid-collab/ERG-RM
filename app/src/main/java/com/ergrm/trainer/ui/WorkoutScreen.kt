@@ -372,11 +372,15 @@ private fun StatTileGrid(
     var totalShowElapsed by remember { mutableStateOf(false) }
     var showPercentFtp by remember { mutableStateOf(false) }
 
-    // Always fills by elapsed-time fraction, regardless of whether the tile itself is currently
-    // showing elapsed or remaining via its own tap-toggle above.
+    // Follows each tile's own elapsed/remaining toggle: showing elapsed fills the bar with that
+    // fraction (blue growing from the left); showing remaining fills it with the remaining
+    // fraction instead (blue shrinking back from the right, since the fill is still anchored to
+    // the left edge) — same bar, same colors, just which fraction it's fed flips with the toggle.
     val stepDurationSec = workoutState.currentStep?.durationSec ?: 0
-    val intervalProgress = if (stepDurationSec > 0) workoutState.elapsedInStepSec / stepDurationSec.toFloat() else 0f
-    val totalProgress = if (workoutState.totalDurationSec > 0) workoutState.totalElapsedSec / workoutState.totalDurationSec.toFloat() else 0f
+    val intervalElapsedFraction = if (stepDurationSec > 0) workoutState.elapsedInStepSec / stepDurationSec.toFloat() else 0f
+    val intervalProgress = if (intervalShowElapsed) intervalElapsedFraction else 1f - intervalElapsedFraction
+    val totalElapsedFraction = if (workoutState.totalDurationSec > 0) workoutState.totalElapsedSec / workoutState.totalDurationSec.toFloat() else 0f
+    val totalProgress = if (totalShowElapsed) totalElapsedFraction else 1f - totalElapsedFraction
 
     Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
