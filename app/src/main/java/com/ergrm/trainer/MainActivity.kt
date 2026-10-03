@@ -38,8 +38,23 @@ class MainActivity : ComponentActivity() {
         handleIntent(intent)
     }
 
+    // Called only when the user deliberately leaves (Home key, recent-apps switcher) — unlike
+    // onStop(), it's NOT called when this activity itself starts another one (a folder picker,
+    // the TCX share sheet, a permission prompt), so it's the right signal for "the user actually
+    // closed the app", not just "something else is briefly on top".
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        AppNavigationEvents.userLeftApp = true
+    }
+
     private fun handleIntent(intent: Intent) {
         if (intent.getBooleanExtra(EXTRA_OPEN_BACKUP_SETTINGS, false)) {
+            // This notification tap is itself a reason the app is coming back to the foreground
+            // after the user left it earlier — its explicit destination (Settings) should win
+            // over the generic Workout reset that userLeftApp would otherwise trigger on the
+            // same onStart. onNewIntent (which calls this) is guaranteed to run before onStart,
+            // so clearing it here beats that check with no race.
+            AppNavigationEvents.userLeftApp = false
             AppNavigationEvents.openSettingsForBackup.tryEmit(Unit)
         }
     }

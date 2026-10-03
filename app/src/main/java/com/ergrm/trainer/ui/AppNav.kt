@@ -26,6 +26,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -37,8 +38,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ergrm.trainer.ble.HrConnectionState
 import com.ergrm.trainer.ble.TrainerConnectionState
@@ -98,6 +102,28 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
                 AppNavigationEvents.openSettingsForBackup.collect {
                     overlay = Overlay.SETTINGS
                 }
+            }
+
+            // Reset to the Workout screen the next time the app comes back to the foreground
+            // after the user deliberately left it (Home key, recent-apps switcher) — not after
+            // merely returning from a folder picker or the TCX share sheet the app itself opened,
+            // which also back-and-forth through the activity lifecycle but aren't "closing the
+            // app". AppNavigationEvents.userLeftApp is set only for the former (see
+            // MainActivity.onUserLeaveHint) and read here as a plain synchronous flag — not via a
+            // Flow collector — so the backup-notification's explicit Settings destination (which
+            // clears it in handleIntent, guaranteed to run before this ON_START) always wins with
+            // no coroutine-dispatch race between the two.
+            val lifecycleOwner = LocalLifecycleOwner.current
+            DisposableEffect(lifecycleOwner) {
+                val observer = LifecycleEventObserver { _, event ->
+                    if (event == Lifecycle.Event.ON_START && AppNavigationEvents.userLeftApp) {
+                        AppNavigationEvents.userLeftApp = false
+                        overlay = Overlay.NONE
+                        screen = Screen.WORKOUT
+                    }
+                }
+                lifecycleOwner.lifecycle.addObserver(observer)
+                onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
             }
 
             // The same 4 items, same order, on every screen's "Other sources" menu (Workout's own
