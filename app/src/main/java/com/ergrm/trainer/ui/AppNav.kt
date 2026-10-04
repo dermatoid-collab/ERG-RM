@@ -1,5 +1,6 @@
 package com.ergrm.trainer.ui
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -337,6 +338,7 @@ private fun NavIcon(
  *  other way, rather than dead-ending at an edge. Starts on an even virtual page (the dashboard)
  *  every time this enters composition — i.e. on every collapse, including a re-collapse via the
  *  Workout nav icon — matching "re-collapsing always lands back on the dashboard+big chart". */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ActiveWorkoutPager(dashboard: @Composable () -> Unit, vitals: @Composable () -> Unit) {
     val pageCount = Int.MAX_VALUE
