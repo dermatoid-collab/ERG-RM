@@ -649,7 +649,7 @@ private fun CoreTempTile(
  * 20 min -> 5 min -> full. [scrollThresholdSec] is how far into a zoomed window the progress
  * line travels (pinned at the left edge) before the window starts scrolling to keep it in place.
  */
-private enum class ChartZoom(val windowSec: Int?, val scrollThresholdSec: Int) {
+internal enum class ChartZoom(val windowSec: Int?, val scrollThresholdSec: Int) {
     FULL(null, 0),
     TWENTY_MIN(20 * 60, 5 * 60),
     FIVE_MIN(5 * 60, 60);
@@ -664,7 +664,7 @@ private enum class ChartZoom(val windowSec: Int?, val scrollThresholdSec: Int) {
 /** Spacing between minute labels on the axis below the chart. Fixed for the two zoomed-in
  *  levels; at FULL it scales with the workout's own total length so a 3-hour plan doesn't end
  *  up with 18 crowded labels the way a fixed 10-minute step would. */
-private fun axisLabelIntervalMin(zoom: ChartZoom, totalDurationSec: Int): Int = when (zoom) {
+internal fun axisLabelIntervalMin(zoom: ChartZoom, totalDurationSec: Int): Int = when (zoom) {
     ChartZoom.FIVE_MIN -> 1
     ChartZoom.TWENTY_MIN -> 5
     ChartZoom.FULL -> {
@@ -682,7 +682,7 @@ private fun axisLabelIntervalMin(zoom: ChartZoom, totalDurationSec: Int): Int = 
  *  progress line stays pinned [ChartZoom.scrollThresholdSec] from the window's left edge (or at
  *  elapsed time if less has passed) — i.e. it sits at the left edge until that much time has
  *  passed, then the window scrolls to keep it fixed there. */
-private fun computeChartWindow(zoom: ChartZoom, totalElapsedSec: Int, totalDurationSec: Int): Pair<Int, Int> {
+internal fun computeChartWindow(zoom: ChartZoom, totalElapsedSec: Int, totalDurationSec: Int): Pair<Int, Int> {
     val windowSec = zoom.windowSec
     if (windowSec == null || windowSec >= totalDurationSec) {
         return 0 to totalDurationSec
@@ -1055,7 +1055,7 @@ private fun WorkoutProfileChart(
  *  about the chart (scale, colors, zoom-tap area, traces, tooltip) is untouched; this only adds
  *  the axis strip and, by taking a fixed height for it, shortens the Canvas above by that much. */
 @Composable
-private fun ChartTimeAxis(zoom: ChartZoom, totalElapsedSec: Int, totalDurationSec: Int) {
+internal fun ChartTimeAxis(zoom: ChartZoom, totalElapsedSec: Int, totalDurationSec: Int) {
     val textMeasurer = rememberTextMeasurer()
     Canvas(
         modifier = Modifier

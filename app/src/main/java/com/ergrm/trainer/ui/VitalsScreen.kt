@@ -3,6 +3,7 @@ package com.ergrm.trainer.ui
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -50,6 +51,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -81,8 +83,8 @@ import kotlin.math.roundToInt
  *  stacked charts (CORE/SKIN/HSI over time, and the familiar power/HR/cadence chart with a new
  *  cadence axis) instead of the live tiles, controls and single chart Screen 1 already has.
  *
- *  Deliberately simpler than Screen 1's chart in one respect: no tap-to-zoom — this is a glance-
- *  at-the-whole-ride summary view, always showing the full elapsed window. */
+ *  Both charts share one all/20min/5min zoom (tapping either cycles it for both, same as Screen
+ *  1's real chart) rather than zooming independently — see the [zoom] state below. */
 @Composable
 fun VitalsScreen(viewModel: MainViewModel) {
     val workoutState by viewModel.workoutState.collectAsState()
@@ -91,6 +93,10 @@ fun VitalsScreen(viewModel: MainViewModel) {
     val coreSamples by viewModel.coreTempHistory.collectAsState()
     var showStopConfirm by remember { mutableStateOf(false) }
     var showDiscardConfirm by remember { mutableStateOf(false) }
+    // Shared by both charts (tapping either cycles it for both) rather than one zoom each, since
+    // they're two views of the same timeline — zooming into an interval on the power chart to
+    // correlate with core temp there is the whole point of having them stacked.
+    var zoom by remember { mutableStateOf(ChartZoom.FULL) }
 
     val stats = remember(samples) {
         computeSessionStats(samples.map { SessionSample(it.tSec, it.watts, it.hrBpm, it.cadenceRpm, it.speedKmh) })
@@ -108,7 +114,10 @@ fun VitalsScreen(viewModel: MainViewModel) {
         ) {
             CoreSkinHsiChart(
                 samples = coreSamples,
+                totalElapsedSec = workoutState.totalElapsedSec,
                 totalDurationSec = workoutState.totalDurationSec,
+                zoom = zoom,
+                onTap = { zoom = zoom.next() },
                 modifier = Modifier.weight(1f).fillMaxWidth(),
             )
             Box(
@@ -120,13 +129,17 @@ fun VitalsScreen(viewModel: MainViewModel) {
             VitalsPowerChart(
                 steps = workoutState.steps,
                 currentStepIndex = workoutState.currentStepIndex,
+                totalElapsedSec = workoutState.totalElapsedSec,
                 totalDurationSec = workoutState.totalDurationSec,
                 samples = samples,
                 ftpWatts = settings.ftpWatts,
                 lthrBpm = settings.lthrBpm,
                 intensityPercent = workoutState.intensityPercent,
+                zoom = zoom,
+                onTap = { zoom = zoom.next() },
                 modifier = Modifier.weight(1f).fillMaxWidth(),
             )
+            ChartTimeAxis(zoom = zoom, totalElapsedSec = workoutState.totalElapsedSec, totalDurationSec = workoutState.totalDurationSec)
         }
 
         CompactControlRow(
@@ -201,7 +214,14 @@ private fun SummaryTilesGrid(stats: SessionStats, durationSec: Int, modifier: Mo
  *  thresholds either. CORE and SKIN get their own side-by-side axis columns (same 30–40°C range)
  *  so their live-value pills never collide even when the two readings are close. */
 @Composable
-private fun CoreSkinHsiChart(samples: List<CoreSamplePoint>, totalDurationSec: Int, modifier: Modifier = Modifier) {
+private fun CoreSkinHsiChart(
+    samples: List<CoreSamplePoint>,
+    totalElapsedSec: Int,
+    totalDurationSec: Int,
+    zoom: ChartZoom,
+    onTap: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val last = samples.lastOrNull()
     val coreMin = 30f
     val coreMax = 40f
@@ -228,7 +248,12 @@ private fun CoreSkinHsiChart(samples: List<CoreSamplePoint>, totalDurationSec: I
             liveFraction = last?.skinTempC?.let { tempFrac(it) } ?: 1f,
             pillColor = ErgSkinTemp,
         )
-        Canvas(modifier = Modifier.weight(1f).fillMaxHeight()) {
+        Canvas(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight()
+                .pointerInput(Unit) { detectTapGestures { onTap() } },
+        ) {
             val w = size.width
             val h = size.height
             // Same horizontal gridlines, at the same 4 tick heights, as the real chart on Screen 1.
@@ -236,11 +261,14 @@ private fun CoreSkinHsiChart(samples: List<CoreSamplePoint>, totalDurationSec: I
                 drawLine(ErgOnSurface.copy(alpha = 0.12f), Offset(0f, h * frac), Offset(w, h * frac), strokeWidth = 2.25f)
             }
             if (samples.size < 2 || totalDurationSec <= 0) return@Canvas
-            fun xAt(t: Int) = w * (t.toFloat() / totalDurationSec)
+            val (windowStart, windowEnd) = computeChartWindow(zoom, totalElapsedSec, totalDurationSec)
+            val windowLen = (windowEnd - windowStart).coerceAtLeast(1)
+            fun xAt(t: Int) = w * (t - windowStart) / windowLen.toFloat()
             val strokeW = 2.dp.toPx()
             for (i in 0 until samples.size - 1) {
                 val a = samples[i]
                 val b = samples[i + 1]
+                if (b.tSec < windowStart || a.tSec > windowEnd) continue
                 val x0 = xAt(a.tSec)
                 val x1 = xAt(b.tSec)
                 val ac = a.coreTempC
@@ -271,19 +299,23 @@ private fun CoreSkinHsiChart(samples: List<CoreSamplePoint>, totalDurationSec: I
     }
 }
 
-/** The familiar power/HR/cadence chart, always showing the full ride (no zoom — see
- *  [VitalsScreen]'s doc comment) with a new CADENCE axis column added alongside WATTS: cadence
- *  is already plotted today (just like [com.ergrm.trainer.ui.WorkoutProfileChart]'s own
- *  `ErgCadenceLine` trace) but has never had a visible axis of its own until now. */
+/** The familiar power/HR/cadence chart — same tap-to-cycle all/20min/5min zoom as Screen 1's real
+ *  chart (shared with [CoreSkinHsiChart] above it, see [VitalsScreen]) — with a new CADENCE axis
+ *  column added alongside WATTS: cadence is already plotted today (just like
+ *  [com.ergrm.trainer.ui.WorkoutProfileChart]'s own `ErgCadenceLine` trace) but has never had a
+ *  visible axis of its own until now. */
 @Composable
 private fun VitalsPowerChart(
     steps: List<WorkoutStep>,
     currentStepIndex: Int,
+    totalElapsedSec: Int,
     totalDurationSec: Int,
     samples: List<SamplePoint>,
     ftpWatts: Int,
     lthrBpm: Int,
     intensityPercent: Int,
+    zoom: ChartZoom,
+    onTap: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val wattsScale = chartMaxWatts(ftpWatts) / (1f - CHART_TOP_HEADROOM)
@@ -316,7 +348,12 @@ private fun VitalsPowerChart(
             liveFraction = last?.watts?.let { (1f - it / wattsScale).coerceIn(0f, 1f) } ?: 1f,
             pillColor = ErgAboveTarget,
         )
-        Canvas(modifier = Modifier.weight(1f).fillMaxHeight()) {
+        Canvas(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight()
+                .pointerInput(Unit) { detectTapGestures { onTap() } },
+        ) {
             val w = size.width
             val h = size.height
             // Same horizontal gridlines, at the same 4 tick heights, as the real chart on Screen 1.
@@ -324,7 +361,9 @@ private fun VitalsPowerChart(
                 drawLine(ErgOnSurface.copy(alpha = 0.12f), Offset(0f, h * frac), Offset(w, h * frac), strokeWidth = 2.25f)
             }
             if (steps.isEmpty() || totalDurationSec <= 0) return@Canvas
-            fun xAt(t: Int) = w * (t.toFloat() / totalDurationSec)
+            val (windowStart, windowEnd) = computeChartWindow(zoom, totalElapsedSec, totalDurationSec)
+            val windowLen = (windowEnd - windowStart).coerceAtLeast(1)
+            fun xAt(t: Int) = w * (t - windowStart) / windowLen.toFloat()
             fun yWatts(watts: Int) = h - h * (watts.toFloat() / wattsScale).coerceIn(0f, 1f)
             fun yBpm(bpm: Int) = h - h * (((bpm - bpmMin) / bpmRange) * (1f - CHART_TOP_HEADROOM)).coerceIn(0f, 1f)
             fun yCad(rpm: Int) = h - h * (rpm.toFloat() / cadScale).coerceIn(0f, 1f)
@@ -334,28 +373,50 @@ private fun VitalsPowerChart(
                 val stepStart = acc
                 val stepEnd = acc + step.durationSec
                 acc = stepEnd
+                if (stepEnd < windowStart || stepStart > windowEnd) return@forEachIndexed
+
                 val dispStart = displayWatts(step.startWatts, index, currentStepIndex, intensityPercent)
                 val dispEnd = displayWatts(step.endWatts, index, currentStepIndex, intensityPercent)
                 val zone = zoneFor(max(dispStart, dispEnd), ftpWatts)
-                val x0 = xAt(stepStart)
-                val x1 = xAt(stepEnd)
+
+                // Same ramp-truncation interpolation as Screen 1's real chart (see
+                // WorkoutProfileChart) — when the zoomed window cuts a ramp step partway through,
+                // the trapezoid's visible edge needs the interpolated watts at that exact cut
+                // point, not the step's true start/end, or the edge won't line up with the power
+                // line under it.
+                val durationSec = step.durationSec.coerceAtLeast(1)
+                fun wattsAt(tSec: Int): Float {
+                    val frac = (tSec - stepStart).toFloat() / durationSec
+                    return dispStart + (dispEnd - dispStart) * frac
+                }
+                val visibleStart = stepStart.coerceAtLeast(windowStart)
+                val visibleEnd = stepEnd.coerceAtMost(windowEnd)
+                val x0 = xAt(visibleStart).coerceIn(0f, w)
+                val x1 = xAt(visibleEnd).coerceIn(0f, w)
+                val yStart = if (visibleStart == stepStart) yWatts(dispStart) else yWatts(wattsAt(visibleStart).roundToInt())
+                val yEnd = if (visibleEnd == stepEnd) yWatts(dispEnd) else yWatts(wattsAt(visibleEnd).roundToInt())
+
                 val path = Path().apply {
                     moveTo(x0, h)
-                    lineTo(x0, yWatts(dispStart))
-                    lineTo(x1, yWatts(dispEnd))
+                    lineTo(x0, yStart)
+                    lineTo(x1, yEnd)
                     lineTo(x1, h)
                     close()
                 }
                 drawPath(path, color = zone.color)
-                if (index > 0) {
+                if (stepStart in windowStart..windowEnd && index > 0) {
                     drawLine(ErgDivider.copy(alpha = 0.5f), Offset(x0, h * 0.75f), Offset(x0, h), strokeWidth = 1.dp.toPx())
                 }
             }
-            val hrPoints = samples.mapNotNull { s -> s.hrBpm?.let { Offset(xAt(s.tSec), yBpm(it)) } }
+            val hrPoints = samples.mapNotNull { s ->
+                if (s.tSec < windowStart || s.tSec > windowEnd) null else s.hrBpm?.let { Offset(xAt(s.tSec), yBpm(it)) }
+            }
             for (i in 0 until hrPoints.size - 1) {
                 drawLine(ErgHrLine, hrPoints[i], hrPoints[i + 1], strokeWidth = 2.dp.toPx())
             }
-            val cadPoints = samples.mapNotNull { s -> s.cadenceRpm?.let { Offset(xAt(s.tSec), yCad(it)) } }
+            val cadPoints = samples.mapNotNull { s ->
+                if (s.tSec < windowStart || s.tSec > windowEnd) null else s.cadenceRpm?.let { Offset(xAt(s.tSec), yCad(it)) }
+            }
             for (i in 0 until cadPoints.size - 1) {
                 drawLine(
                     ErgCadenceLine,
