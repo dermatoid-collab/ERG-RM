@@ -109,6 +109,10 @@ fun WorkoutScreen(
     viewModel: MainViewModel,
     isTrainerConnected: Boolean = true,
     otherSources: List<Pair<String, () -> Unit>> = emptyList(),
+    // True while AppNav's minibar is showing the workout title in its place (Task #68) — skips
+    // this screen's own WorkoutHeader so the title isn't shown twice, and so the chart's
+    // weight(1f) picks up the freed row's height instead of just the topBar's.
+    chromeCollapsed: Boolean = false,
 ) {
     val live by viewModel.liveData.collectAsState()
     val coreReading by viewModel.coreTempReading.collectAsState()
@@ -130,14 +134,16 @@ fun WorkoutScreen(
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(7.dp),
     ) {
-        val loaded = loadState
-        WorkoutHeader(
-            title = when (loaded) {
-                is WorkoutLoadState.Loaded -> loaded.name
-                else -> if (workoutState.steps.isNotEmpty()) "Workout" else "No workout loaded"
-            },
-            otherSources = otherSources,
-        )
+        if (!chromeCollapsed) {
+            val loaded = loadState
+            WorkoutHeader(
+                title = when (loaded) {
+                    is WorkoutLoadState.Loaded -> loaded.name
+                    else -> if (workoutState.steps.isNotEmpty()) "Workout" else "No workout loaded"
+                },
+                otherSources = otherSources,
+            )
+        }
 
         if (!isTrainerConnected) {
             Text(

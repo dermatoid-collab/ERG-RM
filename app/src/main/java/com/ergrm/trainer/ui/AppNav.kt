@@ -1,6 +1,7 @@
 package com.ergrm.trainer.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,11 +13,15 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -39,6 +44,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -59,6 +65,21 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
         Surface(color = MaterialTheme.colorScheme.background) {
             var overlay by remember { mutableStateOf(Overlay.NONE) }
             var screen by remember { mutableStateOf(Screen.WORKOUT) }
+            // Collapses the topBar + WorkoutHeader into a single minibar row during an active
+            // workout, freeing that space for the chart (Task #68). Driven declaratively off
+            // hasStarted's transitions below, not polled continuously, so a manual toggle (the
+            // minibar's back arrow, or tapping the Workout nav icon again) sticks until the next
+            // real start/stop instead of being fought back on every recomposition.
+            var chromeCollapsed by remember { mutableStateOf(false) }
+            val workoutState by viewModel.workoutState.collectAsState()
+            val workoutLoadState by viewModel.workoutLoadState.collectAsState()
+            val workoutTitle = when (val loaded = workoutLoadState) {
+                is WorkoutLoadState.Loaded -> loaded.name
+                else -> if (workoutState.steps.isNotEmpty()) "Workout" else "No workout loaded"
+            }
+            LaunchedEffect(workoutState.hasStarted) {
+                chromeCollapsed = workoutState.hasStarted
+            }
             val connectionState by viewModel.connectionState.collectAsState()
             val hrConnectionState by viewModel.hrConnectionState.collectAsState()
             val isScanning by viewModel.isScanning.collectAsState()
@@ -143,6 +164,14 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
             Scaffold(
                 snackbarHost = { SnackbarHost(snackbarHostState) },
                 topBar = {
+                    if (workoutState.hasStarted && chromeCollapsed && overlay == Overlay.NONE && screen == Screen.WORKOUT) {
+                        Minibar(
+                            workoutTitle = workoutTitle,
+                            otherSources = otherSources,
+                            bluetoothTint = bluetoothTint,
+                            onBack = { chromeCollapsed = false },
+                        )
+                    } else {
                     // Compact custom bar instead of Material3's TopAppBar (which reserves ~64dp
                     // regardless of content) — matches TrainerDay's tighter chrome and frees up
                     // vertical space for the chart below.
@@ -162,8 +191,17 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
                                 contentDescription = "Workout",
                                 active = overlay == Overlay.NONE && screen == Screen.WORKOUT,
                                 onClick = {
-                                    overlay = Overlay.NONE
-                                    screen = Screen.WORKOUT
+                                    // Already here with the workout running: a second tap re-
+                                    // collapses to the minibar instead of being a no-op (Task #68's
+                                    // step 4) — only reachable when chromeCollapsed is false, since
+                                    // that's the only way the full topBar (and this icon) is showing
+                                    // at all during an active workout.
+                                    if (workoutState.hasStarted && overlay == Overlay.NONE && screen == Screen.WORKOUT) {
+                                        chromeCollapsed = true
+                                    } else {
+                                        overlay = Overlay.NONE
+                                        screen = Screen.WORKOUT
+                                    }
                                 },
                                 underlineOffsetX = 1.5.dp,
                             )
@@ -198,6 +236,7 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
                             )
                         }
                     }
+                    }
                 },
             ) { padding ->
                 Box(modifier = Modifier.padding(padding)) {
@@ -228,6 +267,7 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
                             viewModel,
                             isTrainerConnected = isConnected,
                             otherSources = otherSources,
+                            chromeCollapsed = workoutState.hasStarted && chromeCollapsed,
                         )
                         else -> ConnectScreen(viewModel)
                     }
@@ -267,6 +307,64 @@ private fun NavIcon(
                 .size(width = 20.dp, height = 2.5.dp)
                 .clip(RoundedCornerShape(50))
                 .background(if (active) Color.White.copy(alpha = 0.55f) else Color.Transparent),
+        )
+    }
+}
+
+/** The collapsed topBar shown during an active workout (Task #68): the full topBar's brand +
+ *  5 nav icons and WorkoutScreen's own separate title row merge into this one line — a back
+ *  arrow to re-expand (the workout itself keeps running either way), the workout name with its
+ *  own "choose source" dropdown (identical menu to [WorkoutHeader]'s), and the Bluetooth status
+ *  icon with the exact same connection-state tint as the full topBar's own Bluetooth nav icon. */
+@Composable
+private fun Minibar(
+    workoutTitle: String,
+    otherSources: List<Pair<String, () -> Unit>>,
+    bluetoothTint: Color,
+    onBack: () -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surface)
+            .statusBarsPadding()
+            .padding(start = 4.dp, end = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconButton(onClick = onBack) {
+            Icon(Icons.Filled.ArrowBack, contentDescription = "Expand", tint = MaterialTheme.colorScheme.onSurface)
+        }
+        Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+            Row(
+                modifier = Modifier.clickable { expanded = true },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    workoutTitle,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Icon(Icons.Filled.ArrowDropDown, contentDescription = "Choose workout")
+            }
+            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                otherSources.forEach { (label, action) ->
+                    DropdownMenuItem(
+                        text = { Text(label) },
+                        onClick = {
+                            expanded = false
+                            action()
+                        },
+                    )
+                }
+            }
+        }
+        Icon(
+            Icons.Filled.Bluetooth,
+            contentDescription = "Devices",
+            tint = bluetoothTint,
+            modifier = Modifier.size(24.dp),
         )
     }
 }
