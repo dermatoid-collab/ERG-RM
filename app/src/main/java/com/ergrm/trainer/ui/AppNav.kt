@@ -42,6 +42,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -56,6 +57,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ergrm.trainer.ble.HrConnectionState
 import com.ergrm.trainer.ble.TrainerConnectionState
+import com.ergrm.trainer.data.AppSettings
 import com.ergrm.trainer.ui.theme.ErgAccent
 import com.ergrm.trainer.ui.theme.ErgRmTheme
 import com.ergrm.trainer.ui.theme.ErgWarn
@@ -257,18 +259,8 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
             ) { padding ->
                 Box(modifier = Modifier.padding(padding)) {
                     when {
-                        overlay == Overlay.SETTINGS -> SettingsScreen(
-                            settings = settings,
-                            viewModel = viewModel,
-                            onSave = viewModel::saveIntervalsSettings,
-                            onClose = { overlay = Overlay.NONE },
-                        )
-                        overlay == Overlay.LIBRARY -> LibraryScreen(
-                            viewModel,
-                            onImported = { overlay = Overlay.NONE },
-                            otherSources = otherSources,
-                        )
-                        overlay == Overlay.HISTORY -> HistoryScreen(viewModel)
+                        // Reached only from "Other sources", not one of the 5 topBar icons, so
+                        // they sit outside the swipeable set below (Task #73).
                         overlay == Overlay.CALENDAR -> CalendarScreen(
                             viewModel,
                             onPicked = { overlay = Overlay.NONE },
@@ -296,13 +288,16 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
                                 },
                                 vitals = { VitalsScreen(viewModel) },
                             )
-                        screen == Screen.WORKOUT -> WorkoutScreen(
-                            viewModel,
-                            isTrainerConnected = isConnected,
+                        else -> MainPager(
+                            overlay = overlay,
+                            screen = screen,
+                            onOverlayChange = { overlay = it },
+                            onScreenChange = { screen = it },
+                            viewModel = viewModel,
+                            isConnected = isConnected,
                             otherSources = otherSources,
-                            chromeCollapsed = false,
+                            settings = settings,
                         )
-                        else -> ConnectScreen(viewModel)
                     }
                 }
             }
@@ -365,6 +360,80 @@ private fun ActiveWorkoutPager(dashboard: @Composable () -> Unit, vitals: @Compo
     val pagerState = rememberPagerState(initialPage = startPage) { pageCount }
     HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
         if (page % 2 == 0) dashboard() else vitals()
+    }
+}
+
+/** Maps the 5 topBar-icon destinations (Calendar/Intervals.icu Library are reached only from
+ *  "Other sources" and aren't part of this swipeable set) to a page index, 0-4 in icon order. */
+private fun pageFor(overlay: Overlay, screen: Screen): Int = when (overlay) {
+    Overlay.NONE -> if (screen == Screen.WORKOUT) 0 else 1
+    Overlay.LIBRARY -> 2
+    Overlay.HISTORY -> 3
+    Overlay.SETTINGS -> 4
+    Overlay.CALENDAR, Overlay.INTERVALS_LIBRARY -> 0 // unreachable here — see the when{} in ErgRmApp
+}
+
+/** Swipe between the app's 5 main destinations (Task #73), bounded (no wrap at either end) —
+ *  Workout, Connect, Library, History, Settings, in the same order as their topBar icons. Two
+ *  effects keep this pager and the existing (overlay, screen) state in sync in both directions
+ *  without fighting each other: [targetPage] (derived from that state) drives the pager whenever
+ *  something OTHER than a swipe changes it — tapping a topBar icon, the auto-reconnect jump to
+ *  Workout, the reset-to-Workout-on-reopen effect — via animateScrollToPage; and settledPage
+ *  (deliberately not currentPage, which also reports in-between pages while that same animated
+ *  scroll is still under way) drives (overlay, screen) once a user's own swipe comes to rest on a
+ *  page, so the two never fight over an in-progress animated transition. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun MainPager(
+    overlay: Overlay,
+    screen: Screen,
+    onOverlayChange: (Overlay) -> Unit,
+    onScreenChange: (Screen) -> Unit,
+    viewModel: MainViewModel,
+    isConnected: Boolean,
+    otherSources: List<Pair<String, () -> Unit>>,
+    settings: AppSettings,
+) {
+    val targetPage = pageFor(overlay, screen)
+    val pagerState = rememberPagerState(initialPage = targetPage) { 5 }
+
+    LaunchedEffect(targetPage) {
+        if (pagerState.currentPage != targetPage) pagerState.animateScrollToPage(targetPage)
+    }
+    LaunchedEffect(pagerState) {
+        snapshotFlow { pagerState.settledPage }.collect { page ->
+            when (page) {
+                0 -> { onOverlayChange(Overlay.NONE); onScreenChange(Screen.WORKOUT) }
+                1 -> { onOverlayChange(Overlay.NONE); onScreenChange(Screen.CONNECT) }
+                2 -> onOverlayChange(Overlay.LIBRARY)
+                3 -> onOverlayChange(Overlay.HISTORY)
+                4 -> onOverlayChange(Overlay.SETTINGS)
+            }
+        }
+    }
+
+    HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
+        when (page) {
+            0 -> WorkoutScreen(
+                viewModel,
+                isTrainerConnected = isConnected,
+                otherSources = otherSources,
+                chromeCollapsed = false,
+            )
+            1 -> ConnectScreen(viewModel)
+            2 -> LibraryScreen(
+                viewModel,
+                onImported = { onOverlayChange(Overlay.NONE) },
+                otherSources = otherSources,
+            )
+            3 -> HistoryScreen(viewModel)
+            else -> SettingsScreen(
+                settings = settings,
+                viewModel = viewModel,
+                onSave = viewModel::saveIntervalsSettings,
+                onClose = { onOverlayChange(Overlay.NONE) },
+            )
+        }
     }
 }
 
