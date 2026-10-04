@@ -554,12 +554,12 @@ private fun StatTile(
  *  raw precision against these thresholds let e.g. a raw 38.24 (displayed as "38.2°") land in the
  *  38.3-38.5 band, showing the same on-screen number in two different colors depending on the
  *  hidden decimals. */
-private fun floorToOneDecimal(value: Float): Float = floor(value * 10) / 10f
+internal fun floorToOneDecimal(value: Float): Float = floor(value * 10) / 10f
 
 /** Green/yellow/red/purple, matching the same escalating-severity palette used for HR and power
  *  zones elsewhere on this screen (at-target green, warning amber, above-target/thermal red, and
  *  the max-zone purple) rather than inventing new colors for a fourth kind of zone. */
-private fun hsiColor(hsi: Float): Color = when {
+internal fun hsiColor(hsi: Float): Color = when {
     hsi <= 0.9f -> ErgAccent
     hsi <= 2.9f -> ErgWarn
     hsi <= 6.9f -> ErgHrLine
@@ -569,7 +569,7 @@ private fun hsiColor(hsi: Float): Color = when {
 /** Core temperature thresholds, same escalating-severity palette as [hsiColor] but with a blue
  *  "below normal" band instead of green, since core temp has no healthy-at-target reading the
  *  way HSI's 0 does. */
-private fun coreColor(coreTempC: Float): Color = when {
+internal fun coreColor(coreTempC: Float): Color = when {
     coreTempC <= 38.2f -> ErgBelowTarget
     coreTempC <= 38.5f -> ErgWarn
     coreTempC <= 38.9f -> ErgHrLine
@@ -777,7 +777,7 @@ private fun ChartCard(
 /** Headroom left empty above the chart's max watts, as a fraction of the chart height — just
  *  enough for the top axis labels, so the 550W/210bpm labels sit near the very top edge instead
  *  of wasting vertical space above them. */
-private const val CHART_TOP_HEADROOM = 0.08f
+internal const val CHART_TOP_HEADROOM = 0.08f
 
 /** Fraction of the chart's height, from the top, that's the tap-to-zoom target — deliberately
  *  independent of and much larger than [CHART_TOP_HEADROOM] (which only sizes the axis-label
@@ -791,13 +791,13 @@ private const val CHART_ZOOM_TAP_FRACTION = 0.75f
  * raising or lowering the live %FTP intensity actually changes bar heights against a stable
  * reference instead of the axis rescaling to compensate and hiding the change.
  */
-private fun chartMaxWatts(ftpWatts: Int): Float = if (ftpWatts > 0) 1.8f * ftpWatts else 550f
+internal fun chartMaxWatts(ftpWatts: Int): Float = if (ftpWatts > 0) 1.8f * ftpWatts else 550f
 
 /** HR ceiling, fixed relative to LTHR for the same reason [chartMaxWatts] is fixed to FTP. */
-private fun chartMaxBpm(lthrBpm: Int): Float = if (lthrBpm > 0) 1.1f * lthrBpm else 210f
+internal fun chartMaxBpm(lthrBpm: Int): Float = if (lthrBpm > 0) 1.1f * lthrBpm else 210f
 
-private const val CHART_BPM_MIN = 50f
-private const val CHART_MAX_CADENCE = 140f
+internal const val CHART_BPM_MIN = 50f
+internal const val CHART_MAX_CADENCE = 140f
 
 /** Blends a zone's bright accent color toward near-black so bar fills read as muted background,
  *  never as bright as the power/HR/cadence trace lines drawn on top of them. */
@@ -809,7 +809,7 @@ private fun mutedZoneColor(zoneColor: Color, active: Boolean): Color {
 
 /** Steps at or after [currentStepIndex] reflect a live intensity change; earlier ones are
  *  history and stay as originally ridden. */
-private fun displayWatts(rawWatts: Int, stepIndex: Int, currentStepIndex: Int, intensityPercent: Int): Int =
+internal fun displayWatts(rawWatts: Int, stepIndex: Int, currentStepIndex: Int, intensityPercent: Int): Int =
     if (stepIndex >= currentStepIndex) (rawWatts * intensityPercent / 100f).roundToInt() else rawWatts
 
 @Composable
@@ -1530,7 +1530,7 @@ private fun WorkoutHeader(title: String, otherSources: List<Pair<String, () -> U
 
 /** m:ss under an hour, h:mm:ss at or past it — switches back to m:ss the moment the value drops
  *  under 3600s again (e.g. TOTAL's remaining-time countdown crossing under an hour left). */
-private fun formatTime(totalSeconds: Int): String {
+internal fun formatTime(totalSeconds: Int): String {
     val h = totalSeconds / 3600
     val m = (totalSeconds % 3600) / 60
     val s = totalSeconds % 60

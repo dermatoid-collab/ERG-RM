@@ -6,11 +6,14 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -263,11 +266,28 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
                             onPicked = { overlay = Overlay.NONE },
                             otherSources = otherSources,
                         )
+                        screen == Screen.WORKOUT && workoutState.hasStarted && chromeCollapsed ->
+                            // The active-workout fullscreen state only (Task #75): swipe between
+                            // the dashboard (today's WorkoutScreen body) and the new Vitals &
+                            // Analytics screen, both under the shared minibar above. Disabled
+                            // outside this state — the idle Workout screen keeps its normal full
+                            // topBar and single body, no pager involved.
+                            ActiveWorkoutPager(
+                                dashboard = {
+                                    WorkoutScreen(
+                                        viewModel,
+                                        isTrainerConnected = isConnected,
+                                        otherSources = otherSources,
+                                        chromeCollapsed = true,
+                                    )
+                                },
+                                vitals = { VitalsScreen(viewModel) },
+                            )
                         screen == Screen.WORKOUT -> WorkoutScreen(
                             viewModel,
                             isTrainerConnected = isConnected,
                             otherSources = otherSources,
-                            chromeCollapsed = workoutState.hasStarted && chromeCollapsed,
+                            chromeCollapsed = false,
                         )
                         else -> ConnectScreen(viewModel)
                     }
@@ -308,6 +328,22 @@ private fun NavIcon(
                 .clip(RoundedCornerShape(50))
                 .background(if (active) Color.White.copy(alpha = 0.55f) else Color.Transparent),
         )
+    }
+}
+
+/** Two pages swipeable with a circular/infinite feel (Task #75) despite there being only 2 real
+ *  ones: a huge virtual page count with the real page taken as `virtualPage % 2` means swiping
+ *  left off the last real page keeps scrolling smoothly into the first again, and the same the
+ *  other way, rather than dead-ending at an edge. Starts on an even virtual page (the dashboard)
+ *  every time this enters composition — i.e. on every collapse, including a re-collapse via the
+ *  Workout nav icon — matching "re-collapsing always lands back on the dashboard+big chart". */
+@Composable
+private fun ActiveWorkoutPager(dashboard: @Composable () -> Unit, vitals: @Composable () -> Unit) {
+    val pageCount = Int.MAX_VALUE
+    val startPage = remember { (pageCount / 2) - (pageCount / 2) % 2 }
+    val pagerState = rememberPagerState(initialPage = startPage) { pageCount }
+    HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
+        if (page % 2 == 0) dashboard() else vitals()
     }
 }
 

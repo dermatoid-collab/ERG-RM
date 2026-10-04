@@ -97,6 +97,18 @@ sealed interface LibraryUiState {
     data class Error(val message: String) : LibraryUiState
 }
 
+/** One CORE sensor reading, time-aligned with [MainViewModel.sampleHistory] via [tSec] — the
+ *  Vitals screen's CORE/SKIN/HSI chart traces this the same way the power/HR/cadence chart
+ *  traces [com.ergrm.trainer.workout.SamplePoint]. */
+data class CoreSamplePoint(
+    val tSec: Int,
+    val coreTempC: Float?,
+    val skinTempC: Float?,
+    val heatStrainIndex: Float?,
+)
+
+private const val MAX_CORE_TEMP_HISTORY = 6 * 3600
+
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val settingsRepository = SettingsRepository(application)
@@ -133,6 +145,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     val workoutState = workoutExecutor.state
     val sampleHistory = workoutExecutor.sampleHistory
+
+    // One CORE sensor reading per tick, time-aligned with sampleHistory (the Vitals screen's
+    // CORE/SKIN/HSI chart needs a history to trace, same as sampleHistory already gives the
+    // power/HR/cadence chart) — piggybacked on sampleHistory's own once-per-second emissions
+    // instead of a separate ticker, since WorkoutExecutor already owns that clock. Cleared
+    // whenever sampleHistory resets (workout stop/discard), same lifecycle as that history.
+    private val _coreTempHistory = MutableStateFlow<List<CoreSamplePoint>>(emptyList())
+    val coreTempHistory: StateFlow<List<CoreSamplePoint>> = _coreTempHistory.asStateFlow()
 
     private val _scanResults = MutableStateFlow<List<DiscoveredTrainer>>(emptyList())
     val scanResults: StateFlow<List<DiscoveredTrainer>> = _scanResults.asStateFlow()
@@ -213,6 +233,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     val target = workout.currentTargetWatts.takeIf { workout.isRunning }
                     trainerService?.updateStatus(title, target)
                 }
+        }
+        viewModelScope.launch {
+            sampleHistory.collect { samples ->
+                val last = samples.lastOrNull()
+                _coreTempHistory.value = if (last == null) {
+                    emptyList()
+                } else {
+                    val reading = coreTempReading.value
+                    (_coreTempHistory.value + CoreSamplePoint(
+                        tSec = last.tSec,
+                        coreTempC = reading?.coreTempC,
+                        skinTempC = reading?.skinTempC,
+                        heatStrainIndex = reading?.heatStrainIndex,
+                    )).takeLast(MAX_CORE_TEMP_HISTORY)
+                }
+            }
         }
         autoReconnect()
         autoLoadTodayWorkout()
