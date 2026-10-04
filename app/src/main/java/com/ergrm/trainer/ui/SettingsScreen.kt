@@ -29,6 +29,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
+import androidx.documentfile.provider.DocumentFile
 import com.ergrm.trainer.BuildConfig
 import com.ergrm.trainer.data.AppSettings
 
@@ -54,7 +55,10 @@ fun SettingsScreen(
         ActivityResultContracts.OpenDocumentTree(),
     ) { uri ->
         if (uri != null) {
-            val name = uri.lastPathSegment?.substringAfterLast(':') ?: "Folder"
+            // Same fix as LibraryScreen's folder picker: the tree URI's own last path segment is
+            // the provider's internal document ID (opaque for Google Drive), not a human name —
+            // DocumentFile queries the provider for its real display name instead.
+            val name = DocumentFile.fromTreeUri(context, uri)?.name ?: "Folder"
             viewModel.onBackupFolderPicked(uri, name)
         }
     }
