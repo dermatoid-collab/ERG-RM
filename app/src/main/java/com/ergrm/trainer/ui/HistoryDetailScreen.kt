@@ -250,24 +250,24 @@ private fun StatsGrid(session: WorkoutSession, stats: SessionStats) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
             DetailTile("Duration", formatWorkoutDuration(session.durationSec), modifier = Modifier.weight(1f))
+            DetailTile("Distance", stats.distanceKm?.let { "%.1f".format(it) } ?: "n/a", unit = "km", modifier = Modifier.weight(1f))
+            DetailTile("Avg speed", stats.avgSpeedKmh?.let { "%.1f".format(it) } ?: "n/a", unit = "km/h", modifier = Modifier.weight(1f))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+            DetailTile("Work", "${stats.totalKj}", unit = "kJ", modifier = Modifier.weight(1f))
             DetailTile("Avg watts", "${stats.avgWatts}", unit = "W", modifier = Modifier.weight(1f))
             DetailTile("NP", stats.normalizedWatts?.let { "$it" } ?: "n/a", unit = "W", modifier = Modifier.weight(1f))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
-            DetailTile("Work", "${stats.totalKj}", unit = "kJ", modifier = Modifier.weight(1f))
-            DetailTile(
-                "Avg HR", stats.avgHrBpm?.let { "$it" } ?: "n/a", unit = "bpm", modifier = Modifier.weight(1f),
-                valueColor = if (stats.avgHrBpm != null) ErgHrLine else ErgOnSurface,
-            )
             DetailTile(
                 "Max HR", stats.maxHrBpm?.let { "$it" } ?: "n/a", unit = "bpm", modifier = Modifier.weight(1f),
                 valueColor = if (stats.maxHrBpm != null) ErgHrLine else ErgOnSurface,
             )
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+            DetailTile(
+                "Avg HR", stats.avgHrBpm?.let { "$it" } ?: "n/a", unit = "bpm", modifier = Modifier.weight(1f),
+                valueColor = if (stats.avgHrBpm != null) ErgHrLine else ErgOnSurface,
+            )
             DetailTile("Avg cadence", stats.avgCadenceRpm?.let { "$it" } ?: "n/a", unit = "rpm", modifier = Modifier.weight(1f))
-            DetailTile("Avg speed", stats.avgSpeedKmh?.let { "%.1f".format(it) } ?: "n/a", unit = "km/h", modifier = Modifier.weight(1f))
-            DetailTile("Distance", stats.distanceKm?.let { "%.1f".format(it) } ?: "n/a", unit = "km", modifier = Modifier.weight(1f))
         }
     }
 }

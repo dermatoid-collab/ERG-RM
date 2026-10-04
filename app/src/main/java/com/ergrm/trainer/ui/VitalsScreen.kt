@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -49,7 +50,8 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.PointMode
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
@@ -172,35 +174,38 @@ fun VitalsScreen(viewModel: MainViewModel) {
  *  Screen 1's StatTiles, since there's nothing to toggle (each is a single fixed total). */
 @Composable
 private fun SummaryTilesGrid(stats: SessionStats, durationSec: Int, modifier: Modifier = Modifier) {
+    // Left-to-right, top-to-bottom order and HR-red/cadence-blue coloring as requested, echoing
+    // the same colors their respective chart lines/axes use below.
     val tiles = listOf(
-        "Duration" to formatTime(durationSec),
-        "Avg Watts" to "${stats.avgWatts} W",
-        "NP" to (stats.normalizedWatts?.let { "$it W" } ?: "--"),
-        "Work" to "${stats.totalKj} kJ",
-        "Avg HR" to (stats.avgHrBpm?.toString() ?: "--"),
-        "Max HR" to (stats.maxHrBpm?.toString() ?: "--"),
-        "Avg Cad" to (stats.avgCadenceRpm?.toString() ?: "--"),
-        "Avg Speed" to (stats.avgSpeedKmh?.let { "%.1f".format(it) } ?: "--"),
-        "Distance" to (stats.distanceKm?.let { "%.1f km".format(it) } ?: "--"),
+        Triple("Duration", formatTime(durationSec), ErgOnSurface),
+        Triple("Distance", stats.distanceKm?.let { "%.1f km".format(it) } ?: "--", ErgOnSurface),
+        Triple("Avg Speed", stats.avgSpeedKmh?.let { "%.1f".format(it) } ?: "--", ErgOnSurface),
+        Triple("Work", "${stats.totalKj} kJ", ErgOnSurface),
+        Triple("Avg Watts", "${stats.avgWatts} W", ErgOnSurface),
+        Triple("NP", stats.normalizedWatts?.let { "$it W" } ?: "--", ErgOnSurface),
+        Triple("Max HR", stats.maxHrBpm?.toString() ?: "--", ErgHrLine),
+        Triple("Avg HR", stats.avgHrBpm?.toString() ?: "--", ErgHrLine),
+        Triple("Avg Cad", stats.avgCadenceRpm?.toString() ?: "--", ErgCadenceLine),
     )
-    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(5.dp)) {
         tiles.chunked(3).forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.fillMaxWidth()) {
-                row.forEach { (label, value) ->
+            Row(horizontalArrangement = Arrangement.spacedBy(5.dp), modifier = Modifier.fillMaxWidth()) {
+                row.forEach { (label, value, valueColor) ->
                     Column(
                         modifier = Modifier
                             .weight(1f)
-                            .background(ErgSurface, RoundedCornerShape(8.dp))
-                            .padding(horizontal = 6.dp, vertical = 4.dp),
+                            .background(ErgSurface, RoundedCornerShape(10.dp))
+                            .padding(horizontal = 8.dp, vertical = 8.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         Text(
                             label.uppercase(),
-                            style = MaterialTheme.typography.labelSmall,
+                            fontSize = 16.5.sp,
+                            fontWeight = FontWeight.Medium,
                             color = ErgOnSurface.copy(alpha = 0.6f),
                             maxLines = 1,
                         )
-                        Text(value, style = MaterialTheme.typography.titleMedium, color = ErgOnSurface, maxLines = 1)
+                        Text(value, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = valueColor, maxLines = 1)
                     }
                 }
             }
@@ -238,7 +243,7 @@ private fun CoreSkinHsiChart(
             ticks = tempTicks,
             liveValueText = last?.coreTempC?.let { "%.1f°".format(floorToOneDecimal(it)) } ?: "--",
             liveFraction = last?.coreTempC?.let { tempFrac(it) } ?: 1f,
-            pillColor = last?.coreTempC?.let { coreColor(floorToOneDecimal(it)) } ?: ErgOnSurface,
+            valueColor = last?.coreTempC?.let { coreColor(floorToOneDecimal(it)) } ?: ErgOnSurface,
         )
         AxisColumn(
             name = "SKIN",
@@ -246,7 +251,7 @@ private fun CoreSkinHsiChart(
             ticks = tempTicks,
             liveValueText = last?.skinTempC?.let { "%.1f°".format(it) } ?: "--",
             liveFraction = last?.skinTempC?.let { tempFrac(it) } ?: 1f,
-            pillColor = ErgSkinTemp,
+            valueColor = ErgSkinTemp,
         )
         Canvas(
             modifier = Modifier
@@ -294,7 +299,7 @@ private fun CoreSkinHsiChart(
             ticks = listOf("10", "7.5", "5", "2.5"),
             liveValueText = last?.heatStrainIndex?.let { "%.1f".format(floorToOneDecimal(it)) } ?: "--",
             liveFraction = last?.heatStrainIndex?.let { hsiFrac(it) } ?: 1f,
-            pillColor = last?.heatStrainIndex?.let { hsiColor(floorToOneDecimal(it)) } ?: ErgOnSurface,
+            valueColor = last?.heatStrainIndex?.let { hsiColor(floorToOneDecimal(it)) } ?: ErgOnSurface,
         )
     }
 }
@@ -332,8 +337,7 @@ private fun VitalsPowerChart(
             ticks = listOf("140", "105", "70", "35"),
             liveValueText = last?.cadenceRpm?.toString() ?: "--",
             liveFraction = last?.cadenceRpm?.let { (1f - it / cadScale).coerceIn(0f, 1f) } ?: 1f,
-            pillColor = ErgCadenceLine,
-            pillTextColor = Color.White,
+            valueColor = ErgCadenceLine,
         )
         AxisColumn(
             name = "W",
@@ -346,7 +350,7 @@ private fun VitalsPowerChart(
             ),
             liveValueText = last?.watts?.toString() ?: "--",
             liveFraction = last?.watts?.let { (1f - it / wattsScale).coerceIn(0f, 1f) } ?: 1f,
-            pillColor = ErgAboveTarget,
+            valueColor = ErgAboveTarget,
         )
         Canvas(
             modifier = Modifier
@@ -408,23 +412,25 @@ private fun VitalsPowerChart(
                     drawLine(ErgDivider.copy(alpha = 0.5f), Offset(x0, h * 0.75f), Offset(x0, h), strokeWidth = 1.dp.toPx())
                 }
             }
-            val hrPoints = samples.mapNotNull { s ->
-                if (s.tSec < windowStart || s.tSec > windowEnd) null else s.hrBpm?.let { Offset(xAt(s.tSec), yBpm(it)) }
-            }
-            for (i in 0 until hrPoints.size - 1) {
-                drawLine(ErgHrLine, hrPoints[i], hrPoints[i + 1], strokeWidth = 2.dp.toPx())
-            }
-            val cadPoints = samples.mapNotNull { s ->
-                if (s.tSec < windowStart || s.tSec > windowEnd) null else s.cadenceRpm?.let { Offset(xAt(s.tSec), yCad(it)) }
-            }
-            for (i in 0 until cadPoints.size - 1) {
-                drawLine(
-                    ErgCadenceLine,
-                    cadPoints[i],
-                    cadPoints[i + 1],
-                    strokeWidth = 1.5.dp.toPx(),
-                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 4f)),
-                )
+            // Same 3 live traces, same draw order (cadence under HR under power) and the same
+            // drawPoints/Polygon/round-cap approach, as Screen 1's real chart — continuous solid
+            // lines throughout, including cadence (no dashing), and the actual achieved power
+            // drawn in white on top of the target-zone bars below it.
+            val visibleSamples = samples.filter { it.tSec in windowStart..windowEnd }
+            if (visibleSamples.size >= 2) {
+                val cadPoints = visibleSamples.mapNotNull { s -> s.cadenceRpm?.let { Offset(xAt(s.tSec), yCad(it)) } }
+                val hrPoints = visibleSamples.mapNotNull { s -> s.hrBpm?.let { Offset(xAt(s.tSec), yBpm(it)) } }
+                val powerPoints = visibleSamples.map { Offset(xAt(it.tSec), yWatts(it.watts)) }
+
+                if (cadPoints.size >= 2) {
+                    drawPoints(points = cadPoints, pointMode = PointMode.Polygon, color = ErgCadenceLine, strokeWidth = 3f, cap = StrokeCap.Round)
+                }
+                if (hrPoints.size >= 2) {
+                    drawPoints(points = hrPoints, pointMode = PointMode.Polygon, color = ErgHrLine, strokeWidth = 4f, cap = StrokeCap.Round)
+                }
+                if (powerPoints.size >= 2) {
+                    drawPoints(points = powerPoints, pointMode = PointMode.Polygon, color = Color.White, strokeWidth = 4f, cap = StrokeCap.Round)
+                }
             }
         }
         AxisColumn(
@@ -438,8 +444,7 @@ private fun VitalsPowerChart(
             ),
             liveValueText = last?.hrBpm?.toString() ?: "--",
             liveFraction = last?.hrBpm?.let { (1f - ((it - bpmMin) / bpmRange) * (1f - CHART_TOP_HEADROOM)).coerceIn(0f, 1f) } ?: 1f,
-            pillColor = ErgHrLine,
-            pillTextColor = Color.White,
+            valueColor = ErgHrLine,
         )
     }
 }
@@ -447,8 +452,9 @@ private fun VitalsPowerChart(
 /** One axis of the two charts above: a thin vertical line the full height of this column, 4 tick
  *  values at 25/50/75/100% of the axis's range (same convention, and now the same 10sp size, as
  *  Screen 1's real chart axis labels), the axis's name written vertically at the very bottom, and
- *  a small horizontal pill carrying the live value — centered on the line, free to cover a tick
- *  when they coincide.
+ *  the live value as plain colored text on the chart's own background — centered on the line,
+ *  free to cover a tick when they coincide, and free to spill past this column's own width (see
+ *  below) rather than ever truncating.
  *
  *  The name sits bottom-aligned INSIDE this column, but rotate() paints outside its own layout
  *  bounds — the caller (the chart's Row) reserves [NAME_RESERVED_HEIGHT] of blank space below via
@@ -462,8 +468,7 @@ private fun AxisColumn(
     ticks: List<String>,
     liveValueText: String,
     liveFraction: Float,
-    pillColor: Color,
-    pillTextColor: Color = Color.Black,
+    valueColor: Color,
 ) {
     BoxWithConstraints(modifier = Modifier.width(30.dp).fillMaxHeight()) {
         val h = maxHeight
@@ -500,16 +505,25 @@ private fun AxisColumn(
                 .background(ErgBackground)
                 .padding(horizontal = 1.dp),
         )
-        Box(
-            Modifier
+        // Not a colored badge any more (it couldn't fit this column's 30dp width without
+        // truncating the text — see Screen 2's device feedback): a plain label in the chart's own
+        // background color, slightly transparent so the gridline/trace underneath still shows
+        // through a little, sized to whatever the full value needs via wrapContentWidth(unbounded
+        // = true) rather than being capped at the column's own width — it's allowed to spill into
+        // the plot area beside it, same as the axis name below does vertically.
+        Text(
+            liveValueText,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Black,
+            color = valueColor,
+            maxLines = 1,
+            modifier = Modifier
                 .align(Alignment.TopCenter)
-                .offset(y = (h * liveFraction - 10.dp).coerceAtLeast(0.dp))
-                .clip(RoundedCornerShape(50))
-                .background(pillColor)
-                .padding(horizontal = 5.dp, vertical = 2.dp),
-        ) {
-            Text(liveValueText, fontSize = 10.sp, fontWeight = FontWeight.Black, color = pillTextColor, maxLines = 1)
-        }
+                .offset(y = (h * liveFraction - 9.dp).coerceAtLeast(0.dp))
+                .wrapContentWidth(unbounded = true)
+                .background(ErgBackground.copy(alpha = 0.82f), RoundedCornerShape(4.dp))
+                .padding(horizontal = 3.dp, vertical = 1.dp),
+        )
     }
 }
 
