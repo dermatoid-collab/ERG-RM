@@ -111,6 +111,12 @@ fun VitalsScreen(viewModel: MainViewModel) {
                 totalDurationSec = workoutState.totalDurationSec,
                 modifier = Modifier.weight(1f).fillMaxWidth(),
             )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.5.dp)
+                    .background(ErgOnSurface.copy(alpha = 0.3f)),
+            )
             VitalsPowerChart(
                 steps = workoutState.steps,
                 currentStepIndex = workoutState.currentStepIndex,
@@ -177,11 +183,11 @@ private fun SummaryTilesGrid(stats: SessionStats, durationSec: Int, modifier: Mo
                     ) {
                         Text(
                             label.uppercase(),
-                            fontSize = 7.5.sp,
+                            style = MaterialTheme.typography.labelSmall,
                             color = ErgOnSurface.copy(alpha = 0.6f),
                             maxLines = 1,
                         )
-                        Text(value, fontSize = 12.5.sp, fontWeight = FontWeight.Bold, color = ErgOnSurface, maxLines = 1)
+                        Text(value, style = MaterialTheme.typography.titleMedium, color = ErgOnSurface, maxLines = 1)
                     }
                 }
             }
@@ -205,7 +211,7 @@ private fun CoreSkinHsiChart(samples: List<CoreSamplePoint>, totalDurationSec: I
     fun hsiFrac(v: Float) = (1f - (v - hsiMin) / (hsiMax - hsiMin)).coerceIn(0f, 1f)
     val tempTicks = listOf("40°", "37.5°", "35°", "32.5°")
 
-    Row(modifier = modifier) {
+    Row(modifier = modifier.padding(bottom = NAME_RESERVED_HEIGHT)) {
         AxisColumn(
             name = "CORE",
             lineColor = ErgBelowTarget,
@@ -223,9 +229,13 @@ private fun CoreSkinHsiChart(samples: List<CoreSamplePoint>, totalDurationSec: I
             pillColor = ErgSkinTemp,
         )
         Canvas(modifier = Modifier.weight(1f).fillMaxHeight()) {
-            if (samples.size < 2 || totalDurationSec <= 0) return@Canvas
             val w = size.width
             val h = size.height
+            // Same horizontal gridlines, at the same 4 tick heights, as the real chart on Screen 1.
+            listOf(0f, 0.25f, 0.5f, 0.75f).forEach { frac ->
+                drawLine(ErgOnSurface.copy(alpha = 0.12f), Offset(0f, h * frac), Offset(w, h * frac), strokeWidth = 2.25f)
+            }
+            if (samples.size < 2 || totalDurationSec <= 0) return@Canvas
             fun xAt(t: Int) = w * (t.toFloat() / totalDurationSec)
             val strokeW = 2.dp.toPx()
             for (i in 0 until samples.size - 1) {
@@ -283,7 +293,7 @@ private fun VitalsPowerChart(
     val cadScale = CHART_MAX_CADENCE / (1f - CHART_TOP_HEADROOM)
     val last = samples.lastOrNull()
 
-    Row(modifier = modifier) {
+    Row(modifier = modifier.padding(bottom = NAME_RESERVED_HEIGHT)) {
         AxisColumn(
             name = "CAD",
             lineColor = ErgCadenceLine,
@@ -307,9 +317,13 @@ private fun VitalsPowerChart(
             pillColor = ErgAboveTarget,
         )
         Canvas(modifier = Modifier.weight(1f).fillMaxHeight()) {
-            if (steps.isEmpty() || totalDurationSec <= 0) return@Canvas
             val w = size.width
             val h = size.height
+            // Same horizontal gridlines, at the same 4 tick heights, as the real chart on Screen 1.
+            listOf(0f, 0.25f, 0.5f, 0.75f).forEach { frac ->
+                drawLine(ErgOnSurface.copy(alpha = 0.12f), Offset(0f, h * frac), Offset(w, h * frac), strokeWidth = 2.25f)
+            }
+            if (steps.isEmpty() || totalDurationSec <= 0) return@Canvas
             fun xAt(t: Int) = w * (t.toFloat() / totalDurationSec)
             fun yWatts(watts: Int) = h - h * (watts.toFloat() / wattsScale).coerceIn(0f, 1f)
             fun yBpm(bpm: Int) = h - h * (((bpm - bpmMin) / bpmRange) * (1f - CHART_TOP_HEADROOM)).coerceIn(0f, 1f)
@@ -369,10 +383,17 @@ private fun VitalsPowerChart(
     }
 }
 
-/** One axis of the two charts above: a thin vertical line the full height of the chart, 4 tick
- *  values at 25/50/75/100% of the axis's range (same convention Screen 1's real chart already
- *  uses for Watts/HR), the axis's name written vertically at the very bottom, and a small pill
- *  carrying the live value — centered on the line, free to cover a tick when they coincide. */
+/** One axis of the two charts above: a thin vertical line the full height of this column, 4 tick
+ *  values at 25/50/75/100% of the axis's range (same convention, and now the same 10sp size, as
+ *  Screen 1's real chart axis labels), the axis's name written vertically at the very bottom, and
+ *  a small horizontal pill carrying the live value — centered on the line, free to cover a tick
+ *  when they coincide.
+ *
+ *  The name sits bottom-aligned INSIDE this column, but rotate() paints outside its own layout
+ *  bounds — the caller (the chart's Row) reserves [NAME_RESERVED_HEIGHT] of blank space below via
+ *  padding for the rotated text to spill into, so the Canvas it sits beside (which must keep
+ *  using this same column's full height as its own coordinate space, or the two would no longer
+ *  agree on where each tick height falls) isn't shortened to make room for it. */
 @Composable
 private fun AxisColumn(
     name: String,
@@ -383,7 +404,7 @@ private fun AxisColumn(
     pillColor: Color,
     pillTextColor: Color = Color.Black,
 ) {
-    BoxWithConstraints(modifier = Modifier.width(24.dp).fillMaxHeight()) {
+    BoxWithConstraints(modifier = Modifier.width(30.dp).fillMaxHeight()) {
         val h = maxHeight
         Box(
             Modifier
@@ -396,19 +417,19 @@ private fun AxisColumn(
         ticks.forEachIndexed { i, t ->
             Text(
                 t,
-                fontSize = 7.sp,
-                color = ErgOnSurface.copy(alpha = 0.6f),
+                fontSize = 10.sp,
+                color = ErgOnSurface.copy(alpha = 0.7f),
                 maxLines = 1,
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .offset(y = (h * fracs[i] - 4.dp))
+                    .offset(y = (h * fracs[i] - 6.dp))
                     .background(ErgBackground)
                     .padding(horizontal = 1.dp),
             )
         }
         Text(
             name,
-            fontSize = 7.sp,
+            fontSize = 9.sp,
             fontWeight = FontWeight.Black,
             color = lineColor,
             maxLines = 1,
@@ -421,15 +442,17 @@ private fun AxisColumn(
         Box(
             Modifier
                 .align(Alignment.TopCenter)
-                .offset(y = (h * liveFraction - 8.dp).coerceAtLeast(0.dp))
+                .offset(y = (h * liveFraction - 10.dp).coerceAtLeast(0.dp))
                 .clip(RoundedCornerShape(50))
                 .background(pillColor)
-                .padding(horizontal = 4.dp, vertical = 1.dp),
+                .padding(horizontal = 5.dp, vertical = 2.dp),
         ) {
-            Text(liveValueText, fontSize = 8.sp, fontWeight = FontWeight.Black, color = pillTextColor, maxLines = 1)
+            Text(liveValueText, fontSize = 10.sp, fontWeight = FontWeight.Black, color = pillTextColor, maxLines = 1)
         }
     }
 }
+
+private val NAME_RESERVED_HEIGHT = 18.dp
 
 /** Combines what are today ControlsRow + IntensityRow (two separate rows) into one, at
  *  IntensityRow's own height (38.4dp, already 0.8x-scaled per Task #65) — left half Start/+5min/
