@@ -121,11 +121,11 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
                 else -> MaterialTheme.colorScheme.onSurface
             }
 
-            // Task #76: the Workout icon pulses white↔green for as long as a workout is running
-            // and the full chrome is showing (i.e. whenever this icon — rather than the minibar —
-            // is actually on screen). The transition itself always runs (unconditional composable
-            // call, per Compose's slot-table rules); only the color it feeds into the icon is
-            // branched on workout/chrome state.
+            // Task #76: the Workout icon pulses white↔green while a workout is started but
+            // PAUSED (not while actively running) and the full chrome is showing (i.e. whenever
+            // this icon — rather than the minibar — is actually on screen). The transition itself
+            // always runs (unconditional composable call, per Compose's slot-table rules); only
+            // the color it feeds into the icon is branched on workout/chrome state.
             val workoutIconPulse by rememberInfiniteTransition(label = "workoutIconPulse").animateColor(
                 initialValue = Color.White,
                 targetValue = ErgAccent,
@@ -135,7 +135,7 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
                 ),
                 label = "workoutIconPulseColor",
             )
-            val workoutIconTint = if (workoutState.hasStarted && !chromeCollapsed) {
+            val workoutIconTint = if (workoutState.hasStarted && !workoutState.isRunning && !chromeCollapsed) {
                 workoutIconPulse
             } else {
                 MaterialTheme.colorScheme.onSurface
