@@ -1,5 +1,10 @@
 package com.ergrm.trainer.ui
 
+import androidx.compose.animation.animateColor
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -116,6 +121,26 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
                 else -> MaterialTheme.colorScheme.onSurface
             }
 
+            // Task #76: the Workout icon pulses white↔green for as long as a workout is running
+            // and the full chrome is showing (i.e. whenever this icon — rather than the minibar —
+            // is actually on screen). The transition itself always runs (unconditional composable
+            // call, per Compose's slot-table rules); only the color it feeds into the icon is
+            // branched on workout/chrome state.
+            val workoutIconPulse by rememberInfiniteTransition(label = "workoutIconPulse").animateColor(
+                initialValue = Color.White,
+                targetValue = ErgAccent,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(durationMillis = 2000),
+                    repeatMode = RepeatMode.Reverse,
+                ),
+                label = "workoutIconPulseColor",
+            )
+            val workoutIconTint = if (workoutState.hasStarted && !chromeCollapsed) {
+                workoutIconPulse
+            } else {
+                MaterialTheme.colorScheme.onSurface
+            }
+
             // Workout is already the default landing screen, but this also pulls the rider back
             // to it if they'd navigated to Connect (e.g. to pick a different trainer) and it
             // then connects — same as a fresh connection would.
@@ -208,6 +233,7 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
                                 icon = Icons.Filled.FitnessCenter,
                                 contentDescription = "Workout",
                                 active = overlay == Overlay.NONE && screen == Screen.WORKOUT,
+                                tint = workoutIconTint,
                                 onClick = {
                                     // Already here with the workout running: a second tap re-
                                     // collapses to the minibar instead of being a no-op (Task #68's

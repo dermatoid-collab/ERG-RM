@@ -216,8 +216,8 @@ private fun SummaryTilesGrid(stats: SessionStats, durationSec: Int, modifier: Mo
 /** CORE/SKIN/HSI over the whole ride. CORE and HSI are drawn one short segment at a time so each
  *  can take the exact same color its tile would show for that instant (same thresholds as
  *  [coreColor]/[hsiColor]) — SKIN stays [ErgSkinTemp] throughout, since its tile has no
- *  thresholds either. CORE and SKIN get their own side-by-side axis columns (same 30–40°C range)
- *  so their live-value pills never collide even when the two readings are close. */
+ *  thresholds either. CORE (36.5–40.5°C) and SKIN (28–40.5°C) each get their own range so SKIN's
+ *  much wider real-world swing doesn't flatten CORE's narrow one onto a few pixels. */
 @Composable
 private fun CoreSkinHsiChart(
     samples: List<CoreSamplePoint>,
@@ -228,29 +228,36 @@ private fun CoreSkinHsiChart(
     modifier: Modifier = Modifier,
 ) {
     val last = samples.lastOrNull()
-    val coreMin = 30f
-    val coreMax = 40f
+    val coreMin = 36.5f
+    val coreMax = 40.5f
+    val skinMin = 28f
+    val skinMax = 40.5f
     val hsiMin = 0f
     val hsiMax = 10f
-    fun tempFrac(v: Float) = (1f - (v - coreMin) / (coreMax - coreMin)).coerceIn(0f, 1f)
+    fun coreFrac(v: Float) = (1f - (v - coreMin) / (coreMax - coreMin)).coerceIn(0f, 1f)
+    fun skinFrac(v: Float) = (1f - (v - skinMin) / (skinMax - skinMin)).coerceIn(0f, 1f)
     fun hsiFrac(v: Float) = (1f - (v - hsiMin) / (hsiMax - hsiMin)).coerceIn(0f, 1f)
-    val tempTicks = listOf("40°", "37.5°", "35°", "32.5°")
+    fun ticksFor(min: Float, max: Float) = listOf(0f, 0.25f, 0.5f, 0.75f).map { frac ->
+        "%.1f°".format(max - frac * (max - min))
+    }
+    val coreTicks = ticksFor(coreMin, coreMax)
+    val skinTicks = ticksFor(skinMin, skinMax)
 
     Row(modifier = modifier.padding(bottom = NAME_RESERVED_HEIGHT)) {
         AxisColumn(
             name = "CORE",
             lineColor = ErgBelowTarget,
-            ticks = tempTicks,
+            ticks = coreTicks,
             liveValueText = last?.coreTempC?.let { "%.1f°".format(floorToOneDecimal(it)) } ?: "--",
-            liveFraction = last?.coreTempC?.let { tempFrac(it) } ?: 1f,
+            liveFraction = last?.coreTempC?.let { coreFrac(it) } ?: 1f,
             valueColor = last?.coreTempC?.let { coreColor(floorToOneDecimal(it)) } ?: ErgOnSurface,
         )
         AxisColumn(
             name = "SKIN",
             lineColor = ErgSkinTemp,
-            ticks = tempTicks,
+            ticks = skinTicks,
             liveValueText = last?.skinTempC?.let { "%.1f°".format(it) } ?: "--",
-            liveFraction = last?.skinTempC?.let { tempFrac(it) } ?: 1f,
+            liveFraction = last?.skinTempC?.let { skinFrac(it) } ?: 1f,
             valueColor = ErgSkinTemp,
         )
         Canvas(
@@ -279,12 +286,12 @@ private fun CoreSkinHsiChart(
                 val ac = a.coreTempC
                 val bc = b.coreTempC
                 if (ac != null && bc != null) {
-                    drawLine(coreColor(floorToOneDecimal(bc)), Offset(x0, h * tempFrac(ac)), Offset(x1, h * tempFrac(bc)), strokeWidth = strokeW)
+                    drawLine(coreColor(floorToOneDecimal(bc)), Offset(x0, h * coreFrac(ac)), Offset(x1, h * coreFrac(bc)), strokeWidth = strokeW)
                 }
                 val askin = a.skinTempC
                 val bskin = b.skinTempC
                 if (askin != null && bskin != null) {
-                    drawLine(ErgSkinTemp, Offset(x0, h * tempFrac(askin)), Offset(x1, h * tempFrac(bskin)), strokeWidth = strokeW)
+                    drawLine(ErgSkinTemp, Offset(x0, h * skinFrac(askin)), Offset(x1, h * skinFrac(bskin)), strokeWidth = strokeW)
                 }
                 val ah = a.heatStrainIndex
                 val bh = b.heatStrainIndex
