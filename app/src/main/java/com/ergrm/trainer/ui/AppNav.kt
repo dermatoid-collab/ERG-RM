@@ -63,6 +63,10 @@ import com.ergrm.trainer.ui.theme.ErgWarn
 private enum class Screen { CONNECT, WORKOUT }
 private enum class Overlay { NONE, SETTINGS, LIBRARY, HISTORY, CALENDAR, INTERVALS_LIBRARY }
 
+// See ActiveWorkoutPager's doc comment: large enough to feel infinite, small enough that
+// HorizontalPager's internal fling/snap math over this range doesn't hit Infinity/NaN.
+private const val VIRTUAL_PAGE_COUNT = 100_000
+
 @Composable
 fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
     ErgRmTheme {
@@ -345,11 +349,18 @@ private fun NavIcon(
  *  left off the last real page keeps scrolling smoothly into the first again, and the same the
  *  other way, rather than dead-ending at an edge. Starts on an even virtual page (the dashboard)
  *  every time this enters composition — i.e. on every collapse, including a re-collapse via the
- *  Workout nav icon — matching "re-collapsing always lands back on the dashboard+big chart". */
+ *  Workout nav icon — matching "re-collapsing always lands back on the dashboard+big chart".
+ *
+ *  [VIRTUAL_PAGE_COUNT] is deliberately NOT Int.MAX_VALUE — that froze the whole screen the
+ *  instant this Composable entered composition (reported as the UI hanging right when a workout
+ *  is started): HorizontalPager's fling/snap physics do floating-point math over the scrollable
+ *  range implied by the page count, and a range that large produces Infinity/NaN partway through
+ *  that math, which stalls rather than throws. 100,000 pages (50,000 swipes to wrap around) is
+ *  still effectively infinite for a single ride, without tripping that. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ActiveWorkoutPager(dashboard: @Composable () -> Unit, vitals: @Composable () -> Unit) {
-    val pageCount = Int.MAX_VALUE
+    val pageCount = VIRTUAL_PAGE_COUNT
     val startPage = remember { (pageCount / 2) - (pageCount / 2) % 2 }
     val pagerState = rememberPagerState(initialPage = startPage) { pageCount }
     HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
