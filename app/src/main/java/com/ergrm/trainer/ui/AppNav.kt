@@ -141,10 +141,18 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
             val lifecycleOwner = LocalLifecycleOwner.current
             DisposableEffect(lifecycleOwner) {
                 val observer = LifecycleEventObserver { _, event ->
-                    if (event == Lifecycle.Event.ON_START && AppNavigationEvents.userLeftApp) {
-                        AppNavigationEvents.userLeftApp = false
-                        overlay = Overlay.NONE
-                        screen = Screen.WORKOUT
+                    if (event == Lifecycle.Event.ON_START) {
+                        // Consumed every ON_START regardless of userLeftApp, so a picker launch
+                        // flag never lingers to wrongly suppress a later, genuine reset.
+                        val returningFromPicker = AppNavigationEvents.pickerLaunchInFlight
+                        AppNavigationEvents.pickerLaunchInFlight = false
+                        if (AppNavigationEvents.userLeftApp) {
+                            AppNavigationEvents.userLeftApp = false
+                            if (!returningFromPicker) {
+                                overlay = Overlay.NONE
+                                screen = Screen.WORKOUT
+                            }
+                        }
                     }
                 }
                 lifecycleOwner.lifecycle.addObserver(observer)

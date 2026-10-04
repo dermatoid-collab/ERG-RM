@@ -104,7 +104,10 @@ fun LibraryScreen(
                     )
                 }
                 OutlinedButton(
-                    onClick = { folderPicker.launch(null) },
+                    onClick = {
+                        AppNavigationEvents.pickerLaunchInFlight = true
+                        folderPicker.launch(null)
+                    },
                     modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
                 ) {
                     Text(if (settings.libraryFolderUri == null) "Choose folder" else "Change folder")

@@ -86,6 +86,7 @@ fun ConnectScreen(viewModel: MainViewModel) {
         val requiredGranted = requiredBluetoothPermissions.all { grants[it] == true }
         if (requiredGranted) {
             if (BluetoothAdapter.getDefaultAdapter()?.isEnabled == false) {
+                AppNavigationEvents.pickerLaunchInFlight = true
                 enableBtLauncher.launch(android.content.Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
             } else {
                 viewModel.startScan()
@@ -144,7 +145,10 @@ fun ConnectScreen(viewModel: MainViewModel) {
             }
         } else {
             Button(
-                onClick = { permissionLauncher.launch(bluetoothPermissions) },
+                onClick = {
+                    AppNavigationEvents.pickerLaunchInFlight = true
+                    permissionLauncher.launch(bluetoothPermissions)
+                },
                 modifier = Modifier.padding(top = 16.dp),
             ) {
                 Text(if (isScanning) "Scanning…" else "Search for trainer")
@@ -192,7 +196,10 @@ fun ConnectScreen(viewModel: MainViewModel) {
             }
         } else {
             Button(
-                onClick = { hrPermissionLauncher.launch(bluetoothPermissions) },
+                onClick = {
+                    AppNavigationEvents.pickerLaunchInFlight = true
+                    hrPermissionLauncher.launch(bluetoothPermissions)
+                },
                 modifier = Modifier.padding(top = 16.dp),
             ) {
                 Text(if (isHrScanning) "Scanning…" else "Search for heart rate sensor")
@@ -240,7 +247,10 @@ fun ConnectScreen(viewModel: MainViewModel) {
             }
         } else {
             Button(
-                onClick = { corePermissionLauncher.launch(bluetoothPermissions) },
+                onClick = {
+                    AppNavigationEvents.pickerLaunchInFlight = true
+                    corePermissionLauncher.launch(bluetoothPermissions)
+                },
                 modifier = Modifier.padding(top = 16.dp),
             ) {
                 Text(if (isCoreScanning) "Scanning…" else "Search for CORE sensor")

@@ -177,13 +177,17 @@ fun SettingsScreen(
                         putExtra(Intent.EXTRA_STREAM, uri)
                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     }
+                    AppNavigationEvents.pickerLaunchInFlight = true
                     context.startActivity(Intent.createChooser(sendIntent, "Export backup"))
                 }
             },
             modifier = Modifier.fillMaxWidth(),
         ) { Text("Export backup") }
         OutlinedButton(
-            onClick = { importLauncher.launch("*/*") },
+            onClick = {
+                AppNavigationEvents.pickerLaunchInFlight = true
+                importLauncher.launch("*/*")
+            },
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 8.dp),
@@ -209,7 +213,10 @@ fun SettingsScreen(
             modifier = Modifier.padding(bottom = 8.dp),
         )
         OutlinedButton(
-            onClick = { backupFolderPicker.launch(null) },
+            onClick = {
+                AppNavigationEvents.pickerLaunchInFlight = true
+                backupFolderPicker.launch(null)
+            },
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(if (settings.backupFolderUri == null) "Choose auto-backup folder" else "Change auto-backup folder")

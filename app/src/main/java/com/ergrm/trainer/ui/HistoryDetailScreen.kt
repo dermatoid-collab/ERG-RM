@@ -92,6 +92,7 @@ fun SessionDetailScreen(session: WorkoutSession, viewModel: MainViewModel, onBac
                         putExtra(Intent.EXTRA_STREAM, uri)
                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     }
+                    AppNavigationEvents.pickerLaunchInFlight = true
                     context.startActivity(Intent.createChooser(sendIntent, "Export session"))
                 }
             }) {
