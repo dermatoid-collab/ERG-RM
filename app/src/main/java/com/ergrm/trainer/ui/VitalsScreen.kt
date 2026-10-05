@@ -554,8 +554,9 @@ private fun AxisColumn(
 private val NAME_RESERVED_HEIGHT = 18.dp
 
 /** Combines what are today ControlsRow + IntensityRow (two separate rows) into one, at
- *  IntensityRow's own height (38.4dp, already 0.8x-scaled per Task #65) — left half Start/+5min/
- *  Skip (Start and Skip equal width), right half the ERG/HR+ pill, same order the user specified. */
+ *  IntensityRow's own height (38.4dp, already 0.8x-scaled per Task #65) — Start/+5min/Skip as 3
+ *  fixed-size circles on the left (only as wide as they need to be), the ERG/HR+ pill taking
+ *  all the width that frees up on the right, same order the user specified. */
 @Composable
 private fun CompactControlRow(
     hasWorkout: Boolean,
@@ -584,8 +585,11 @@ private fun CompactControlRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // All 3 fixed-size circles now (not stretched to weight(1f)), so this group only takes
+        // the width it actually needs — the space that frees up goes to the ERG/HR+ side below
+        // via its own weight(1f), the only one left in this outer Row.
         Row(
-            modifier = Modifier.weight(1.15f).fillMaxHeight(),
+            modifier = Modifier.fillMaxHeight(),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             CompactButton(
@@ -594,21 +598,21 @@ private fun CompactControlRow(
                 onClick = mainAction,
                 enabled = hasWorkout,
                 containerColor = mainColor,
-                modifier = Modifier.weight(1f).fillMaxHeight(),
+                modifier = Modifier.size(38.4.dp),
             )
             CompactButton(
                 icon = Icons.Filled.Add,
                 description = "Add 5 minutes",
                 onClick = onExtend,
                 enabled = hasWorkout,
-                modifier = Modifier.fillMaxHeight().width(38.4.dp),
+                modifier = Modifier.size(38.4.dp),
             )
             CompactButton(
                 icon = Icons.Filled.SkipNext,
                 description = "Skip step",
                 onClick = onSkip,
                 enabled = hasWorkout,
-                modifier = Modifier.weight(1f).fillMaxHeight(),
+                modifier = Modifier.size(38.4.dp),
             )
         }
         Row(
