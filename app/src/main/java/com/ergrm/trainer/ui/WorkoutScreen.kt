@@ -379,9 +379,10 @@ private fun StatTileGrid(
     var showPercentFtp by remember { mutableStateOf(false) }
 
     // Follows each tile's own elapsed/remaining toggle: showing elapsed fills the bar with that
-    // fraction (blue growing from the left); showing remaining fills it with the remaining
-    // fraction instead (blue shrinking back from the right, since the fill is still anchored to
-    // the left edge) — same bar, same colors, just which fraction it's fed flips with the toggle.
+    // fraction, blue growing from the left (progressAnchorEnd = false); showing remaining fills
+    // it with the remaining fraction instead, anchored to the right so it's the blue portion
+    // itself — "what's left" — that visibly shrinks away over time, not just some arbitrary
+    // left-anchored sliver (progressAnchorEnd = true, see StatTile).
     val stepDurationSec = workoutState.currentStep?.durationSec ?: 0
     val intervalElapsedFraction = if (stepDurationSec > 0) workoutState.elapsedInStepSec / stepDurationSec.toFloat() else 0f
     val intervalProgress = if (intervalShowElapsed) intervalElapsedFraction else 1f - intervalElapsedFraction
@@ -395,6 +396,7 @@ private fun StatTileGrid(
                 value = formatTime(if (intervalShowElapsed) workoutState.elapsedInStepSec else workoutState.remainingInStepSec),
                 modifier = Modifier.weight(1f),
                 progress = intervalProgress,
+                progressAnchorEnd = !intervalShowElapsed,
                 onClick = { intervalShowElapsed = !intervalShowElapsed },
             )
             StatTile(
@@ -402,6 +404,7 @@ private fun StatTileGrid(
                 value = formatTime(if (totalShowElapsed) workoutState.totalElapsedSec else workoutState.totalRemainingSec),
                 modifier = Modifier.weight(1f),
                 progress = totalProgress,
+                progressAnchorEnd = !totalShowElapsed,
                 onClick = { totalShowElapsed = !totalShowElapsed },
             )
         }
@@ -484,6 +487,11 @@ private fun StatTile(
     zoneLabel: String? = null,
     zoneColor: Color = ErgOnSurface,
     progress: Float? = null,
+    // false (default): the fill represents elapsed time and grows from the left, anchored start.
+    // true: the fill represents remaining time and should instead be anchored to the right —
+    // shrinking away from its own left edge as time passes, not from the right — so what's
+    // actually running out visually recedes from the correct side.
+    progressAnchorEnd: Boolean = false,
     onClick: (() -> Unit)? = null,
 ) {
     Column(
@@ -539,6 +547,7 @@ private fun StatTile(
             ) {
                 Box(
                     modifier = Modifier
+                        .align(if (progressAnchorEnd) Alignment.CenterEnd else Alignment.CenterStart)
                         .fillMaxWidth(progress.coerceIn(0f, 1f))
                         .fillMaxHeight()
                         .clip(RoundedCornerShape(50))
