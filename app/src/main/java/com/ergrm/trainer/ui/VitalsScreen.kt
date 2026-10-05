@@ -55,7 +55,10 @@ import androidx.compose.ui.graphics.PointMode
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -243,6 +246,7 @@ private fun CoreSkinHsiChart(
     }
     val coreTicks = ticksFor(coreMin, coreMax)
     val skinTicks = ticksFor(skinMin, skinMax)
+    val textMeasurer = rememberTextMeasurer()
 
     Row(modifier = modifier.padding(bottom = NAME_RESERVED_HEIGHT)) {
         AxisColumn(
@@ -298,6 +302,29 @@ private fun CoreSkinHsiChart(
                 val bh = b.heatStrainIndex
                 if (ah != null && bh != null) {
                     drawLine(hsiColor(floorToOneDecimal(bh)), Offset(x0, h * hsiFrac(ah)), Offset(x1, h * hsiFrac(bh)), strokeWidth = strokeW)
+                }
+            }
+
+            // Live value repeated right at the current point on each trace, not just on the axis
+            // pill — easier to read at a glance which number belongs to which of the 3 lines when
+            // they're close together, without hunting back to the axis gutter.
+            val liveSample = last
+            if (liveSample != null && liveSample.tSec in windowStart..windowEnd) {
+                val x = xAt(liveSample.tSec)
+                fun drawInlineLabel(text: String, frac: Float, color: Color) {
+                    val measured = textMeasurer.measure(text, TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Black, color = color))
+                    val labelX = (x + 6.dp.toPx()).coerceAtMost(w - measured.size.width - 2.dp.toPx())
+                    val labelY = (h * frac - measured.size.height / 2f).coerceIn(0f, h - measured.size.height)
+                    drawText(measured, topLeft = Offset(labelX, labelY))
+                }
+                liveSample.coreTempC?.let { v ->
+                    val floored = floorToOneDecimal(v)
+                    drawInlineLabel("%.1f°".format(floored), coreFrac(v), coreColor(floored))
+                }
+                liveSample.skinTempC?.let { v -> drawInlineLabel("%.1f°".format(v), skinFrac(v), ErgSkinTemp) }
+                liveSample.heatStrainIndex?.let { v ->
+                    val floored = floorToOneDecimal(v)
+                    drawInlineLabel("%.1f".format(floored), hsiFrac(v), hsiColor(floored))
                 }
             }
         }
