@@ -310,6 +310,10 @@ fun WorkoutScreen(
             intensityPercent = workoutState.intensityPercent,
             controlMode = workoutState.controlMode,
             enabled = workoutState.steps.isNotEmpty(),
+            // The circular mode tag, its larger font, and the arrows nudged closer to center
+            // apply only during an active workout (this same screen used as the dashboard page
+            // of the pager) — the idle "pick a workout" screen keeps the original oval pill.
+            active = chromeCollapsed,
             onDecrease = { viewModel.decreaseIntensity() },
             onIncrease = { viewModel.increaseIntensity() },
             onToggleMode = { viewModel.toggleControlMode() },
@@ -1360,6 +1364,7 @@ private fun IntensityRow(
     intensityPercent: Int,
     controlMode: ControlMode,
     enabled: Boolean,
+    active: Boolean,
     onDecrease: () -> Unit,
     onIncrease: () -> Unit,
     onToggleMode: () -> Unit,
@@ -1380,7 +1385,12 @@ private fun IntensityRow(
     // a fixed offset would only be symmetric for whichever label happens to be showing.
     var modeTagWidthPx by remember { mutableStateOf(0) }
     val density = LocalDensity.current
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    // Active (this screen as the dashboard page of the active-workout pager): the mode tag
+    // becomes a perfect circle at +10% font, and the arrow buttons sit slightly closer to the
+    // center pill. Idle (the "pick a workout" screen): unchanged oval tag.
+    val modeFontSize = if (active) 19.4.sp else 17.6.sp
+    val arrowGap = if (active) 5.dp else 8.dp
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(arrowGap)) {
         PillIconButton(
             icon = Icons.Filled.KeyboardArrowDown,
             contentDescription = "Decrease intensity",
@@ -1406,6 +1416,7 @@ private fun IntensityRow(
                 Row(
                     modifier = Modifier
                         .fillMaxHeight()
+                        .then(if (active) Modifier.width(38.4.dp) else Modifier)
                         .clip(RoundedCornerShape(50))
                         .background(modeColor)
                         .clickable(enabled = enabled, onClick = onToggleMode)
@@ -1413,13 +1424,15 @@ private fun IntensityRow(
                         // before .padding() in the chain so the reported size includes it, since
                         // this is the same full colored capsule the triangle needs to mirror.
                         .onGloballyPositioned { modeTagWidthPx = it.size.width }
-                        .padding(horizontal = 11.2.dp),
+                        .then(if (active) Modifier else Modifier.padding(horizontal = 11.2.dp)),
+                    horizontalArrangement = if (active) Arrangement.Center else Arrangement.Start,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        // Same font size as the CORE/SKIN/HSI pill values above this row.
+                        // Same font size as the CORE/SKIN/HSI pill values above this row (+10%
+                        // while active, to match the circle's slightly larger footprint).
                         if (isHrPlus) "HR+" else "ERG",
-                        fontSize = 17.6.sp,
+                        fontSize = modeFontSize,
                         fontWeight = FontWeight.Black,
                         color = Color.Black,
                     )

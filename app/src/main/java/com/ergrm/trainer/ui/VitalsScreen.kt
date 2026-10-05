@@ -620,24 +620,35 @@ private fun CompactControlRow(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
+                // A perfect circle (width == height == the row's own 38.4dp) instead of an oval
+                // sized by its padding.
                 modifier = Modifier
-                    .fillMaxHeight()
+                    .size(38.4.dp)
                     .clip(RoundedCornerShape(50))
                     .background(modeColor)
-                    .clickable(enabled = hasWorkout, onClick = onToggleMode)
-                    .padding(horizontal = 8.dp),
+                    .clickable(enabled = hasWorkout, onClick = onToggleMode),
                 contentAlignment = Alignment.Center,
             ) {
-                // Same font size as this screen's own CORE/SKIN/HSI axis live-value pills.
-                Text(if (isHrPlus) "HR+" else "ERG", fontSize = 12.sp, fontWeight = FontWeight.Black, color = Color.Black)
+                // Same font size as this screen's own CORE/SKIN/HSI axis live-value pills, +10%.
+                Text(if (isHrPlus) "HR+" else "ERG", fontSize = 13.2.sp, fontWeight = FontWeight.Black, color = Color.Black)
             }
-            IconButton(onClick = onIncrease, enabled = hasWorkout, modifier = Modifier.size(28.dp)) {
+            IconButton(
+                onClick = onIncrease,
+                enabled = hasWorkout,
+                // Nudged slightly in from the mode circle, toward the percentage.
+                modifier = Modifier.padding(start = 3.dp).size(28.dp),
+            ) {
                 Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Increase intensity", tint = ErgOnSurface)
             }
             Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
                 Text("$intensityPercent%", fontSize = 10.5.sp, fontWeight = FontWeight.Bold, color = Color.White)
             }
-            IconButton(onClick = onDecrease, enabled = hasWorkout, modifier = Modifier.size(28.dp)) {
+            IconButton(
+                onClick = onDecrease,
+                enabled = hasWorkout,
+                // Nudged slightly in from the pill's right edge, toward the percentage.
+                modifier = Modifier.padding(end = 3.dp).size(28.dp),
+            ) {
                 Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Decrease intensity", tint = ErgOnSurface)
             }
         }
