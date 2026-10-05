@@ -628,7 +628,8 @@ private fun CompactControlRow(
                     .padding(horizontal = 8.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(if (isHrPlus) "HR+" else "ERG", fontSize = 9.5.sp, fontWeight = FontWeight.Black, color = Color.Black)
+                // Same font size as this screen's own CORE/SKIN/HSI axis live-value pills.
+                Text(if (isHrPlus) "HR+" else "ERG", fontSize = 12.sp, fontWeight = FontWeight.Black, color = Color.Black)
             }
             IconButton(onClick = onIncrease, enabled = hasWorkout, modifier = Modifier.size(28.dp)) {
                 Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Increase intensity", tint = ErgOnSurface)

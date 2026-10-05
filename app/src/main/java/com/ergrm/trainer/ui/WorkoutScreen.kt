@@ -1417,11 +1417,9 @@ private fun IntensityRow(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        // Explicit fontSize (x0.8 of the 16sp default bodyLarge these inherited
-                        // before), so the two stay equal to each other while both shrinking with
-                        // the rest of this row.
+                        // Same font size as the CORE/SKIN/HSI pill values above this row.
                         if (isHrPlus) "HR+" else "ERG",
-                        fontSize = 12.8.sp,
+                        fontSize = 17.6.sp,
                         fontWeight = FontWeight.Black,
                         color = Color.Black,
                     )
