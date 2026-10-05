@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -668,6 +669,10 @@ private fun CompactControlRow(
                     modifier = Modifier.size(26.dp),
                 )
             }
+            // Balances the ERG/HR+ circle's own 38.4dp on this side — without it, the % box
+            // (centered only within the space left over after the circle and both arrows) sits
+            // off the pill's true visual center, shifted toward the right.
+            Spacer(modifier = Modifier.width(38.4.dp))
         }
     }
 }
