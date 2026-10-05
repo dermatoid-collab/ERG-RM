@@ -388,7 +388,12 @@ private fun VitalsPowerChart(
 
                 val dispStart = displayWatts(step.startWatts, index, currentStepIndex, intensityPercent)
                 val dispEnd = displayWatts(step.endWatts, index, currentStepIndex, intensityPercent)
-                val zone = zoneFor(max(dispStart, dispEnd), ftpWatts)
+                // Same 5%-of-height floor as Screen 1's real chart's bars (distinct from yWatts(),
+                // which floors at 0 for the power TRACE) — without it, a ramp step whose start (or
+                // end) is near 0W draws that edge at zero height, i.e. the bar visibly collapses to
+                // nothing right where the ramp is lowest, usually its left edge.
+                val startBarHeight = h * (dispStart.toFloat() / wattsScale).coerceIn(0.05f, 1f)
+                val endBarHeight = h * (dispEnd.toFloat() / wattsScale).coerceIn(0.05f, 1f)
 
                 // Same ramp-truncation interpolation as Screen 1's real chart (see
                 // WorkoutProfileChart) — when the zoomed window cuts a ramp step partway through,
@@ -404,19 +409,31 @@ private fun VitalsPowerChart(
                 val visibleEnd = stepEnd.coerceAtMost(windowEnd)
                 val x0 = xAt(visibleStart).coerceIn(0f, w)
                 val x1 = xAt(visibleEnd).coerceIn(0f, w)
-                val yStart = if (visibleStart == stepStart) yWatts(dispStart) else yWatts(wattsAt(visibleStart).roundToInt())
-                val yEnd = if (visibleEnd == stepEnd) yWatts(dispEnd) else yWatts(wattsAt(visibleEnd).roundToInt())
+                val drawStartHeight = if (visibleStart == stepStart) {
+                    startBarHeight
+                } else {
+                    h * (wattsAt(visibleStart) / wattsScale).coerceIn(0.05f, 1f)
+                }
+                val drawEndHeight = if (visibleEnd == stepEnd) {
+                    endBarHeight
+                } else {
+                    h * (wattsAt(visibleEnd) / wattsScale).coerceIn(0.05f, 1f)
+                }
 
+                // mutedZoneColor (not the bright zone.color used for the live traces' thresholds)
+                // — matches Screen 1's muted bar fill, brightened only for the current step.
+                val zone = zoneFor(max(dispStart, dispEnd), ftpWatts)
+                val color = mutedZoneColor(zone.color, active = index == currentStepIndex)
                 val path = Path().apply {
-                    moveTo(x0, h)
-                    lineTo(x0, yStart)
-                    lineTo(x1, yEnd)
+                    moveTo(x0, h - drawStartHeight)
+                    lineTo(x1, h - drawEndHeight)
                     lineTo(x1, h)
+                    lineTo(x0, h)
                     close()
                 }
-                drawPath(path, color = zone.color)
+                drawPath(path, color = color)
                 if (stepStart in windowStart..windowEnd && index > 0) {
-                    drawLine(ErgDivider.copy(alpha = 0.5f), Offset(x0, h * 0.75f), Offset(x0, h), strokeWidth = 1.dp.toPx())
+                    drawLine(ErgDivider.copy(alpha = 0.5f), Offset(x0, h - startBarHeight), Offset(x0, h), strokeWidth = 1.dp.toPx())
                 }
             }
             // Same 3 live traces, same draw order (cadence under HR under power) and the same

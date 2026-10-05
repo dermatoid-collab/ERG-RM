@@ -801,7 +801,7 @@ internal const val CHART_MAX_CADENCE = 140f
 
 /** Blends a zone's bright accent color toward near-black so bar fills read as muted background,
  *  never as bright as the power/HR/cadence trace lines drawn on top of them. */
-private fun mutedZoneColor(zoneColor: Color, active: Boolean): Color {
+internal fun mutedZoneColor(zoneColor: Color, active: Boolean): Color {
     val base = Color(0xFF14171D)
     val t = if (active) 0.62f else 0.35f
     return lerp(base, zoneColor, t)
