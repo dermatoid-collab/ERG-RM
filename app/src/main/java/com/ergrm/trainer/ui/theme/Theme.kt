@@ -19,7 +19,8 @@ val ErgAboveTarget = Color(0xFFE65A5A)
 val ErgWarn = Color(0xFFE6C15A)
 val ErgDivider = Color(0xFF7FC2F0)
 val ErgProgressLine = Color(0xFF4E8FE8)
-val ErgCadenceLine = Color(0xFF3A6BB5)
+// Same light blue as CORE's own normal-range color (coreColor's ErgBelowTarget case).
+val ErgCadenceLine = ErgBelowTarget
 val ErgHrPlus = Color(0xFFE6598A)
 // Dedicated, more vivid colors reused across the live chart and history detail: kept separate
 // from ErgAboveTarget/ErgAccent (which mean "above target power" and "at target"/theme-primary
