@@ -23,14 +23,11 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -54,6 +51,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -210,7 +208,6 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
                     if (workoutState.hasStarted && chromeCollapsed && overlay == Overlay.NONE && screen == Screen.WORKOUT) {
                         Minibar(
                             workoutTitle = workoutTitle,
-                            otherSources = otherSources,
                             bluetoothTint = bluetoothTint,
                             onBack = { chromeCollapsed = false },
                         )
@@ -465,17 +462,17 @@ private fun MainPager(
 
 /** The collapsed topBar shown during an active workout (Task #68): the full topBar's brand +
  *  5 nav icons and WorkoutScreen's own separate title row merge into this one line — a back
- *  arrow to re-expand (the workout itself keeps running either way), the workout name with its
- *  own "choose source" dropdown (identical menu to [WorkoutHeader]'s), and the Bluetooth status
- *  icon with the exact same connection-state tint as the full topBar's own Bluetooth nav icon. */
+ *  arrow to re-expand (the workout itself keeps running either way), the workout name (plain,
+ *  no "choose source" menu here — switching workouts mid-ride isn't something these 2 active-
+ *  workout screens need to support; that stays on the main, not-yet-started Workout screen's own
+ *  [WorkoutHeader]), and the Bluetooth status icon with the exact same connection-state tint as
+ *  the full topBar's own Bluetooth nav icon. */
 @Composable
 private fun Minibar(
     workoutTitle: String,
-    otherSources: List<Pair<String, () -> Unit>>,
     bluetoothTint: Color,
     onBack: () -> Unit,
 ) {
-    var expanded by remember { mutableStateOf(false) }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -487,31 +484,18 @@ private fun Minibar(
         IconButton(onClick = onBack) {
             Icon(Icons.Filled.ArrowBack, contentDescription = "Expand", tint = MaterialTheme.colorScheme.onSurface)
         }
-        Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-            Row(
-                modifier = Modifier.clickable { expanded = true },
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    workoutTitle,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Icon(Icons.Filled.ArrowDropDown, contentDescription = "Choose workout")
-            }
-            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                otherSources.forEach { (label, action) ->
-                    DropdownMenuItem(
-                        text = { Text(label) },
-                        onClick = {
-                            expanded = false
-                            action()
-                        },
-                    )
-                }
-            }
-        }
+        // weight(1f) bounds the Text to the space actually left between the back arrow and the
+        // Bluetooth icon, so maxLines=1/overflow=Ellipsis can kick in on a long title — an
+        // unweighted Text in a Row instead measures itself at its full intrinsic width regardless
+        // of what's left, pushing the Bluetooth icon off-screen instead of ellipsizing.
+        Text(
+            workoutTitle,
+            style = MaterialTheme.typography.titleMedium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+        )
         Icon(
             Icons.Filled.Bluetooth,
             contentDescription = "Devices",

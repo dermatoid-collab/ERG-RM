@@ -1424,9 +1424,9 @@ private fun IntensityRow(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        // Same font size as the CORE/SKIN/HSI pill values above this row.
+                        // Same font size as the percentage next to it.
                         if (isHrPlus) "HR+" else "ERG",
-                        fontSize = 17.6.sp,
+                        fontSize = 14.1.sp,
                         fontWeight = FontWeight.Black,
                         color = Color.Black,
                     )
@@ -1485,7 +1485,7 @@ private fun IntensityRow(
  *  exactly the center of this composable's box — unlike a Text, whose vertical centering is
  *  based on font ascent/descent rather than the triangle's actual ink. */
 @Composable
-private fun IntensityTriangle(pointingUp: Boolean, color: Color, sizeDp: Dp = 18.dp, modifier: Modifier = Modifier) {
+internal fun IntensityTriangle(pointingUp: Boolean, color: Color, sizeDp: Dp = 18.dp, modifier: Modifier = Modifier) {
     Canvas(modifier = modifier.size(sizeDp)) {
         val w = size.width
         val h = size.height
@@ -1511,16 +1511,21 @@ private fun IntensityTriangle(pointingUp: Boolean, color: Color, sizeDp: Dp = 18
 @Composable
 private fun WorkoutHeader(title: String, otherSources: List<Pair<String, () -> Unit>>) {
     var expanded by remember { mutableStateOf(false) }
-    Box {
+    Box(modifier = Modifier.fillMaxWidth()) {
         Row(
-            modifier = Modifier.clickable { expanded = true },
+            modifier = Modifier.fillMaxWidth().clickable { expanded = true },
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            // weight(1f, fill = false): bounds the Text to whatever's left once the dropdown icon
+            // takes its own space, so maxLines=1/overflow=Ellipsis actually has a width to
+            // ellipsize against — unweighted, Text measures at its full intrinsic width and a long
+            // title just runs past the screen edge uncut instead of truncating.
             Text(
                 title,
                 style = MaterialTheme.typography.titleMedium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
             )
             Icon(Icons.Filled.ArrowDropDown, contentDescription = "Choose workout")
         }

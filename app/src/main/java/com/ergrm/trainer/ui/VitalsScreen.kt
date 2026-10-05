@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -73,6 +72,8 @@ import com.ergrm.trainer.ui.theme.ErgCadenceLine
 import com.ergrm.trainer.ui.theme.ErgDivider
 import com.ergrm.trainer.ui.theme.ErgHrLine
 import com.ergrm.trainer.ui.theme.ErgHrPlus
+import com.ergrm.trainer.ui.theme.ErgIntensityDownGlyph
+import com.ergrm.trainer.ui.theme.ErgIntensityUpGlyph
 import com.ergrm.trainer.ui.theme.ErgModeErg
 import com.ergrm.trainer.ui.theme.ErgOnSurface
 import com.ergrm.trainer.ui.theme.ErgSkinTemp
@@ -662,32 +663,16 @@ private fun CompactControlRow(
                     .clickable(enabled = hasWorkout, onClick = onToggleMode),
                 contentAlignment = Alignment.Center,
             ) {
-                // Same font size as this screen's own CORE/SKIN/HSI axis live-value pills, +10%,
-                // bumped again — still comfortably inside the 38.4dp circle for "HR+", the wider
-                // of the two labels.
-                Text(if (isHrPlus) "HR+" else "ERG", fontSize = 14.5.sp, fontWeight = FontWeight.Black, color = Color.Black)
+                // Same font size as the percentage next to it.
+                Text(if (isHrPlus) "HR+" else "ERG", fontSize = 12.5.sp, fontWeight = FontWeight.Black, color = Color.Black)
             }
-            IconButton(
-                onClick = onIncrease,
-                enabled = hasWorkout,
-                // Nudged slightly in from the mode circle, toward the percentage.
-                modifier = Modifier.padding(start = 3.dp).size(30.dp),
-            ) {
-                Icon(
-                    Icons.Filled.KeyboardArrowUp,
-                    contentDescription = "Increase intensity",
-                    tint = ErgOnSurface,
-                    modifier = Modifier.size(26.dp),
-                )
-            }
-            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                Text("$intensityPercent%", fontSize = 12.5.sp, fontWeight = FontWeight.Bold, color = Color.White)
-            }
+            // Decrease sits closest to the mode circle; increase sits on the far side, next to
+            // where the direction triangle appears — same pairing as the main Workout screen's
+            // own pill (increase/▲ together on the right, decrease/▼ together on the left).
             IconButton(
                 onClick = onDecrease,
                 enabled = hasWorkout,
-                // Nudged slightly in from the pill's right edge, toward the percentage.
-                modifier = Modifier.padding(end = 3.dp).size(30.dp),
+                modifier = Modifier.padding(start = 3.dp).size(30.dp),
             ) {
                 Icon(
                     Icons.Filled.KeyboardArrowDown,
@@ -696,10 +681,33 @@ private fun CompactControlRow(
                     modifier = Modifier.size(26.dp),
                 )
             }
-            // Balances the ERG/HR+ circle's own 38.4dp on this side — without it, the % box
-            // (centered only within the space left over after the circle and both arrows) sits
-            // off the pill's true visual center, shifted toward the right.
-            Spacer(modifier = Modifier.width(38.4.dp))
+            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                Text("$intensityPercent%", fontSize = 12.5.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            }
+            IconButton(
+                onClick = onIncrease,
+                enabled = hasWorkout,
+                modifier = Modifier.padding(end = 3.dp).size(30.dp),
+            ) {
+                Icon(
+                    Icons.Filled.KeyboardArrowUp,
+                    contentDescription = "Increase intensity",
+                    tint = ErgOnSurface,
+                    modifier = Modifier.size(26.dp),
+                )
+            }
+            // Same width as the ERG/HR+ circle (balances it so the % box above stays centered in
+            // the whole pill) — now also where the ▲/▼ direction triangle shows, when intensity
+            // isn't 100%, same colors/shape as the main Workout screen's own pill.
+            Box(modifier = Modifier.size(38.4.dp), contentAlignment = Alignment.Center) {
+                if (intensityPercent != 100) {
+                    IntensityTriangle(
+                        pointingUp = intensityPercent > 100,
+                        color = if (intensityPercent > 100) ErgIntensityUpGlyph else ErgIntensityDownGlyph,
+                        sizeDp = 14.4.dp,
+                    )
+                }
+            }
         }
     }
 }
