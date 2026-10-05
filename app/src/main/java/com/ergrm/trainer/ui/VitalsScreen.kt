@@ -634,27 +634,39 @@ private fun CompactControlRow(
                     .clickable(enabled = hasWorkout, onClick = onToggleMode),
                 contentAlignment = Alignment.Center,
             ) {
-                // Same font size as this screen's own CORE/SKIN/HSI axis live-value pills, +10%.
-                Text(if (isHrPlus) "HR+" else "ERG", fontSize = 13.2.sp, fontWeight = FontWeight.Black, color = Color.Black)
+                // Same font size as this screen's own CORE/SKIN/HSI axis live-value pills, +10%,
+                // bumped again — still comfortably inside the 38.4dp circle for "HR+", the wider
+                // of the two labels.
+                Text(if (isHrPlus) "HR+" else "ERG", fontSize = 14.5.sp, fontWeight = FontWeight.Black, color = Color.Black)
             }
             IconButton(
                 onClick = onIncrease,
                 enabled = hasWorkout,
                 // Nudged slightly in from the mode circle, toward the percentage.
-                modifier = Modifier.padding(start = 3.dp).size(28.dp),
+                modifier = Modifier.padding(start = 3.dp).size(30.dp),
             ) {
-                Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Increase intensity", tint = ErgOnSurface)
+                Icon(
+                    Icons.Filled.KeyboardArrowUp,
+                    contentDescription = "Increase intensity",
+                    tint = ErgOnSurface,
+                    modifier = Modifier.size(26.dp),
+                )
             }
             Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                Text("$intensityPercent%", fontSize = 10.5.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                Text("$intensityPercent%", fontSize = 12.5.sp, fontWeight = FontWeight.Bold, color = Color.White)
             }
             IconButton(
                 onClick = onDecrease,
                 enabled = hasWorkout,
                 // Nudged slightly in from the pill's right edge, toward the percentage.
-                modifier = Modifier.padding(end = 3.dp).size(28.dp),
+                modifier = Modifier.padding(end = 3.dp).size(30.dp),
             ) {
-                Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Decrease intensity", tint = ErgOnSurface)
+                Icon(
+                    Icons.Filled.KeyboardArrowDown,
+                    contentDescription = "Decrease intensity",
+                    tint = ErgOnSurface,
+                    modifier = Modifier.size(26.dp),
+                )
             }
         }
     }
@@ -680,7 +692,8 @@ private fun CompactButton(
             icon,
             contentDescription = description,
             tint = if (enabled) ErgOnSurface else ErgOnSurface.copy(alpha = 0.4f),
-            modifier = Modifier.size(18.dp),
+            // 22dp inside a 38.4dp circle — still well clear of the edge.
+            modifier = Modifier.size(22.dp),
         )
     }
 }
