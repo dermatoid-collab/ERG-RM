@@ -1401,9 +1401,7 @@ private fun IntensityRow(
         )
         // The triangle sits on the opposite side of the pill from ERG/HR+ (mirroring it, not
         // sitting next to the percentage), so it can never touch or shift the percentage —
-        // they're not even siblings in the same layout pass. The percentage itself is centered
-        // only in the space to the right of the mode tag (a plain Row + weight(1f) Box), the
-        // same as before the triangle existed.
+        // they're not even siblings in the same layout pass.
         Box(
             modifier = Modifier
                 .weight(1f)
@@ -1441,6 +1439,11 @@ private fun IntensityRow(
                         color = Color.White,
                     )
                 }
+                // Balances the mode tag's own width on this side, so the % box above — weight(1f)
+                // of whatever's left — ends up centered in the whole pill instead of sitting in
+                // just the space to the right of the tag (which reads as off-center since the tag
+                // itself has nothing matching it on the right).
+                Spacer(modifier = Modifier.width(with(density) { modeTagWidthPx.toDp() }))
             }
             if (intensityGlyph != null) {
                 // Drawn directly rather than as a "▲"/"▼" glyph: a Text's own vertical centering
