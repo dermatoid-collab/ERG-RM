@@ -357,7 +357,8 @@ private fun VitalsPowerChart(
             ),
             liveValueText = last?.watts?.toString() ?: "--",
             liveFraction = last?.watts?.let { (1f - it / wattsScale).coerceIn(0f, 1f) } ?: 1f,
-            valueColor = ErgAboveTarget,
+            // Same white as the power trace it sits beside.
+            valueColor = Color.White,
         )
         Canvas(
             modifier = Modifier
