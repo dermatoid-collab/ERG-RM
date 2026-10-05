@@ -684,6 +684,20 @@ private fun CompactControlRow(
             Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
                 Text("$intensityPercent%", fontSize = 12.5.sp, fontWeight = FontWeight.Bold, color = Color.White)
             }
+            // Same width as the ERG/HR+ circle (balances it so the % box above stays centered in
+            // the whole pill) — also where the ▲/▼ direction triangle shows, when intensity isn't
+            // 100%, same colors/shape as the main Workout screen's own pill. Sits BEFORE the
+            // increase arrow (not after it) so the arrow stays the pill's true rightmost element,
+            // same as screen 1 — the triangle is adjacent to it, not past it.
+            Box(modifier = Modifier.size(38.4.dp), contentAlignment = Alignment.Center) {
+                if (intensityPercent != 100) {
+                    IntensityTriangle(
+                        pointingUp = intensityPercent > 100,
+                        color = if (intensityPercent > 100) ErgIntensityUpGlyph else ErgIntensityDownGlyph,
+                        sizeDp = 14.4.dp,
+                    )
+                }
+            }
             IconButton(
                 onClick = onIncrease,
                 enabled = hasWorkout,
@@ -695,18 +709,6 @@ private fun CompactControlRow(
                     tint = ErgOnSurface,
                     modifier = Modifier.size(26.dp),
                 )
-            }
-            // Same width as the ERG/HR+ circle (balances it so the % box above stays centered in
-            // the whole pill) — now also where the ▲/▼ direction triangle shows, when intensity
-            // isn't 100%, same colors/shape as the main Workout screen's own pill.
-            Box(modifier = Modifier.size(38.4.dp), contentAlignment = Alignment.Center) {
-                if (intensityPercent != 100) {
-                    IntensityTriangle(
-                        pointingUp = intensityPercent > 100,
-                        color = if (intensityPercent > 100) ErgIntensityUpGlyph else ErgIntensityDownGlyph,
-                        sizeDp = 14.4.dp,
-                    )
-                }
             }
         }
     }
