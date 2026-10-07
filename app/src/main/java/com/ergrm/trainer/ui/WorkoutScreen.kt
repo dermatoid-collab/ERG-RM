@@ -113,6 +113,12 @@ fun WorkoutScreen(
     // this screen's own WorkoutHeader so the title isn't shown twice, and so the chart's
     // weight(1f) picks up the freed row's height instead of just the topBar's.
     chromeCollapsed: Boolean = false,
+    // Lets the active-workout pager (AppNav) hoist this screen's chart zoom above itself, so it
+    // survives swiping to Vitals and back instead of resetting every time this composable is
+    // disposed and recreated by the pager. Left null (default internal state) for the idle,
+    // not-yet-started Workout screen, which isn't inside that pager.
+    chartZoom: ChartZoom? = null,
+    onChartZoomChange: ((ChartZoom) -> Unit)? = null,
 ) {
     val live by viewModel.liveData.collectAsState()
     val coreReading by viewModel.coreTempReading.collectAsState()
@@ -123,6 +129,9 @@ fun WorkoutScreen(
     var showStopConfirm by remember { mutableStateOf(false) }
     var showDiscardConfirm by remember { mutableStateOf(false) }
     var autoBackupDialogReason by remember { mutableStateOf<AutoBackupNeededReason?>(null) }
+    var internalChartZoom by remember { mutableStateOf(ChartZoom.FULL) }
+    val effectiveChartZoom = chartZoom ?: internalChartZoom
+    val setChartZoom = onChartZoomChange ?: { z: ChartZoom -> internalChartZoom = z }
 
     LaunchedEffect(Unit) {
         viewModel.autoBackupNeeded.collect { reason -> autoBackupDialogReason = reason }
@@ -301,6 +310,8 @@ fun WorkoutScreen(
             ftpWatts = settings.ftpWatts,
             lthrBpm = settings.lthrBpm,
             intensityPercent = workoutState.intensityPercent,
+            zoom = effectiveChartZoom,
+            onZoomChange = setChartZoom,
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
@@ -658,7 +669,7 @@ private fun CoreTempTile(
  * 20 min -> 5 min -> full. [scrollThresholdSec] is how far into a zoomed window the progress
  * line travels (pinned at the left edge) before the window starts scrolling to keep it in place.
  */
-internal enum class ChartZoom(val windowSec: Int?, val scrollThresholdSec: Int) {
+enum class ChartZoom(val windowSec: Int?, val scrollThresholdSec: Int) {
     FULL(null, 0),
     TWENTY_MIN(20 * 60, 5 * 60),
     FIVE_MIN(5 * 60, 60);
@@ -760,6 +771,8 @@ private fun ChartCard(
     ftpWatts: Int,
     lthrBpm: Int,
     intensityPercent: Int,
+    zoom: ChartZoom,
+    onZoomChange: (ChartZoom) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -776,6 +789,8 @@ private fun ChartCard(
             ftpWatts = ftpWatts,
             lthrBpm = lthrBpm,
             intensityPercent = intensityPercent,
+            zoom = zoom,
+            onZoomChange = onZoomChange,
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
@@ -831,6 +846,8 @@ private fun WorkoutProfileChart(
     ftpWatts: Int,
     lthrBpm: Int,
     intensityPercent: Int,
+    zoom: ChartZoom,
+    onZoomChange: (ChartZoom) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // Divide by (1 - headroom) so the ceiling reaches only that fraction of the height, leaving
@@ -844,7 +861,9 @@ private fun WorkoutProfileChart(
     val bpmRange = chartMaxBpm(lthrBpm) - bpmMin
     val cadScale = CHART_MAX_CADENCE / (1f - CHART_TOP_HEADROOM)
 
-    var zoom by remember { mutableStateOf(ChartZoom.FULL) }
+    // zoom is hoisted to WorkoutScreen's own caller (see its chartZoom param) rather than kept
+    // locally here, so it survives the active-workout pager disposing/recomposing this chart on
+    // every swipe to Vitals and back instead of resetting to FULL each time.
     // Not keyed on `steps`: a stale index left over from a since-replaced workout plan simply
     // fails the `selIndex in steps.indices` guard below and stops rendering — no need to key a
     // remember() to reset it, which was instead causing the state to reset on every recomposition.
@@ -877,7 +896,7 @@ private fun WorkoutProfileChart(
                 // short bar's tip.
                 if (offset.y < size.height * CHART_ZOOM_TAP_FRACTION) {
                     selectedStepIndex = null
-                    zoom = zoom.next()
+                    onZoomChange(zoom.next())
                     return@awaitEachGesture
                 }
                 val (windowStart, windowEnd) = computeChartWindow(zoom, inputs.totalElapsedSec, inputs.totalDurationSec)

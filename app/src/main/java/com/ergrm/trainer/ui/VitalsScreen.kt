@@ -91,19 +91,22 @@ import kotlin.math.roundToInt
  *  cadence axis) instead of the live tiles, controls and single chart Screen 1 already has.
  *
  *  Both charts share one all/20min/5min zoom (tapping either cycles it for both, same as Screen
- *  1's real chart) rather than zooming independently — see the [zoom] state below. */
+ *  1's real chart) rather than zooming independently — see the [zoom]/[onZoomChange] params. */
 @Composable
-fun VitalsScreen(viewModel: MainViewModel) {
+fun VitalsScreen(
+    viewModel: MainViewModel,
+    // Hoisted to AppNav's ActiveWorkoutPager (this screen's only caller) so it survives swiping
+    // to the dashboard and back instead of resetting every time the pager disposes/recreates this
+    // composable.
+    zoom: ChartZoom,
+    onZoomChange: (ChartZoom) -> Unit,
+) {
     val workoutState by viewModel.workoutState.collectAsState()
     val settings by viewModel.settings.collectAsState()
     val samples by viewModel.sampleHistory.collectAsState()
     val coreSamples by viewModel.coreTempHistory.collectAsState()
     var showStopConfirm by remember { mutableStateOf(false) }
     var showDiscardConfirm by remember { mutableStateOf(false) }
-    // Shared by both charts (tapping either cycles it for both) rather than one zoom each, since
-    // they're two views of the same timeline — zooming into an interval on the power chart to
-    // correlate with core temp there is the whole point of having them stacked.
-    var zoom by remember { mutableStateOf(ChartZoom.FULL) }
 
     val stats = remember(samples) {
         computeSessionStats(samples.map { SessionSample(it.tSec, it.watts, it.hrBpm, it.cadenceRpm, it.speedKmh) })
@@ -124,7 +127,7 @@ fun VitalsScreen(viewModel: MainViewModel) {
                 totalElapsedSec = workoutState.totalElapsedSec,
                 totalDurationSec = workoutState.totalDurationSec,
                 zoom = zoom,
-                onTap = { zoom = zoom.next() },
+                onTap = { onZoomChange(zoom.next()) },
                 modifier = Modifier.weight(1f).fillMaxWidth(),
             )
             Box(
@@ -143,7 +146,7 @@ fun VitalsScreen(viewModel: MainViewModel) {
                 lthrBpm = settings.lthrBpm,
                 intensityPercent = workoutState.intensityPercent,
                 zoom = zoom,
-                onTap = { zoom = zoom.next() },
+                onTap = { onZoomChange(zoom.next()) },
                 modifier = Modifier.weight(1f).fillMaxWidth(),
             )
             ChartTimeAxis(zoom = zoom, totalElapsedSec = workoutState.totalElapsedSec, totalDurationSec = workoutState.totalDurationSec)

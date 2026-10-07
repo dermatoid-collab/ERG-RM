@@ -84,6 +84,13 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
             // minibar's back arrow, or tapping the Workout nav icon again) sticks until the next
             // real start/stop instead of being fought back on every recomposition.
             var chromeCollapsed by remember { mutableStateOf(false) }
+            // Hoisted here (above ActiveWorkoutPager) rather than left as local state inside
+            // WorkoutScreen/VitalsScreen, so each screen's own chart zoom survives swiping to the
+            // other and back — HorizontalPager disposes a page's composition (and so its
+            // remember-ed state) once it scrolls far enough out of view, which was resetting the
+            // zoom to FULL on every swipe instead of keeping the last one the rider picked.
+            var dashboardChartZoom by remember { mutableStateOf(ChartZoom.FULL) }
+            var vitalsChartZoom by remember { mutableStateOf(ChartZoom.FULL) }
             val workoutState by viewModel.workoutState.collectAsState()
             val workoutLoadState by viewModel.workoutLoadState.collectAsState()
             val workoutTitle = when (val loaded = workoutLoadState) {
@@ -307,9 +314,17 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
                                         isTrainerConnected = isConnected,
                                         otherSources = otherSources,
                                         chromeCollapsed = true,
+                                        chartZoom = dashboardChartZoom,
+                                        onChartZoomChange = { dashboardChartZoom = it },
                                     )
                                 },
-                                vitals = { VitalsScreen(viewModel) },
+                                vitals = {
+                                    VitalsScreen(
+                                        viewModel,
+                                        zoom = vitalsChartZoom,
+                                        onZoomChange = { vitalsChartZoom = it },
+                                    )
+                                },
                             )
                         else -> MainPager(
                             overlay = overlay,
