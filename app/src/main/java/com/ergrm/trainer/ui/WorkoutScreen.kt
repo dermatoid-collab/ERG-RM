@@ -1256,7 +1256,9 @@ private fun IntervalDetailBlock(
         // any watt range ever was). weight(fill = false) reserves the fixed pieces' space first
         // and only lets the value claim what's left; basicMarquee scrolls it in a continuous loop
         // instead of ellipsizing, so the full range stays readable without shrinking the font or
-        // pushing the zone chip off the edge of the screen.
+        // pushing the zone chip off the edge of the screen. delayMillis=10_000: one scroll pass,
+        // then a 10s pause (also before the very first pass) before it repeats — short enough
+        // text barely needs to move, so most of that "cycle" is this pause.
         Text(
             valueLabel,
             style = MaterialTheme.typography.bodyMedium,
@@ -1264,7 +1266,7 @@ private fun IntervalDetailBlock(
             overflow = TextOverflow.Clip,
             modifier = Modifier
                 .weight(1f, fill = false)
-                .basicMarquee(),
+                .basicMarquee(delayMillis = 10_000),
         )
         Text(
             zone.label,
