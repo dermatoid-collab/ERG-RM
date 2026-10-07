@@ -103,6 +103,7 @@ import com.ergrm.trainer.workout.WorkoutStep
 import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.roundToInt
+import kotlinx.coroutines.withTimeoutOrNull
 
 @Composable
 fun WorkoutScreen(
@@ -1331,6 +1332,7 @@ private fun ControlsRow(
             containerColor = mainContainerColor,
             iconSize = 28.dp,
             modifier = Modifier.weight(1f),
+            requireLongPressMillis = 3000L,
         )
         PillIconButton(
             icon = Icons.Filled.Add,
@@ -1339,6 +1341,7 @@ private fun ControlsRow(
             enabled = hasWorkout,
             iconSize = 28.dp,
             modifier = Modifier.width(60.dp),
+            requireLongPressMillis = 3000L,
         )
         PillIconButton(
             icon = Icons.Filled.SkipNext,
@@ -1347,6 +1350,7 @@ private fun ControlsRow(
             enabled = hasWorkout,
             iconSize = 28.dp,
             modifier = Modifier.weight(1f),
+            requireLongPressMillis = 3000L,
         )
     }
 }
@@ -1364,13 +1368,23 @@ private fun PillIconButton(
     // controls below pass a smaller size.
     iconSize: Dp = 36.dp,
     height: Dp = 48.dp,
+    // Start/Pause/Stop, +5min and Skip pass a duration here so a brush of the screen mid-ride
+    // can't trigger them — only a deliberate, held-down press does. The intensity row's up/down
+    // arrows leave this null (immediate tap), since nudging those a few times is routine.
+    requireLongPressMillis: Long? = null,
 ) {
     Box(
         modifier = modifier
             .height(height)
             .clip(RoundedCornerShape(50))
             .background(if (enabled) containerColor else containerColor.copy(alpha = 0.4f))
-            .clickable(enabled = enabled, onClick = onClick),
+            .then(
+                if (requireLongPressMillis != null) {
+                    Modifier.requireLongPress(enabled, requireLongPressMillis, onClick)
+                } else {
+                    Modifier.clickable(enabled = enabled, onClick = onClick)
+                },
+            ),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
@@ -1379,6 +1393,26 @@ private fun PillIconButton(
             tint = if (enabled) iconColor else iconColor.copy(alpha = 0.4f),
             modifier = Modifier.size(iconSize),
         )
+    }
+}
+
+/** Fires [onActivate] only once the pointer has been held down for [durationMillis] without
+ *  lifting — a normal tap, or a press released early, does nothing. [enabled] mirrors the
+ *  button's own enabled state so a disabled control stays fully inert rather than still counting
+ *  down a press that can never do anything. */
+internal fun Modifier.requireLongPress(
+    enabled: Boolean,
+    durationMillis: Long,
+    onActivate: () -> Unit,
+): Modifier = pointerInput(enabled, durationMillis) {
+    if (!enabled) return@pointerInput
+    awaitEachGesture {
+        awaitFirstDown()
+        val releasedEarly = withTimeoutOrNull(durationMillis) { waitForUpOrCancellation() }
+        if (releasedEarly == null) {
+            onActivate()
+            waitForUpOrCancellation()
+        }
     }
 }
 

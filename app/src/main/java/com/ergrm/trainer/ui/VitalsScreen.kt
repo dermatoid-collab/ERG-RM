@@ -632,6 +632,7 @@ private fun CompactControlRow(
                 enabled = hasWorkout,
                 containerColor = mainColor,
                 modifier = Modifier.size(38.4.dp),
+                requireLongPressMillis = 3000L,
             )
             CompactButton(
                 icon = Icons.Filled.Add,
@@ -639,6 +640,7 @@ private fun CompactControlRow(
                 onClick = onExtend,
                 enabled = hasWorkout,
                 modifier = Modifier.size(38.4.dp),
+                requireLongPressMillis = 3000L,
             )
             CompactButton(
                 icon = Icons.Filled.SkipNext,
@@ -646,6 +648,7 @@ private fun CompactControlRow(
                 onClick = onSkip,
                 enabled = hasWorkout,
                 modifier = Modifier.size(38.4.dp),
+                requireLongPressMillis = 3000L,
             )
         }
         Row(
@@ -725,12 +728,22 @@ private fun CompactButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     containerColor: Color = ErgSurface2,
+    // Start/Pause/Stop, +5min and Skip pass a duration here so a brush of the screen mid-ride
+    // can't trigger them — only a deliberate, held-down press does (see requireLongPress in
+    // WorkoutScreen.kt, shared with this screen's own Start/Pause/Stop/+5/Skip row).
+    requireLongPressMillis: Long? = null,
 ) {
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(50))
             .background(if (enabled) containerColor else containerColor.copy(alpha = 0.4f))
-            .clickable(enabled = enabled, onClick = onClick),
+            .then(
+                if (requireLongPressMillis != null) {
+                    Modifier.requireLongPress(enabled, requireLongPressMillis, onClick)
+                } else {
+                    Modifier.clickable(enabled = enabled, onClick = onClick)
+                },
+            ),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
