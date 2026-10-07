@@ -1,4 +1,6 @@
 import java.io.ByteArrayOutputStream
+import java.text.SimpleDateFormat
+import java.util.Date
 
 plugins {
     id("com.android.application")
@@ -30,6 +32,10 @@ val gitSha: String = try {
 val ciVersionCode: Int = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
 println("ERG-RM build config: versionCode=$ciVersionCode gitSha=$gitSha (raw GITHUB_RUN_NUMBER=${System.getenv("GITHUB_RUN_NUMBER")})")
 
+// The date this build was produced (build-time, not install-time) — shown alongside the build
+// number in Settings so the running app is fully self-identifying without checking the CI run.
+val buildDate: String = SimpleDateFormat("yyyy-MM-dd").format(Date())
+
 android {
     namespace = "com.ergrm.trainer"
     compileSdk = 34
@@ -41,6 +47,7 @@ android {
         versionCode = ciVersionCode
         versionName = "0.1.0 ($gitSha)"
         buildConfigField("String", "GIT_SHA", "\"$gitSha\"")
+        buildConfigField("String", "BUILD_DATE", "\"$buildDate\"")
     }
 
     buildTypes {

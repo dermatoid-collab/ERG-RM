@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.documentfile.provider.DocumentFile
@@ -223,9 +224,11 @@ fun SettingsScreen(
         }
 
         Text(
-            "Build ${BuildConfig.GIT_SHA}",
+            "#${BuildConfig.VERSION_CODE} · ${BuildConfig.BUILD_DATE} · ©RM",
             style = MaterialTheme.typography.bodySmall,
-            modifier = Modifier.padding(top = 24.dp),
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+            modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
+            textAlign = TextAlign.Center,
         )
     }
 
