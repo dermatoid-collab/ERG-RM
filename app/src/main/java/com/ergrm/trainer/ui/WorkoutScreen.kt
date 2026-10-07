@@ -1332,7 +1332,11 @@ private fun ControlsRow(
             containerColor = mainContainerColor,
             iconSize = 28.dp,
             modifier = Modifier.weight(1f),
-            requireLongPressMillis = 3000L,
+            // Start (not yet riding) stays a plain tap — only Pause/Stop, reached once hasStarted,
+            // need the 3s hold. Requiring it for Start too meant a normal tap on it silently did
+            // nothing, reported as "the app doesn't respond" when starting a ride with the
+            // trainer disconnected.
+            requireLongPressMillis = if (hasStarted) 3000L else null,
         )
         PillIconButton(
             icon = Icons.Filled.Add,
