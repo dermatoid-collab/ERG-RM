@@ -221,7 +221,7 @@ private fun SummaryTilesGrid(stats: SessionStats, durationSec: Int, modifier: Mo
 /** CORE/SKIN/HSI over the whole ride. CORE and HSI are drawn one short segment at a time so each
  *  can take the exact same color its tile would show for that instant (same thresholds as
  *  [coreColor]/[hsiColor]) — SKIN stays [ErgSkinTemp] throughout, since its tile has no
- *  thresholds either. CORE (36.5–40.5°C) and SKIN (28–40.5°C) each get their own range so SKIN's
+ *  thresholds either. CORE (36.5–39.5°C) and SKIN (28–39.5°C) each get their own range so SKIN's
  *  much wider real-world swing doesn't flatten CORE's narrow one onto a few pixels. */
 @Composable
 private fun CoreSkinHsiChart(
@@ -234,9 +234,9 @@ private fun CoreSkinHsiChart(
 ) {
     val last = samples.lastOrNull()
     val coreMin = 36.5f
-    val coreMax = 40.5f
+    val coreMax = 39.5f
     val skinMin = 28f
-    val skinMax = 40.5f
+    val skinMax = 39.5f
     val hsiMin = 0f
     val hsiMax = 10f
     fun coreFrac(v: Float) = (1f - (v - coreMin) / (coreMax - coreMin)).coerceIn(0f, 1f)
