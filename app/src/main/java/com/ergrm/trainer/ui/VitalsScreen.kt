@@ -632,9 +632,8 @@ private fun CompactControlRow(
                 enabled = hasWorkout,
                 containerColor = mainColor,
                 modifier = Modifier.size(38.4.dp),
-                // Start (not yet riding) stays a plain tap — only Pause/Stop, reached once
-                // hasStarted, need the 3s hold (see WorkoutScreen's ControlsRow for why).
-                requireLongPressMillis = if (hasStarted) 3000L else null,
+                // Plain tap in all 3 states (Start/Pause/Stop) — only +5min and Skip require the
+                // 3s hold now.
             )
             CompactButton(
                 icon = Icons.Filled.Add,
