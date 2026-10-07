@@ -224,6 +224,18 @@ fun SettingsScreen(
         }
 
         Text(
+            "Data sources",
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(top = 24.dp, bottom = 8.dp),
+        )
+        Text(
+            "Workouts, calendar and sport settings (FTP/LTHR) are read from your own " +
+                "Intervals.icu account via its public API. Some of that data may originate " +
+                "from a Garmin device synced to Intervals.icu.",
+            style = MaterialTheme.typography.bodySmall,
+        )
+
+        Text(
             "#${BuildConfig.VERSION_CODE} · ${BuildConfig.BUILD_DATE} · ©RM",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
