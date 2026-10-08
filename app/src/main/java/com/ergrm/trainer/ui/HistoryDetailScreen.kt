@@ -10,13 +10,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Share
@@ -45,13 +42,17 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
+import com.ergrm.trainer.history.CORE_TEMP_ALERT_C
 import com.ergrm.trainer.history.SessionSample
 import com.ergrm.trainer.history.SessionStats
 import com.ergrm.trainer.history.WorkoutSession
 import com.ergrm.trainer.history.computeSessionStats
+import com.ergrm.trainer.ui.theme.ErgAccent
+import com.ergrm.trainer.ui.theme.ErgBelowTarget
 import com.ergrm.trainer.ui.theme.ErgHrLine
 import com.ergrm.trainer.ui.theme.ErgOnSurface
 import com.ergrm.trainer.ui.theme.ErgProgressLine
+import com.ergrm.trainer.ui.theme.ErgSkinTemp
 import com.ergrm.trainer.ui.theme.ErgSurface
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -100,23 +101,42 @@ fun SessionDetailScreen(session: WorkoutSession, viewModel: MainViewModel, onBac
             }
         }
 
+        // No scroll here (unlike most other screens): charts get weight(1f) each so they share
+        // whatever vertical space is left after the summary tiles below them — which stay at
+        // their natural height — rather than pushing the tiles off-screen under a scrollbar.
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            val hasCoreData = session.samples.any {
+                it.coreTempC != null || it.skinTempC != null || it.heatStrainIndex != null
+            }
             if (session.samples.size >= 2) {
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.padding(10.dp, 10.dp, 10.dp, 4.dp)) {
+                Card(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                    Column(modifier = Modifier.padding(10.dp, 10.dp, 10.dp, 4.dp).fillMaxSize()) {
                         SessionDetailChart(
                             samples = session.samples,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(180.dp),
+                                .weight(1f),
                         )
                         ChartLegend(hasHr = stats.avgHrBpm != null, hasCadence = stats.avgCadenceRpm != null)
+                    }
+                }
+            }
+
+            if (hasCoreData) {
+                Card(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                    Column(modifier = Modifier.padding(10.dp, 10.dp, 10.dp, 4.dp).fillMaxSize()) {
+                        CoreSkinHsiDetailChart(
+                            samples = session.samples,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
+                        )
+                        CoreSkinHsiLegend()
                     }
                 }
             }
@@ -189,27 +209,33 @@ private fun SessionDetailChart(samples: List<SessionSample>, modifier: Modifier 
         val h = size.height
         fun x(i: Int) = w * i / (n - 1).toFloat()
 
+        // Smoothed (3-sample ≈ 3s centered moving average) for the drawn traces only — the scrub
+        // tooltip below still reports each sample's own exact reading, unsmoothed.
+        val smoothedWatts = smoothed(samples.map { it.watts.toFloat() })
+        val smoothedHr = smoothed(samples.map { it.hrBpm?.toFloat() })
+        val smoothedCad = smoothed(samples.map { it.cadenceRpm?.toFloat() })
+
         val maxWatts = samples.maxOf { it.watts }.coerceAtLeast(50)
-        fun yWatts(v: Int) = h - h * (v.toFloat() / maxWatts).coerceIn(0f, 1f)
+        fun yWatts(v: Float) = h - h * (v / maxWatts).coerceIn(0f, 1f)
 
         val hrs = samples.mapNotNull { it.hrBpm }
         if (hrs.size >= 2) {
             val hrMin = (hrs.min() - 10).coerceAtLeast(0)
             val hrRange = (hrs.max() - hrMin).coerceAtLeast(1)
-            fun yHr(v: Int) = h - h * ((v - hrMin).toFloat() / hrRange).coerceIn(0f, 1f)
-            val points = samples.mapIndexedNotNull { i, s -> s.hrBpm?.let { Offset(x(i), yHr(it)) } }
+            fun yHr(v: Float) = h - h * ((v - hrMin) / hrRange).coerceIn(0f, 1f)
+            val points = smoothedHr.mapIndexedNotNull { i, v -> v?.let { Offset(x(i), yHr(it)) } }
             drawPoints(points = points, pointMode = PointMode.Polygon, color = ErgHrLine, strokeWidth = 3f, cap = StrokeCap.Round)
         }
 
         val cadences = samples.mapNotNull { it.cadenceRpm }
         if (cadences.size >= 2) {
             val cadMax = cadences.max().coerceAtLeast(10)
-            fun yCad(v: Int) = h - h * (v.toFloat() / cadMax).coerceIn(0f, 1f)
-            val points = samples.mapIndexedNotNull { i, s -> s.cadenceRpm?.let { Offset(x(i), yCad(it)) } }
+            fun yCad(v: Float) = h - h * (v / cadMax).coerceIn(0f, 1f)
+            val points = smoothedCad.mapIndexedNotNull { i, v -> v?.let { Offset(x(i), yCad(it)) } }
             drawPoints(points = points, pointMode = PointMode.Polygon, color = ErgProgressLine, strokeWidth = 2.5f, cap = StrokeCap.Round)
         }
 
-        val wattsPoints = samples.mapIndexed { i, s -> Offset(x(i), yWatts(s.watts)) }
+        val wattsPoints = smoothedWatts.mapIndexed { i, v -> Offset(x(i), yWatts(v ?: 0f)) }
         drawPoints(points = wattsPoints, pointMode = PointMode.Polygon, color = Color.White, strokeWidth = 3f, cap = StrokeCap.Round)
 
         // Scrub indicator: vertical line at the selected sample + a tooltip box with that
@@ -245,6 +271,111 @@ private fun SessionDetailChart(samples: List<SessionSample>, modifier: Modifier 
 
 private fun formatScrubTime(totalSeconds: Int): String = "%d:%02d".format(totalSeconds / 60, totalSeconds % 60)
 
+/** 3-sample (≈3s at this app's 1Hz sampling) centered moving average, for softening raw
+ *  per-second sensor noise in a drawn chart trace — never used for the scrub tooltip, which
+ *  always reports a sample's own exact reading. A null sample stays null rather than being
+ *  interpolated from its neighbors, so a genuine sensor gap still shows as a gap. */
+private fun smoothed(values: List<Float?>): List<Float?> = values.indices.map { i ->
+    val v = values[i] ?: return@map null
+    val neighbors = listOfNotNull(values.getOrNull(i - 1), values.getOrNull(i + 1))
+    (v + neighbors.sum()) / (1 + neighbors.size)
+}
+
+@Composable
+private fun CoreSkinHsiLegend() {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 6.dp, bottom = 6.dp),
+    ) {
+        LegendEntry("Core", ErgBelowTarget)
+        LegendEntry("Skin", ErgSkinTemp)
+        LegendEntry("HSI", ErgAccent)
+    }
+}
+
+/** Same scrub-chart pattern as [SessionDetailChart], for the CORE sensor's 3 traces instead of
+ *  power/HR/cadence. Fixed ranges (not auto-fit to the data) match the live Vitals chart's own
+ *  CORE/SKIN/HSI scale, so a ride looks the same whether read live or from history. */
+@Composable
+private fun CoreSkinHsiDetailChart(samples: List<SessionSample>, modifier: Modifier = Modifier) {
+    var selectedIndex by remember(samples) { mutableStateOf<Int?>(null) }
+    val textMeasurer = rememberTextMeasurer()
+    val coreMin = 36.5f
+    val coreMax = 39.5f
+    val skinMin = 28f
+    val skinMax = 39.5f
+    val hsiMin = 0f
+    val hsiMax = 10f
+
+    Canvas(
+        modifier = modifier.pointerInput(samples) {
+            val lastIndex = samples.size - 1
+            if (lastIndex < 1) return@pointerInput
+            fun indexAt(touchX: Float) = (touchX / size.width * lastIndex).roundToInt().coerceIn(0, lastIndex)
+            detectDragGestures(
+                onDragStart = { offset -> selectedIndex = indexAt(offset.x) },
+                onDrag = { change, _ ->
+                    change.consume()
+                    selectedIndex = indexAt(change.position.x)
+                },
+            )
+        },
+    ) {
+        val n = samples.size
+        if (n < 2) return@Canvas
+        val w = size.width
+        val h = size.height
+        fun x(i: Int) = w * i / (n - 1).toFloat()
+        fun yFor(v: Float, min: Float, max: Float) = h - h * ((v - min) / (max - min)).coerceIn(0f, 1f)
+
+        val smoothedCore = smoothed(samples.map { it.coreTempC })
+        val smoothedSkin = smoothed(samples.map { it.skinTempC })
+        val smoothedHsi = smoothed(samples.map { it.heatStrainIndex })
+
+        // SKIN behind, HSI in the middle, CORE in front — same stacking as the live chart.
+        val skinPoints = smoothedSkin.mapIndexedNotNull { i, v -> v?.let { Offset(x(i), yFor(it, skinMin, skinMax)) } }
+        if (skinPoints.size >= 2) {
+            drawPoints(points = skinPoints, pointMode = PointMode.Polygon, color = ErgSkinTemp, strokeWidth = 2.5f, cap = StrokeCap.Round)
+        }
+        val hsiPoints = smoothedHsi.mapIndexedNotNull { i, v -> v?.let { Offset(x(i), yFor(it, hsiMin, hsiMax)) } }
+        if (hsiPoints.size >= 2) {
+            drawPoints(points = hsiPoints, pointMode = PointMode.Polygon, color = ErgAccent, strokeWidth = 2.5f, cap = StrokeCap.Round)
+        }
+        val corePoints = smoothedCore.mapIndexedNotNull { i, v -> v?.let { Offset(x(i), yFor(it, coreMin, coreMax)) } }
+        if (corePoints.size >= 2) {
+            drawPoints(points = corePoints, pointMode = PointMode.Polygon, color = ErgBelowTarget, strokeWidth = 3f, cap = StrokeCap.Round)
+        }
+
+        selectedIndex?.let { idx ->
+            val sample = samples.getOrNull(idx) ?: return@let
+            val lineX = x(idx)
+            drawLine(color = ErgOnSurface.copy(alpha = 0.5f), start = Offset(lineX, 0f), end = Offset(lineX, h), strokeWidth = 1.5f)
+
+            val lines = buildList {
+                add(formatScrubTime(sample.tSec) to ErgOnSurface)
+                sample.coreTempC?.let { add("%.1f°C".format(it) to ErgBelowTarget) }
+                sample.skinTempC?.let { add("%.1f°C".format(it) to ErgSkinTemp) }
+                sample.heatStrainIndex?.let { add("%.1f HSI".format(it) to ErgAccent) }
+            }
+            if (lines.size <= 1) return@let
+            val measured = lines.map { (text, color) -> textMeasurer.measure(text, TextStyle(fontSize = 11.sp, color = color)) }
+            val padding = 6.dp.toPx()
+            val rowHeight = measured.maxOf { it.size.height }
+            val boxWidth = measured.maxOf { it.size.width } + padding * 2
+            val boxHeight = rowHeight * measured.size + padding * 2
+            val gap = 4.dp.toPx()
+            val boxX = if (lineX + gap + boxWidth > w) lineX - gap - boxWidth else lineX + gap
+            val boxXClamped = boxX.coerceIn(0f, (w - boxWidth).coerceAtLeast(0f))
+            drawRect(color = ErgSurface, topLeft = Offset(boxXClamped, 0f), size = Size(boxWidth, boxHeight))
+            measured.forEachIndexed { i, result ->
+                drawText(result, topLeft = Offset(boxXClamped + padding, padding + rowHeight * i))
+            }
+        }
+    }
+}
+
 @Composable
 private fun StatsGrid(session: WorkoutSession, stats: SessionStats) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -269,8 +400,24 @@ private fun StatsGrid(session: WorkoutSession, stats: SessionStats) {
             )
             DetailTile("Avg cadence", stats.avgCadenceRpm?.let { "$it" } ?: "n/a", unit = "rpm", modifier = Modifier.weight(1f))
         }
+        if (stats.avgCoreTempC != null) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                DetailTile("Avg core temp", "%.2f".format(stats.avgCoreTempC), unit = "°C", modifier = Modifier.weight(1f))
+                DetailTile(
+                    "Max core temp", stats.maxCoreTempC?.let { "%.2f".format(it) } ?: "n/a", unit = "°C",
+                    modifier = Modifier.weight(1f),
+                )
+                DetailTile(
+                    "Time > ${CORE_TEMP_ALERT_C}°C", formatHms(stats.timeAboveCoreTempSec),
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
     }
 }
+
+private fun formatHms(totalSeconds: Int): String =
+    "%02d:%02d:%02d".format(totalSeconds / 3600, (totalSeconds % 3600) / 60, totalSeconds % 60)
 
 @Composable
 private fun DetailTile(

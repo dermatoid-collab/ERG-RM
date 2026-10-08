@@ -15,13 +15,22 @@ data class SessionStats(
     val avgCadenceRpm: Int?,
     val avgSpeedKmh: Float?,
     val distanceKm: Float?,
+    val avgCoreTempC: Float?,
+    val maxCoreTempC: Float?,
+    // Seconds spent above CORE_TEMP_ALERT_C — each sample is ~1 recorded second, so this is just
+    // a count of samples over the threshold, same assumption [totalKj] already relies on.
+    val timeAboveCoreTempSec: Int,
 )
+
+/** Heat-strain alert threshold for [SessionStats.timeAboveCoreTempSec], as requested. */
+const val CORE_TEMP_ALERT_C = 38.3f
 
 fun computeSessionStats(samples: List<SessionSample>): SessionStats {
     val watts = samples.map { it.watts }
     val hrs = samples.mapNotNull { it.hrBpm }
     val cadences = samples.mapNotNull { it.cadenceRpm }
     val speeds = samples.mapNotNull { it.speedKmh }
+    val coreTemps = samples.mapNotNull { it.coreTempC }
     return SessionStats(
         avgWatts = if (watts.isNotEmpty()) watts.average().roundToInt() else 0,
         maxWatts = watts.maxOrNull() ?: 0,
@@ -35,6 +44,9 @@ fun computeSessionStats(samples: List<SessionSample>): SessionStats {
         // Each sample contributes speedKmh/3600 km for its ~1 second — absent (not zero) when no
         // session sample ever carried a speed, e.g. one saved before speed capture was added.
         distanceKm = if (speeds.isNotEmpty()) (speeds.sum() / 3600.0).toFloat() else null,
+        avgCoreTempC = if (coreTemps.isNotEmpty()) coreTemps.average().toFloat() else null,
+        maxCoreTempC = coreTemps.maxOrNull(),
+        timeAboveCoreTempSec = samples.count { (it.coreTempC ?: 0f) > CORE_TEMP_ALERT_C },
     )
 }
 
