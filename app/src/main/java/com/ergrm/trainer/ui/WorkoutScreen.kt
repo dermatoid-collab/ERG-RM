@@ -873,6 +873,13 @@ private fun WorkoutProfileChart(
     val latestInputs = rememberUpdatedState(
         ChartInputs(steps, currentStepIndex, totalElapsedSec, totalDurationSec, intensityPercent, ftpWatts),
     )
+    // zoom/onZoomChange are read inside the pointerInput(Unit) gesture coroutine below, which
+    // launches once and never restarts — without rememberUpdatedState it would keep seeing the
+    // zoom value (and callback) from whenever that coroutine first launched, so every tap after
+    // the first recomputed .next() from the same stale zoom and the UI appeared to "freeze" after
+    // one change.
+    val latestZoom = rememberUpdatedState(zoom)
+    val latestOnZoomChange = rememberUpdatedState(onZoomChange)
 
     Column(modifier = modifier) {
     Canvas(
@@ -897,10 +904,10 @@ private fun WorkoutProfileChart(
                 // short bar's tip.
                 if (offset.y < size.height * CHART_ZOOM_TAP_FRACTION) {
                     selectedStepIndex = null
-                    onZoomChange(zoom.next())
+                    latestOnZoomChange.value(latestZoom.value.next())
                     return@awaitEachGesture
                 }
-                val (windowStart, windowEnd) = computeChartWindow(zoom, inputs.totalElapsedSec, inputs.totalDurationSec)
+                val (windowStart, windowEnd) = computeChartWindow(latestZoom.value, inputs.totalElapsedSec, inputs.totalDurationSec)
                 val windowLen = (windowEnd - windowStart).coerceAtLeast(1)
                 val tSec = windowStart + ((offset.x / size.width) * windowLen).roundToInt()
                 val tappedIndex = stepIndexAt(tSec, inputs.steps)
@@ -1273,20 +1280,22 @@ private fun IntervalDetailBlock(
         )
         // The label/time/zone chip are always short and fixed-width; the value is the one piece
         // that can genuinely run long (a three-digit bpm range like "150–220 bpm" is wider than
-        // any watt range ever was). weight(fill = false) reserves the fixed pieces' space first
-        // and only lets the value claim what's left; basicMarquee scrolls it in a continuous loop
-        // instead of ellipsizing, so the full range stays readable without shrinking the font or
-        // pushing the zone chip off the edge of the screen. delayMillis=10_000: one scroll pass,
-        // then a 10s pause (also before the very first pass) before it repeats — short enough
-        // text barely needs to move, so most of that "cycle" is this pause.
+        // any watt range ever was). weight(1f) with the default fill=true claims ALL remaining
+        // space after the fixed pieces are measured — not just what the text needs — so the zone
+        // chip that follows always lands at the same fixed spot (the block's own right edge) no
+        // matter how short or long the value text is, instead of trailing right behind it.
+        // basicMarquee scrolls it in a continuous loop (iterations default to Int.MAX_VALUE)
+        // instead of ellipsizing, so the full range stays readable without shrinking the font.
+        // velocity halved from the 30.dp/s default; delayMillis=5_000 is the pause before each
+        // pass (also before the very first one).
         Text(
             valueLabel,
             style = MaterialTheme.typography.bodyMedium,
             maxLines = 1,
             overflow = TextOverflow.Clip,
             modifier = Modifier
-                .weight(1f, fill = false)
-                .basicMarquee(delayMillis = 10_000),
+                .weight(1f)
+                .basicMarquee(delayMillis = 5_000, velocity = 15.dp),
         )
         Text(
             zone.label,
@@ -1332,7 +1341,7 @@ private fun ControlsRow(
             containerColor = mainContainerColor,
             iconSize = 28.dp,
             modifier = Modifier.weight(1f),
-            // Plain tap in all 3 states (Start/Pause/Stop) — only +5min and Skip require the 3s
+            // Plain tap in all 3 states (Start/Pause/Stop) — only +5min and Skip require the 2s
             // hold now.
         )
         PillIconButton(
@@ -1342,7 +1351,7 @@ private fun ControlsRow(
             enabled = hasWorkout,
             iconSize = 28.dp,
             modifier = Modifier.width(60.dp),
-            requireLongPressMillis = 3000L,
+            requireLongPressMillis = 2000L,
         )
         PillIconButton(
             icon = Icons.Filled.SkipNext,
@@ -1351,7 +1360,7 @@ private fun ControlsRow(
             enabled = hasWorkout,
             iconSize = 28.dp,
             modifier = Modifier.weight(1f),
-            requireLongPressMillis = 3000L,
+            requireLongPressMillis = 2000L,
         )
     }
 }

@@ -42,6 +42,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -251,6 +252,12 @@ private fun CoreSkinHsiChart(
     val coreTicks = ticksFor(coreMin, coreMax)
     val skinTicks = ticksFor(skinMin, skinMax)
     val textMeasurer = rememberTextMeasurer()
+    // pointerInput(Unit) below launches its gesture-detection coroutine once and never restarts
+    // it, so without rememberUpdatedState it would keep calling the onTap lambda instance (and
+    // the zoom value it closed over) from whenever that coroutine first launched — every tap
+    // after the first recomputed .next() from the same stale zoom, so the chart appeared to
+    // "freeze" after one zoom change.
+    val latestOnTap = rememberUpdatedState(onTap)
 
     Row(modifier = modifier.padding(bottom = NAME_RESERVED_HEIGHT)) {
         AxisColumn(
@@ -273,7 +280,7 @@ private fun CoreSkinHsiChart(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxHeight()
-                .pointerInput(Unit) { detectTapGestures { onTap() } },
+                .pointerInput(Unit) { detectTapGestures { latestOnTap.value() } },
         ) {
             val w = size.width
             val h = size.height
@@ -321,14 +328,16 @@ private fun CoreSkinHsiChart(
                     val labelY = (h * frac - measured.size.height / 2f).coerceIn(0f, h - measured.size.height)
                     drawText(measured, topLeft = Offset(labelX, labelY))
                 }
-                liveSample.coreTempC?.let { v ->
-                    val floored = floorToOneDecimal(v)
-                    drawInlineLabel("%.1f°".format(floored), coreFrac(v), coreColor(floored))
-                }
+                // Canvas draws paint over earlier ones, so later calls here end up frontmost:
+                // SKIN first (backmost), then HSI, then CORE last (frontmost).
                 liveSample.skinTempC?.let { v -> drawInlineLabel("%.1f°".format(v), skinFrac(v), ErgSkinTemp) }
                 liveSample.heatStrainIndex?.let { v ->
                     val floored = floorToOneDecimal(v)
                     drawInlineLabel("%.1f".format(floored), hsiFrac(v), hsiColor(floored))
+                }
+                liveSample.coreTempC?.let { v ->
+                    val floored = floorToOneDecimal(v)
+                    drawInlineLabel("%.1f°".format(floored), coreFrac(v), coreColor(floored))
                 }
             }
         }
@@ -368,6 +377,10 @@ private fun VitalsPowerChart(
     val bpmRange = chartMaxBpm(lthrBpm) - bpmMin
     val cadScale = CHART_MAX_CADENCE / (1f - CHART_TOP_HEADROOM)
     val last = samples.lastOrNull()
+    // Same stale-closure fix as CoreSkinHsiChart above: pointerInput(Unit) never restarts its
+    // gesture coroutine, so onTap must be read through rememberUpdatedState to see later taps'
+    // current zoom instead of freezing after the first.
+    val latestOnTap = rememberUpdatedState(onTap)
 
     Row(modifier = modifier.padding(bottom = NAME_RESERVED_HEIGHT)) {
         AxisColumn(
@@ -396,7 +409,7 @@ private fun VitalsPowerChart(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxHeight()
-                .pointerInput(Unit) { detectTapGestures { onTap() } },
+                .pointerInput(Unit) { detectTapGestures { latestOnTap.value() } },
         ) {
             val w = size.width
             val h = size.height
@@ -633,7 +646,7 @@ private fun CompactControlRow(
                 containerColor = mainColor,
                 modifier = Modifier.size(38.4.dp),
                 // Plain tap in all 3 states (Start/Pause/Stop) — only +5min and Skip require the
-                // 3s hold now.
+                // 2s hold now.
             )
             CompactButton(
                 icon = Icons.Filled.Add,
@@ -641,7 +654,7 @@ private fun CompactControlRow(
                 onClick = onExtend,
                 enabled = hasWorkout,
                 modifier = Modifier.size(38.4.dp),
-                requireLongPressMillis = 3000L,
+                requireLongPressMillis = 2000L,
             )
             CompactButton(
                 icon = Icons.Filled.SkipNext,
@@ -649,7 +662,7 @@ private fun CompactControlRow(
                 onClick = onSkip,
                 enabled = hasWorkout,
                 modifier = Modifier.size(38.4.dp),
-                requireLongPressMillis = 3000L,
+                requireLongPressMillis = 2000L,
             )
         }
         Row(
