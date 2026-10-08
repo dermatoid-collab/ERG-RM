@@ -608,6 +608,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val s = workoutState.value
         if (s.hasStarted) {
             val samples = sampleHistory.value
+            val coreByTSec = coreTempHistory.value.associateBy { it.tSec }
             val watts = samples.map { it.watts }
             val hrs = samples.mapNotNull { it.hrBpm }
             val cadences = samples.mapNotNull { it.cadenceRpm }
@@ -620,7 +621,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 maxWatts = watts.maxOrNull() ?: 0,
                 avgHrBpm = if (hrs.isNotEmpty()) hrs.average().roundToInt() else null,
                 avgCadenceRpm = if (cadences.isNotEmpty()) cadences.average().roundToInt() else null,
-                samples = samples.map { SessionSample(it.tSec, it.watts, it.hrBpm, it.cadenceRpm, it.speedKmh) },
+                samples = samples.map {
+                    val core = coreByTSec[it.tSec]
+                    SessionSample(
+                        it.tSec, it.watts, it.hrBpm, it.cadenceRpm, it.speedKmh,
+                        coreTempC = core?.coreTempC, skinTempC = core?.skinTempC, heatStrainIndex = core?.heatStrainIndex,
+                    )
+                },
             )
             viewModelScope.launch {
                 historyRepository.saveSession(session)

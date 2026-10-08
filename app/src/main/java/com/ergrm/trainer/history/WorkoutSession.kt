@@ -11,6 +11,11 @@ data class SessionSample(
     // Absent (null) on sessions saved before speed capture was added — the detail view shows
     // average speed/distance as unavailable for those rather than a misleading zero.
     val speedKmh: Float? = null,
+    // CORE sensor readings, time-aligned with the rest of this sample — absent (default null) on
+    // sessions saved before this was added, or any second with no CORE sensor connected.
+    val coreTempC: Float? = null,
+    val skinTempC: Float? = null,
+    val heatStrainIndex: Float? = null,
 )
 
 /** A completed (started and then stopped) workout session, saved locally for the history list. */
