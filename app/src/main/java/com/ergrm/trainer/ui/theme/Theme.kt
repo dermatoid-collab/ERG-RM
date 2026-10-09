@@ -30,6 +30,9 @@ val ErgModeErg = Color(0xFF2ECC71)
 // The CORE sensor's skin-temperature pill value, chosen distinct from ErgHrLine/ErgWarn/
 // ZONE_MAX.color — the other three colors in the same pill row — so all three stay tellable apart.
 val ErgSkinTemp = Color(0xFFD49494)
+// CORE's Heat Training Load tile value — distinct from every other accent already in a tile row
+// (red HR, blue cadence, amber warn) so it reads as its own thing.
+val ErgHeatLoad = Color(0xFFFF9800)
 // The intensity pill's directional triangle (below/above target) — the pill's background used to
 // carry this meaning via ErgIntensityUp/Down, but that's now a fixed color instead, so the
 // direction lives entirely in this small glyph's color.

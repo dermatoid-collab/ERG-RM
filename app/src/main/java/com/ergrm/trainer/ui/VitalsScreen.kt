@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -72,6 +73,7 @@ import com.ergrm.trainer.ui.theme.ErgBackground
 import com.ergrm.trainer.ui.theme.ErgBelowTarget
 import com.ergrm.trainer.ui.theme.ErgCadenceLine
 import com.ergrm.trainer.ui.theme.ErgDivider
+import com.ergrm.trainer.ui.theme.ErgHeatLoad
 import com.ergrm.trainer.ui.theme.ErgHrLine
 import com.ergrm.trainer.ui.theme.ErgHrPlus
 import com.ergrm.trainer.ui.theme.ErgIntensityDownGlyph
@@ -195,32 +197,49 @@ fun VitalsScreen(
  *  Screen 1's StatTiles, since there's nothing to toggle (each is a single fixed total). */
 @Composable
 private fun SummaryTilesGrid(stats: SessionStats, durationSec: Int, modifier: Modifier = Modifier) {
-    // Left-to-right, top-to-bottom order and HR-red/cadence-blue coloring as requested, echoing
-    // the same colors their respective chart lines/axes use below.
-    val mainTiles = listOf(
+    // 2x2 grouped cards (replacing the old 13-small-tile grid) — each line is its own
+    // "Label: value", so a card's height follows its own line count instead of every tile
+    // sharing one fixed height. HR-red/cadence-blue/HTL-orange coloring as requested, echoing
+    // the same colors their respective chart lines use below.
+    val topLeft = listOf(
         Triple("Duration", formatTime(durationSec), ErgOnSurface),
         Triple("Distance", stats.distanceKm?.let { "%.1f km".format(it) } ?: "--", ErgOnSurface),
-        Triple("Avg Speed", stats.avgSpeedKmh?.let { "%.1f".format(it) } ?: "--", ErgOnSurface),
+        Triple("Avg Speed", stats.avgSpeedKmh?.let { "%.1f km/h".format(it) } ?: "--", ErgOnSurface),
+    )
+    val topRight = listOf(
         Triple("Work", "${stats.totalKj} kJ", ErgOnSurface),
         Triple("Avg Watts", "${stats.avgWatts} W", ErgOnSurface),
         Triple("NP", stats.normalizedWatts?.let { "$it W" } ?: "--", ErgOnSurface),
-        Triple("Max HR", stats.maxHrBpm?.toString() ?: "--", ErgHrLine),
-        Triple("Avg HR", stats.avgHrBpm?.toString() ?: "--", ErgHrLine),
-        Triple("Avg Cad", stats.avgCadenceRpm?.toString() ?: "--", ErgCadenceLine),
     )
-    // Its own row of 4 (not folded into mainTiles' chunked(3)) so this adds exactly one row's
-    // worth of height, same as any other row here — not two, which a flat 13-item chunked(3)
-    // list would've produced (4 rows of 3 plus a stray row of 1).
-    val coreTiles = listOf(
-        Triple("Avg Core T", stats.avgCoreTempC?.let { "%.2f".format(it) } ?: "--", ErgOnSurface),
-        Triple("Max Core T", stats.maxCoreTempC?.let { "%.2f".format(it) } ?: "--", ErgOnSurface),
+    val bottomLeft = listOf(
+        Triple("Max HR", stats.maxHrBpm?.let { "$it bpm" } ?: "--", ErgHrLine),
+        Triple("Avg HR", stats.avgHrBpm?.let { "$it bpm" } ?: "--", ErgHrLine),
+        Triple("Avg Cad", stats.avgCadenceRpm?.let { "$it rpm" } ?: "--", ErgCadenceLine),
+    )
+    val bottomRight = listOf(
+        Triple("Avg Core T", stats.avgCoreTempC?.let { "%.2f °C".format(it) } ?: "--", ErgOnSurface),
+        Triple("Max Core T", stats.maxCoreTempC?.let { "%.2f °C".format(it) } ?: "--", ErgOnSurface),
         Triple("Mins > ${CORE_TEMP_ALERT_C}°", formatMmSs(stats.timeAboveCoreTempSec), ErgOnSurface),
         // See HeatTrainingLoad.kt — same estimate the History detail view now shows.
-        Triple("Core HTL", stats.heatTrainingLoad?.let { "%.1f".format(it) } ?: "--", ErgOnSurface),
+        Triple("Core HTL", stats.heatTrainingLoad?.let { "%.1f".format(it) } ?: "--", ErgHeatLoad),
     )
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-        mainTiles.chunked(3).forEach { TileRow(it) }
-        TileRow(coreTiles)
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+            modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+        ) {
+            GroupCard(topLeft, Modifier.weight(1f))
+            GroupCard(topRight, Modifier.weight(1f))
+        }
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+            modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+        ) {
+            GroupCard(bottomLeft, Modifier.weight(1f))
+            // The taller of the two cards in this row (4 lines vs 3) sets the row's height —
+            // IntrinsicSize.Min + fillMaxHeight below makes both cards match it.
+            GroupCard(bottomRight, Modifier.weight(1f))
+        }
     }
 }
 
@@ -228,27 +247,18 @@ private fun formatMmSs(totalSeconds: Int): String =
     "%02d:%02d".format(totalSeconds / 60, totalSeconds % 60)
 
 @Composable
-private fun TileRow(tiles: List<Triple<String, String, Color>>) {
-    Row(horizontalArrangement = Arrangement.spacedBy(5.dp), modifier = Modifier.fillMaxWidth()) {
-        tiles.forEach { (label, value, valueColor) ->
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .background(ErgSurface, RoundedCornerShape(10.dp))
-                    .padding(horizontal = 8.dp, vertical = 5.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                // Same label size as Screen 1's own StatTile (labelSmall) — was 16.5sp,
-                // noticeably bigger than that screen's tiles for no reason.
-                Text(
-                    label.uppercase(),
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Medium,
-                    color = ErgOnSurface.copy(alpha = 0.6f),
-                    maxLines = 1,
-                )
-                // -20% from the original 24sp.
-                Text(value, fontSize = 19.2.sp, fontWeight = FontWeight.Bold, color = valueColor, maxLines = 1)
+private fun GroupCard(lines: List<Triple<String, String, Color>>, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .fillMaxHeight()
+            .background(ErgSurface, RoundedCornerShape(10.dp))
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.Center,
+    ) {
+        lines.forEach { (label, value, valueColor) ->
+            Row {
+                Text("$label: ", fontSize = 16.sp, color = ErgOnSurface.copy(alpha = 0.65f), maxLines = 1)
+                Text(value, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = valueColor, maxLines = 1)
             }
         }
     }
