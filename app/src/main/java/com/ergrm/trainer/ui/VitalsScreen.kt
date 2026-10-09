@@ -3,7 +3,9 @@ package com.ergrm.trainer.ui
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -324,7 +326,17 @@ private fun CoreSkinHsiChart(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxHeight()
-                .pointerInput(Unit) { detectTapGestures { latestOnTap.value() } },
+                // detectTapGestures cancels the whole gesture if the finger drifts past touch
+                // slop before lifting — exactly why WorkoutProfileChart's own zoom tap avoids it
+                // (see its comment there); this chart's tap-anywhere-to-zoom band is just as
+                // vulnerable to a real finger's natural drift, so track down-then-up directly.
+                .pointerInput(Unit) {
+                    awaitEachGesture {
+                        awaitFirstDown()
+                        waitForUpOrCancellation() ?: return@awaitEachGesture
+                        latestOnTap.value()
+                    }
+                },
         ) {
             val w = size.width
             val h = size.height
@@ -453,7 +465,17 @@ private fun VitalsPowerChart(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxHeight()
-                .pointerInput(Unit) { detectTapGestures { latestOnTap.value() } },
+                // detectTapGestures cancels the whole gesture if the finger drifts past touch
+                // slop before lifting — exactly why WorkoutProfileChart's own zoom tap avoids it
+                // (see its comment there); this chart's tap-anywhere-to-zoom band is just as
+                // vulnerable to a real finger's natural drift, so track down-then-up directly.
+                .pointerInput(Unit) {
+                    awaitEachGesture {
+                        awaitFirstDown()
+                        waitForUpOrCancellation() ?: return@awaitEachGesture
+                        latestOnTap.value()
+                    }
+                },
         ) {
             val w = size.width
             val h = size.height
