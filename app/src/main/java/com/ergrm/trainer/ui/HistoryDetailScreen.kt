@@ -64,7 +64,7 @@ import kotlin.math.roundToInt
  *  original plan, so this mirrors the live workout chart's traces without the interval backdrop. */
 @Composable
 fun SessionDetailScreen(session: WorkoutSession, viewModel: MainViewModel, onBack: () -> Unit) {
-    val stats = remember(session.id) { computeSessionStats(session.samples) }
+    val stats = remember(session.id) { computeSessionStats(session.samples, ftpWatts = session.ftpWatts) }
     val context = LocalContext.current
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -388,6 +388,7 @@ private fun StatsGrid(session: WorkoutSession, stats: SessionStats) {
             DetailTile("Work", "${stats.totalKj}", unit = "kJ", modifier = Modifier.weight(1f))
             DetailTile("Avg watts", "${stats.avgWatts}", unit = "W", modifier = Modifier.weight(1f))
             DetailTile("NP", stats.normalizedWatts?.let { "$it" } ?: "n/a", unit = "W", modifier = Modifier.weight(1f))
+            DetailTile("TSS", stats.tss?.toString() ?: "n/a", modifier = Modifier.weight(1f))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
             DetailTile(

@@ -34,4 +34,8 @@ data class WorkoutSession(
     // derived live via SessionStats, so it round-trips through the JSON backup/export — absent
     // (default null) on sessions saved before this was added, or with no usable CORE + HR data.
     val heatTrainingLoad: Float? = null,
+    // The rider's FTP in effect *during* this ride, not whatever it is now — so TSS (see
+    // SessionStats.tss) stays correct for an old session even after the rider's FTP changes.
+    // Absent (default null) on sessions saved before this was added.
+    val ftpWatts: Int? = null,
 )

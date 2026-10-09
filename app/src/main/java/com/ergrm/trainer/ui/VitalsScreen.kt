@@ -114,7 +114,7 @@ fun VitalsScreen(
 
     // Same tSec-keyed merge as MainViewModel.exitWorkout() uses to persist this into history —
     // needed here too so the Avg/Max Core T tiles below have live data to show, not just "--".
-    val stats = remember(samples, coreSamples) {
+    val stats = remember(samples, coreSamples, settings.ftpWatts) {
         val coreByTSec = coreSamples.associateBy { it.tSec }
         computeSessionStats(
             samples.map {
@@ -124,6 +124,7 @@ fun VitalsScreen(
                     coreTempC = core?.coreTempC, skinTempC = core?.skinTempC, heatStrainIndex = core?.heatStrainIndex,
                 )
             },
+            ftpWatts = settings.ftpWatts,
         )
     }
 
@@ -208,12 +209,13 @@ private fun SummaryTilesGrid(stats: SessionStats, durationSec: Int, modifier: Mo
     )
     val topRight = listOf(
         Triple("Work", "${stats.totalKj} kJ", ErgOnSurface),
-        Triple("Avg Watts", "${stats.avgWatts} W", ErgOnSurface),
         Triple("NP", stats.normalizedWatts?.let { "$it W" } ?: "--", ErgOnSurface),
+        Triple("TSS", stats.tss?.toString() ?: "--", ErgOnSurface),
     )
     val bottomLeft = listOf(
-        Triple("Max HR", stats.maxHrBpm?.let { "$it bpm" } ?: "--", ErgHrLine),
+        Triple("Avg Watts", "${stats.avgWatts} W", ErgOnSurface),
         Triple("Avg HR", stats.avgHrBpm?.let { "$it bpm" } ?: "--", ErgHrLine),
+        Triple("Max HR", stats.maxHrBpm?.let { "$it bpm" } ?: "--", ErgHrLine),
         Triple("Avg Cad", stats.avgCadenceRpm?.let { "$it rpm" } ?: "--", ErgCadenceLine),
     )
     val bottomRight = listOf(

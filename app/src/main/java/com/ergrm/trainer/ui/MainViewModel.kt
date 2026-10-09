@@ -631,6 +631,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 avgCadenceRpm = if (cadences.isNotEmpty()) cadences.average().roundToInt() else null,
                 samples = sessionSamples,
                 heatTrainingLoad = HeatTrainingLoad.compute(sessionSamples),
+                ftpWatts = settings.value.ftpWatts,
             )
             viewModelScope.launch {
                 historyRepository.saveSession(session)

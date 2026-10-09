@@ -22,21 +22,26 @@ data class SessionStats(
     val timeAboveCoreTempSec: Int,
     // Estimated CORE Heat Training Load (0-10) — null without CORE + heart-rate data.
     val heatTrainingLoad: Float?,
+    // Training Stress Score (Coggan) — null without both an FTP and enough samples for NP.
+    val tss: Int?,
 )
 
 /** Heat-strain alert threshold for [SessionStats.timeAboveCoreTempSec], as requested. */
 const val CORE_TEMP_ALERT_C = 38.3f
 
-fun computeSessionStats(samples: List<SessionSample>): SessionStats {
+/** [ftpWatts] should be the FTP in effect *during* the ride, not necessarily the rider's current
+ *  one — see [WorkoutSession.ftpWatts], which is what the history view passes in. */
+fun computeSessionStats(samples: List<SessionSample>, ftpWatts: Int? = null): SessionStats {
     val watts = samples.map { it.watts }
     val hrs = samples.mapNotNull { it.hrBpm }
     val cadences = samples.mapNotNull { it.cadenceRpm }
     val speeds = samples.mapNotNull { it.speedKmh }
     val coreTemps = samples.mapNotNull { it.coreTempC }
+    val normalizedWatts = normalizedPower(watts)
     return SessionStats(
         avgWatts = if (watts.isNotEmpty()) watts.average().roundToInt() else 0,
         maxWatts = watts.maxOrNull() ?: 0,
-        normalizedWatts = normalizedPower(watts),
+        normalizedWatts = normalizedWatts,
         // Each sample is ~1 second of recorded riding, so summing watts directly gives joules.
         totalKj = (watts.sumOf { it.toLong() } / 1000.0).roundToInt(),
         avgHrBpm = if (hrs.isNotEmpty()) hrs.average().roundToInt() else null,
@@ -50,6 +55,14 @@ fun computeSessionStats(samples: List<SessionSample>): SessionStats {
         maxCoreTempC = coreTemps.maxOrNull(),
         timeAboveCoreTempSec = samples.count { (it.coreTempC ?: 0f) > CORE_TEMP_ALERT_C },
         heatTrainingLoad = HeatTrainingLoad.compute(samples),
+        // TSS = duration_sec x NP x IF / (FTP x 3600) x 100, IF = NP/FTP — each sample is ~1
+        // second, same assumption totalKj already relies on.
+        tss = if (ftpWatts != null && ftpWatts > 0 && normalizedWatts != null) {
+            val intensityFactor = normalizedWatts.toDouble() / ftpWatts
+            (samples.size * normalizedWatts * intensityFactor / (ftpWatts * 3600.0) * 100.0).roundToInt()
+        } else {
+            null
+        },
     )
 }
 
