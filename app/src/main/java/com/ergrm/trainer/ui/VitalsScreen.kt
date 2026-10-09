@@ -109,8 +109,19 @@ fun VitalsScreen(
     var showStopConfirm by remember { mutableStateOf(false) }
     var showDiscardConfirm by remember { mutableStateOf(false) }
 
-    val stats = remember(samples) {
-        computeSessionStats(samples.map { SessionSample(it.tSec, it.watts, it.hrBpm, it.cadenceRpm, it.speedKmh) })
+    // Same tSec-keyed merge as MainViewModel.exitWorkout() uses to persist this into history —
+    // needed here too so the Avg/Max Core T tiles below have live data to show, not just "--".
+    val stats = remember(samples, coreSamples) {
+        val coreByTSec = coreSamples.associateBy { it.tSec }
+        computeSessionStats(
+            samples.map {
+                val core = coreByTSec[it.tSec]
+                SessionSample(
+                    it.tSec, it.watts, it.hrBpm, it.cadenceRpm, it.speedKmh,
+                    coreTempC = core?.coreTempC, skinTempC = core?.skinTempC, heatStrainIndex = core?.heatStrainIndex,
+                )
+            },
+        )
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp, vertical = 6.dp)) {
@@ -195,6 +206,11 @@ private fun SummaryTilesGrid(stats: SessionStats, durationSec: Int, modifier: Mo
         Triple("Max HR", stats.maxHrBpm?.toString() ?: "--", ErgHrLine),
         Triple("Avg HR", stats.avgHrBpm?.toString() ?: "--", ErgHrLine),
         Triple("Avg Cad", stats.avgCadenceRpm?.toString() ?: "--", ErgCadenceLine),
+        Triple("Avg Core T", stats.avgCoreTempC?.let { "%.2f".format(it) } ?: "--", ErgOnSurface),
+        Triple("Max Core T", stats.maxCoreTempC?.let { "%.2f".format(it) } ?: "--", ErgOnSurface),
+        // TODO(CORE HTL): placeholder until the Heat Training Load formula is provided — not yet
+        // computed or persisted anywhere.
+        Triple("Core HTL", "--", ErgOnSurface),
     )
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(5.dp)) {
         tiles.chunked(3).forEach { row ->
@@ -204,17 +220,20 @@ private fun SummaryTilesGrid(stats: SessionStats, durationSec: Int, modifier: Mo
                         modifier = Modifier
                             .weight(1f)
                             .background(ErgSurface, RoundedCornerShape(10.dp))
-                            .padding(horizontal = 8.dp, vertical = 8.dp),
+                            .padding(horizontal = 8.dp, vertical = 5.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
+                        // Same label size as Screen 1's own StatTile (labelSmall) — was 16.5sp,
+                        // noticeably bigger than that screen's tiles for no reason.
                         Text(
                             label.uppercase(),
-                            fontSize = 16.5.sp,
+                            style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Medium,
                             color = ErgOnSurface.copy(alpha = 0.6f),
                             maxLines = 1,
                         )
-                        Text(value, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = valueColor, maxLines = 1)
+                        // -20% from the original 24sp.
+                        Text(value, fontSize = 19.2.sp, fontWeight = FontWeight.Bold, color = valueColor, maxLines = 1)
                     }
                 }
             }
