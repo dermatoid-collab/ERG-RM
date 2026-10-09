@@ -20,6 +20,8 @@ data class SessionStats(
     // Seconds spent above CORE_TEMP_ALERT_C — each sample is ~1 recorded second, so this is just
     // a count of samples over the threshold, same assumption [totalKj] already relies on.
     val timeAboveCoreTempSec: Int,
+    // Estimated CORE Heat Training Load (0-10) — null without CORE + heart-rate data.
+    val heatTrainingLoad: Float?,
 )
 
 /** Heat-strain alert threshold for [SessionStats.timeAboveCoreTempSec], as requested. */
@@ -47,6 +49,7 @@ fun computeSessionStats(samples: List<SessionSample>): SessionStats {
         avgCoreTempC = if (coreTemps.isNotEmpty()) coreTemps.average().toFloat() else null,
         maxCoreTempC = coreTemps.maxOrNull(),
         timeAboveCoreTempSec = samples.count { (it.coreTempC ?: 0f) > CORE_TEMP_ALERT_C },
+        heatTrainingLoad = HeatTrainingLoad.compute(samples),
     )
 }
 

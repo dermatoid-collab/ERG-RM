@@ -413,6 +413,12 @@ private fun StatsGrid(session: WorkoutSession, stats: SessionStats) {
                 )
             }
         }
+        stats.heatTrainingLoad?.let { htl ->
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                // Estimate of CORE's Heat Training Load, see HeatTrainingLoad.kt.
+                DetailTile("Heat Training Load", "%.1f".format(htl), unit = "/ 10", modifier = Modifier.weight(1f))
+            }
+        }
     }
 }
 
