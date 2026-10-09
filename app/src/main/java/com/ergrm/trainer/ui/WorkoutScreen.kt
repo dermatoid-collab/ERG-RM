@@ -896,17 +896,20 @@ private fun WorkoutProfileChart(
                 awaitFirstDown()
                 val up = waitForUpOrCancellation() ?: return@awaitEachGesture
                 val offset = up.position
-                val inputs = latestInputs.value
-                if (inputs.steps.isEmpty() || inputs.totalDurationSec <= 0) return@awaitEachGesture
                 // Top 75% of the chart cycles zoom; the bottom quarter selects whatever interval
                 // sits at that x for its tooltip, even where that particular bar falls short of
                 // the tap — matching TrainerDay, where you don't have to land precisely on a
-                // short bar's tip.
+                // short bar's tip. The zoom cycle itself doesn't need any step/duration data, so
+                // it's checked BEFORE the no-plan-loaded guard below — zoom must still work on an
+                // empty/no-plan chart (e.g. testing with no workout loaded), only the interval
+                // tooltip genuinely needs real steps.
                 if (offset.y < size.height * CHART_ZOOM_TAP_FRACTION) {
                     selectedStepIndex = null
                     latestOnZoomChange.value(latestZoom.value.next())
                     return@awaitEachGesture
                 }
+                val inputs = latestInputs.value
+                if (inputs.steps.isEmpty() || inputs.totalDurationSec <= 0) return@awaitEachGesture
                 val (windowStart, windowEnd) = computeChartWindow(latestZoom.value, inputs.totalElapsedSec, inputs.totalDurationSec)
                 val windowLen = (windowEnd - windowStart).coerceAtLeast(1)
                 val tSec = windowStart + ((offset.x / size.width) * windowLen).roundToInt()
