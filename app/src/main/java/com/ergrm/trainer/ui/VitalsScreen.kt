@@ -237,7 +237,7 @@ private fun CoreSkinHsiChart(
     modifier: Modifier = Modifier,
 ) {
     val last = samples.lastOrNull()
-    val coreMin = 36.5f
+    val coreMin = 34.5f
     val coreMax = 39.5f
     val skinMin = 28f
     val skinMax = 39.5f

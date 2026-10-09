@@ -302,7 +302,7 @@ private fun CoreSkinHsiLegend() {
 private fun CoreSkinHsiDetailChart(samples: List<SessionSample>, modifier: Modifier = Modifier) {
     var selectedIndex by remember(samples) { mutableStateOf<Int?>(null) }
     val textMeasurer = rememberTextMeasurer()
-    val coreMin = 36.5f
+    val coreMin = 34.5f
     val coreMax = 39.5f
     val skinMin = 28f
     val skinMax = 39.5f
