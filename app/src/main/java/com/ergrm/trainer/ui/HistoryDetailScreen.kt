@@ -49,6 +49,7 @@ import com.ergrm.trainer.history.WorkoutSession
 import com.ergrm.trainer.history.computeSessionStats
 import com.ergrm.trainer.ui.theme.ErgAccent
 import com.ergrm.trainer.ui.theme.ErgBelowTarget
+import com.ergrm.trainer.ui.theme.ErgHeatLoad
 import com.ergrm.trainer.ui.theme.ErgHrLine
 import com.ergrm.trainer.ui.theme.ErgOnSurface
 import com.ergrm.trainer.ui.theme.ErgProgressLine
@@ -388,7 +389,6 @@ private fun StatsGrid(session: WorkoutSession, stats: SessionStats) {
             DetailTile("Work", "${stats.totalKj}", unit = "kJ", modifier = Modifier.weight(1f))
             DetailTile("Avg watts", "${stats.avgWatts}", unit = "W", modifier = Modifier.weight(1f))
             DetailTile("NP", stats.normalizedWatts?.let { "$it" } ?: "n/a", unit = "W", modifier = Modifier.weight(1f))
-            DetailTile("TSS", stats.tss?.toString() ?: "n/a", modifier = Modifier.weight(1f))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
             DetailTile(
@@ -417,10 +417,17 @@ private fun StatsGrid(session: WorkoutSession, stats: SessionStats) {
         // Prefers the value stored on the session itself (computed once at save time, see
         // MainViewModel.exitWorkout) over recomputing it here — falls back to the live derivation
         // only for sessions saved before that field existed.
-        (session.heatTrainingLoad ?: stats.heatTrainingLoad)?.let { htl ->
+        val htl = session.heatTrainingLoad ?: stats.heatTrainingLoad
+        if (htl != null || stats.tss != null) {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
-                // Estimate of CORE's Heat Training Load, see HeatTrainingLoad.kt.
-                DetailTile("Heat Training Load", "%.1f".format(htl), unit = "/ 10", modifier = Modifier.weight(1f))
+                // Estimate of CORE's Heat Training Load, see HeatTrainingLoad.kt. Same orange as
+                // Vitals' own Core HTL tile.
+                DetailTile(
+                    "Core HTL", htl?.let { "%.1f".format(it) } ?: "n/a",
+                    valueColor = if (htl != null) ErgHeatLoad else ErgOnSurface,
+                    modifier = Modifier.weight(1f),
+                )
+                DetailTile("TSS", stats.tss?.toString() ?: "n/a", modifier = Modifier.weight(1f))
             }
         }
     }
