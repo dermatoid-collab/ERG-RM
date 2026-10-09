@@ -62,6 +62,7 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.ergrm.trainer.history.CORE_TEMP_ALERT_C
 import com.ergrm.trainer.history.SessionSample
 import com.ergrm.trainer.history.SessionStats
 import com.ergrm.trainer.history.computeSessionStats
@@ -196,7 +197,7 @@ fun VitalsScreen(
 private fun SummaryTilesGrid(stats: SessionStats, durationSec: Int, modifier: Modifier = Modifier) {
     // Left-to-right, top-to-bottom order and HR-red/cadence-blue coloring as requested, echoing
     // the same colors their respective chart lines/axes use below.
-    val tiles = listOf(
+    val mainTiles = listOf(
         Triple("Duration", formatTime(durationSec), ErgOnSurface),
         Triple("Distance", stats.distanceKm?.let { "%.1f km".format(it) } ?: "--", ErgOnSurface),
         Triple("Avg Speed", stats.avgSpeedKmh?.let { "%.1f".format(it) } ?: "--", ErgOnSurface),
@@ -206,35 +207,48 @@ private fun SummaryTilesGrid(stats: SessionStats, durationSec: Int, modifier: Mo
         Triple("Max HR", stats.maxHrBpm?.toString() ?: "--", ErgHrLine),
         Triple("Avg HR", stats.avgHrBpm?.toString() ?: "--", ErgHrLine),
         Triple("Avg Cad", stats.avgCadenceRpm?.toString() ?: "--", ErgCadenceLine),
+    )
+    // Its own row of 4 (not folded into mainTiles' chunked(3)) so this adds exactly one row's
+    // worth of height, same as any other row here — not two, which a flat 13-item chunked(3)
+    // list would've produced (4 rows of 3 plus a stray row of 1).
+    val coreTiles = listOf(
         Triple("Avg Core T", stats.avgCoreTempC?.let { "%.2f".format(it) } ?: "--", ErgOnSurface),
         Triple("Max Core T", stats.maxCoreTempC?.let { "%.2f".format(it) } ?: "--", ErgOnSurface),
+        Triple("Mins > ${CORE_TEMP_ALERT_C}°", formatMmSs(stats.timeAboveCoreTempSec), ErgOnSurface),
         // See HeatTrainingLoad.kt — same estimate the History detail view now shows.
         Triple("Core HTL", stats.heatTrainingLoad?.let { "%.1f".format(it) } ?: "--", ErgOnSurface),
     )
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-        tiles.chunked(3).forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(5.dp), modifier = Modifier.fillMaxWidth()) {
-                row.forEach { (label, value, valueColor) ->
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .background(ErgSurface, RoundedCornerShape(10.dp))
-                            .padding(horizontal = 8.dp, vertical = 5.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        // Same label size as Screen 1's own StatTile (labelSmall) — was 16.5sp,
-                        // noticeably bigger than that screen's tiles for no reason.
-                        Text(
-                            label.uppercase(),
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Medium,
-                            color = ErgOnSurface.copy(alpha = 0.6f),
-                            maxLines = 1,
-                        )
-                        // -20% from the original 24sp.
-                        Text(value, fontSize = 19.2.sp, fontWeight = FontWeight.Bold, color = valueColor, maxLines = 1)
-                    }
-                }
+        mainTiles.chunked(3).forEach { TileRow(it) }
+        TileRow(coreTiles)
+    }
+}
+
+private fun formatMmSs(totalSeconds: Int): String =
+    "%02d:%02d".format(totalSeconds / 60, totalSeconds % 60)
+
+@Composable
+private fun TileRow(tiles: List<Triple<String, String, Color>>) {
+    Row(horizontalArrangement = Arrangement.spacedBy(5.dp), modifier = Modifier.fillMaxWidth()) {
+        tiles.forEach { (label, value, valueColor) ->
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .background(ErgSurface, RoundedCornerShape(10.dp))
+                    .padding(horizontal = 8.dp, vertical = 5.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                // Same label size as Screen 1's own StatTile (labelSmall) — was 16.5sp,
+                // noticeably bigger than that screen's tiles for no reason.
+                Text(
+                    label.uppercase(),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Medium,
+                    color = ErgOnSurface.copy(alpha = 0.6f),
+                    maxLines = 1,
+                )
+                // -20% from the original 24sp.
+                Text(value, fontSize = 19.2.sp, fontWeight = FontWeight.Bold, color = valueColor, maxLines = 1)
             }
         }
     }

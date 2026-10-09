@@ -408,7 +408,7 @@ private fun StatsGrid(session: WorkoutSession, stats: SessionStats) {
                     modifier = Modifier.weight(1f),
                 )
                 DetailTile(
-                    "Time > ${CORE_TEMP_ALERT_C}°C", formatHms(stats.timeAboveCoreTempSec),
+                    "Mins > ${CORE_TEMP_ALERT_C}°", formatMmSs(stats.timeAboveCoreTempSec),
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -422,8 +422,8 @@ private fun StatsGrid(session: WorkoutSession, stats: SessionStats) {
     }
 }
 
-private fun formatHms(totalSeconds: Int): String =
-    "%02d:%02d:%02d".format(totalSeconds / 3600, (totalSeconds % 3600) / 60, totalSeconds % 60)
+private fun formatMmSs(totalSeconds: Int): String =
+    "%02d:%02d".format(totalSeconds / 60, totalSeconds % 60)
 
 @Composable
 private fun DetailTile(
