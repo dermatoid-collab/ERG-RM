@@ -30,4 +30,8 @@ data class WorkoutSession(
     val avgHrBpm: Int?,
     val avgCadenceRpm: Int?,
     val samples: List<SessionSample> = emptyList(),
+    // Computed once at save time (see HeatTrainingLoad.compute) and stored here rather than only
+    // derived live via SessionStats, so it round-trips through the JSON backup/export — absent
+    // (default null) on sessions saved before this was added, or with no usable CORE + HR data.
+    val heatTrainingLoad: Float? = null,
 )

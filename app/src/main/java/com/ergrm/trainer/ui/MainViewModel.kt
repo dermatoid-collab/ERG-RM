@@ -30,6 +30,7 @@ import com.ergrm.trainer.backup.BackupReminderScheduler
 import com.ergrm.trainer.data.AppSettings
 import com.ergrm.trainer.data.BackupRepository
 import com.ergrm.trainer.data.SettingsRepository
+import com.ergrm.trainer.history.HeatTrainingLoad
 import com.ergrm.trainer.history.SessionHistoryRepository
 import com.ergrm.trainer.history.SessionSample
 import com.ergrm.trainer.history.WorkoutSession
@@ -612,6 +613,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val watts = samples.map { it.watts }
             val hrs = samples.mapNotNull { it.hrBpm }
             val cadences = samples.mapNotNull { it.cadenceRpm }
+            val sessionSamples = samples.map {
+                val core = coreByTSec[it.tSec]
+                SessionSample(
+                    it.tSec, it.watts, it.hrBpm, it.cadenceRpm, it.speedKmh,
+                    coreTempC = core?.coreTempC, skinTempC = core?.skinTempC, heatStrainIndex = core?.heatStrainIndex,
+                )
+            }
             val session = WorkoutSession(
                 id = UUID.randomUUID().toString(),
                 startEpochMillis = System.currentTimeMillis() - s.totalElapsedSec * 1000L,
@@ -621,13 +629,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 maxWatts = watts.maxOrNull() ?: 0,
                 avgHrBpm = if (hrs.isNotEmpty()) hrs.average().roundToInt() else null,
                 avgCadenceRpm = if (cadences.isNotEmpty()) cadences.average().roundToInt() else null,
-                samples = samples.map {
-                    val core = coreByTSec[it.tSec]
-                    SessionSample(
-                        it.tSec, it.watts, it.hrBpm, it.cadenceRpm, it.speedKmh,
-                        coreTempC = core?.coreTempC, skinTempC = core?.skinTempC, heatStrainIndex = core?.heatStrainIndex,
-                    )
-                },
+                samples = sessionSamples,
+                heatTrainingLoad = HeatTrainingLoad.compute(sessionSamples),
             )
             viewModelScope.launch {
                 historyRepository.saveSession(session)
