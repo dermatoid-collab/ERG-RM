@@ -223,7 +223,7 @@ private fun SummaryTilesGrid(stats: SessionStats, durationSec: Int, modifier: Mo
         Triple("Max Core T", stats.maxCoreTempC?.let { "%.2f °C".format(it) } ?: "--", ErgOnSurface),
         Triple("Mins > ${CORE_TEMP_ALERT_C}°", formatMmSs(stats.timeAboveCoreTempSec), ErgOnSurface),
         // See HeatTrainingLoad.kt — same estimate the History detail view now shows.
-        Triple("Core HTL", stats.heatTrainingLoad?.let { "%.1f".format(it) } ?: "--", ErgHeatLoad),
+        Triple("Core HTL", stats.heatTrainingLoad?.let { "%.1f/10".format(it) } ?: "--", ErgHeatLoad),
     )
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(5.dp)) {
         Row(

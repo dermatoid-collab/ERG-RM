@@ -428,7 +428,7 @@ private fun StatsGrid(session: WorkoutSession, stats: SessionStats) {
                 // Estimate of CORE's Heat Training Load, see HeatTrainingLoad.kt. Same orange as
                 // Vitals' own Core HTL tile.
                 DetailTile(
-                    "Core HTL", htl?.let { "%.1f".format(it) } ?: "n/a",
+                    "Core HTL", htl?.let { "%.1f/10".format(it) } ?: "n/a",
                     valueColor = if (htl != null) ErgHeatLoad else ErgOnSurface,
                     modifier = Modifier.weight(1f),
                 )
