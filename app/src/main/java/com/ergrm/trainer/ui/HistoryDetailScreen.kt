@@ -399,7 +399,12 @@ private fun StatsGrid(session: WorkoutSession, stats: SessionStats) {
                 "Avg HR", stats.avgHrBpm?.let { "$it" } ?: "n/a", unit = "bpm", modifier = Modifier.weight(1f),
                 valueColor = if (stats.avgHrBpm != null) ErgHrLine else ErgOnSurface,
             )
-            DetailTile("Avg cadence", stats.avgCadenceRpm?.let { "$it" } ?: "n/a", unit = "rpm", modifier = Modifier.weight(1f))
+            DetailTile(
+                "Avg cadence", stats.avgCadenceRpm?.let { "$it" } ?: "n/a", unit = "rpm", modifier = Modifier.weight(1f),
+                // Same blue as this screen's own cadence trace/legend above, not Vitals' slightly
+                // different blue.
+                valueColor = if (stats.avgCadenceRpm != null) ErgProgressLine else ErgOnSurface,
+            )
         }
         if (stats.avgCoreTempC != null) {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
