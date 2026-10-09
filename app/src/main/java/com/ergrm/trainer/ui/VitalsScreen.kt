@@ -208,9 +208,8 @@ private fun SummaryTilesGrid(stats: SessionStats, durationSec: Int, modifier: Mo
         Triple("Avg Cad", stats.avgCadenceRpm?.toString() ?: "--", ErgCadenceLine),
         Triple("Avg Core T", stats.avgCoreTempC?.let { "%.2f".format(it) } ?: "--", ErgOnSurface),
         Triple("Max Core T", stats.maxCoreTempC?.let { "%.2f".format(it) } ?: "--", ErgOnSurface),
-        // TODO(CORE HTL): placeholder until the Heat Training Load formula is provided — not yet
-        // computed or persisted anywhere.
-        Triple("Core HTL", "--", ErgOnSurface),
+        // See HeatTrainingLoad.kt — same estimate the History detail view now shows.
+        Triple("Core HTL", stats.heatTrainingLoad?.let { "%.1f".format(it) } ?: "--", ErgOnSurface),
     )
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(5.dp)) {
         tiles.chunked(3).forEach { row ->
