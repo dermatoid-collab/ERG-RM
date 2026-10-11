@@ -94,6 +94,7 @@ import com.ergrm.trainer.ui.theme.ErgIntensityDownGlyph
 import com.ergrm.trainer.ui.theme.ErgIntensityUpGlyph
 import com.ergrm.trainer.ui.theme.ErgLiveAccent
 import com.ergrm.trainer.ui.theme.ErgModeErg
+import com.ergrm.trainer.ui.theme.ErgModeSlo
 import com.ergrm.trainer.ui.theme.ErgOnSurface
 import com.ergrm.trainer.ui.theme.ErgProgressLine
 import com.ergrm.trainer.ui.theme.ErgSkinTemp
@@ -229,10 +230,13 @@ fun WorkoutScreen(
 
                 IntensityRow(
                     intensityPercent = workoutState.intensityPercent,
+                    gradePercent = workoutState.currentGradePercent,
                     controlMode = workoutState.controlMode,
                     enabled = workoutState.steps.isNotEmpty(),
-                    onDecrease = { viewModel.decreaseIntensity() },
-                    onIncrease = { viewModel.increaseIntensity() },
+                    onDecreaseIntensity = { viewModel.decreaseIntensity() },
+                    onIncreaseIntensity = { viewModel.increaseIntensity() },
+                    onDecreaseGrade = { viewModel.decreaseGrade() },
+                    onIncreaseGrade = { viewModel.increaseGrade() },
                     onToggleMode = { viewModel.toggleControlMode() },
                 )
             }
@@ -426,10 +430,13 @@ private fun WorkoutScreenLandscape(
 
             IntensityRow(
                 intensityPercent = workoutState.intensityPercent,
+                gradePercent = workoutState.currentGradePercent,
                 controlMode = workoutState.controlMode,
                 enabled = workoutState.steps.isNotEmpty(),
-                onDecrease = { viewModel.decreaseIntensity() },
-                onIncrease = { viewModel.increaseIntensity() },
+                onDecreaseIntensity = { viewModel.decreaseIntensity() },
+                onIncreaseIntensity = { viewModel.increaseIntensity() },
+                onDecreaseGrade = { viewModel.decreaseGrade() },
+                onIncreaseGrade = { viewModel.increaseGrade() },
                 onToggleMode = { viewModel.toggleControlMode() },
             )
         }
@@ -486,19 +493,33 @@ private fun WorkoutStatLines(
         else -> ErgAtTarget
     }
     val zone = zoneFor(target, ftpWatts, ErgOnSurface)
-    val isHrPlus = workoutState.controlMode == ControlMode.HR_PLUS
-    val wattsColor = if (isHrPlus) zone.color else powerColor
-    val hrTargetColor = workoutState.currentTargetBpm?.let { hrTarget ->
-        live.heartRateBpm?.let { hrActual ->
-            when {
-                hrActual < hrTarget - 5 -> ErgBelowTarget
-                hrActual > hrTarget + 5 -> ErgAboveTarget
-                else -> ErgAtTarget
+    val mode = workoutState.controlMode
+    val wattsColor = when (mode) {
+        ControlMode.HR_PLUS -> zone.color
+        ControlMode.SLO -> ErgOnSurface
+        ControlMode.ERG -> powerColor
+    }
+    val hrTargetColor = if (mode == ControlMode.HR_PLUS) {
+        workoutState.currentTargetBpm?.let { hrTarget ->
+            live.heartRateBpm?.let { hrActual ->
+                when {
+                    hrActual < hrTarget - 5 -> ErgBelowTarget
+                    hrActual > hrTarget + 5 -> ErgAboveTarget
+                    else -> ErgAtTarget
+                }
             }
         }
+    } else {
+        null
     }
     val hrZoneColor = live.heartRateBpm?.let { zoneForHr(it, lthrBpm, ErgOnSurface).color } ?: ErgOnSurface
     val hrColor = hrTargetColor ?: hrZoneColor
+    val grade = workoutState.currentGradePercent
+    val gradeColor = when {
+        grade > 0.05f -> ErgAboveTarget
+        grade < -0.05f -> ErgBelowTarget
+        else -> ErgAtTarget
+    }
     val flooredCore = coreReading?.coreTempC?.let { floorToOneDecimal(it) }
     val flooredHsi = coreReading?.heatStrainIndex?.let { floorToOneDecimal(it) }
 
@@ -506,14 +527,22 @@ private fun WorkoutStatLines(
         StatLine("Interval", formatTime(workoutState.remainingInStepSec))
         StatLine("Total", formatTime(workoutState.totalRemainingSec))
         StatLine("Cadence", live.cadenceRpm?.let { "${it.toInt()} rpm" } ?: "--")
-        if (isHrPlus) {
-            StatLine("Watts", "$actual W", valueColor = wattsColor)
-            StatLine("Target HR", (workoutState.currentTargetBpm?.toString() ?: "--") + " bpm")
-            StatLine("HR", live.heartRateBpm?.let { "$it bpm" } ?: "--", valueColor = hrColor)
-        } else {
-            StatLine("HR", live.heartRateBpm?.let { "$it bpm" } ?: "--", valueColor = hrColor)
-            StatLine("Target watts", "$target W (${zone.label})", valueColor = zone.color)
-            StatLine("Watts", "$actual W", valueColor = wattsColor)
+        when (mode) {
+            ControlMode.HR_PLUS -> {
+                StatLine("Watts", "$actual W", valueColor = wattsColor)
+                StatLine("Target HR", (workoutState.currentTargetBpm?.toString() ?: "--") + " bpm")
+                StatLine("HR", live.heartRateBpm?.let { "$it bpm" } ?: "--", valueColor = hrColor)
+            }
+            ControlMode.SLO -> {
+                StatLine("Watts", "$actual W", valueColor = wattsColor)
+                StatLine("Grade", (if (grade == 0f) "0.0" else "%+.1f".format(grade)) + " %", valueColor = gradeColor)
+                StatLine("HR", live.heartRateBpm?.let { "$it bpm" } ?: "--", valueColor = hrColor)
+            }
+            ControlMode.ERG -> {
+                StatLine("HR", live.heartRateBpm?.let { "$it bpm" } ?: "--", valueColor = hrColor)
+                StatLine("Target watts", "$target W (${zone.label})", valueColor = zone.color)
+                StatLine("Watts", "$actual W", valueColor = wattsColor)
+            }
         }
         StatLine("Skin", coreReading?.skinTempC?.let { "%.1f°".format(it) } ?: "--", valueColor = ErgSkinTemp)
         StatLine(
@@ -563,26 +592,44 @@ private fun StatTileGrid(
         else -> ErgAtTarget
     }
     val zone = zoneFor(target, ftpWatts, ErgOnSurface)
-    val isHrPlus = workoutState.controlMode == ControlMode.HR_PLUS
+    val mode = workoutState.controlMode
+    val isHrPlus = mode == ControlMode.HR_PLUS
+    val isSlo = mode == ControlMode.SLO
     // The row a metric lands in decides its color style, not the metric itself: whichever stat
     // sits next to Cadence (row 2) is colored by zone, and whichever sits next to Target (row 3)
     // is colored by deviation from that target — Watts is in row 2 in HR+, row 3 in ERG, so it
-    // flips between the two the same way HR already does below.
-    val wattsColor = if (isHrPlus) zone.color else powerColor
+    // flips between the two the same way HR already does below. SLO has no target at all (power
+    // emerges from effort against the simulated grade), so its Watts just stays plain.
+    val wattsColor = when (mode) {
+        ControlMode.HR_PLUS -> zone.color
+        ControlMode.SLO -> ErgOnSurface
+        ControlMode.ERG -> powerColor
+    }
     // Mirrors powerColor's ±15W-vs-target logic, at a ±5bpm deadband — but only HR+ has a bpm
-    // target to compare against (currentTargetBpm is always null in ERG), so this only applies
-    // there. In ERG, with no target to be "on" or "off", fall back to the HR-zone color instead.
-    val hrTargetColor = workoutState.currentTargetBpm?.let { hrTarget ->
-        live.heartRateBpm?.let { hrActual ->
-            when {
-                hrActual < hrTarget - 5 -> ErgBelowTarget
-                hrActual > hrTarget + 5 -> ErgAboveTarget
-                else -> ErgAtTarget
+    // target to compare against, so this only applies there (ERG has none, and SLO's is the
+    // stale value from whichever mode ran before it). Both other modes fall back to the plain
+    // HR-zone color instead.
+    val hrTargetColor = if (isHrPlus) {
+        workoutState.currentTargetBpm?.let { hrTarget ->
+            live.heartRateBpm?.let { hrActual ->
+                when {
+                    hrActual < hrTarget - 5 -> ErgBelowTarget
+                    hrActual > hrTarget + 5 -> ErgAboveTarget
+                    else -> ErgAtTarget
+                }
             }
         }
+    } else {
+        null
     }
     val hrZoneColor = live.heartRateBpm?.let { zoneForHr(it, lthrBpm, ErgOnSurface).color } ?: ErgOnSurface
     val hrColor = hrTargetColor ?: hrZoneColor
+    val grade = workoutState.currentGradePercent
+    val gradeColor = when {
+        grade > 0.05f -> ErgAboveTarget
+        grade < -0.05f -> ErgBelowTarget
+        else -> ErgAtTarget
+    }
 
     var intervalShowElapsed by remember { mutableStateOf(false) }
     var totalShowElapsed by remember { mutableStateOf(false) }
@@ -629,7 +676,15 @@ private fun StatTileGrid(
                 modifier = Modifier.weight(1f),
                 unit = "rpm",
             )
-            if (isHrPlus) {
+            if (isSlo) {
+                StatTile(
+                    label = "Watts",
+                    value = "$actual",
+                    modifier = Modifier.weight(1f),
+                    valueColor = wattsColor,
+                    unit = "W",
+                )
+            } else if (isHrPlus) {
                 StatTile(
                     label = if (showPercentFtp) "% FTP" else "Watts",
                     value = if (showPercentFtp) percentOfFtp(actual, ftpWatts) else "$actual",
@@ -649,20 +704,30 @@ private fun StatTileGrid(
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
-            StatTile(
-                label = when { isHrPlus -> "Target HR"; showPercentFtp -> "Target % FTP"; else -> "Target watts" },
-                value = when {
-                    isHrPlus -> workoutState.currentTargetBpm?.toString() ?: "--"
-                    showPercentFtp -> percentOfFtp(target, ftpWatts)
-                    else -> "$target"
-                },
-                modifier = Modifier.weight(1f),
-                unit = when { isHrPlus -> "bpm"; showPercentFtp -> null; else -> "W" },
-                zoneLabel = zone.label,
-                zoneColor = zone.color,
-                onClick = { showPercentFtp = !showPercentFtp },
-            )
-            if (isHrPlus) {
+            if (isSlo) {
+                StatTile(
+                    label = "Grade",
+                    value = if (grade == 0f) "0.0" else "%+.1f".format(grade),
+                    modifier = Modifier.weight(1f),
+                    valueColor = gradeColor,
+                    unit = "%",
+                )
+            } else {
+                StatTile(
+                    label = when { isHrPlus -> "Target HR"; showPercentFtp -> "Target % FTP"; else -> "Target watts" },
+                    value = when {
+                        isHrPlus -> workoutState.currentTargetBpm?.toString() ?: "--"
+                        showPercentFtp -> percentOfFtp(target, ftpWatts)
+                        else -> "$target"
+                    },
+                    modifier = Modifier.weight(1f),
+                    unit = when { isHrPlus -> "bpm"; showPercentFtp -> null; else -> "W" },
+                    zoneLabel = zone.label,
+                    zoneColor = zone.color,
+                    onClick = { showPercentFtp = !showPercentFtp },
+                )
+            }
+            if (isHrPlus || isSlo) {
                 StatTile(
                     label = "HR",
                     value = live.heartRateBpm?.let { "$it" } ?: "--",
@@ -1642,45 +1707,68 @@ internal fun Modifier.requireLongPress(
     }
 }
 
-/** The ERG/HR+ switch lives inside this same pill instead of a row of its own, so the toggle
+/** The ERG/HR+/SLO switch lives inside this same pill instead of a row of its own, so the toggle
  *  costs no extra vertical space: the ↓/↑ arrows and the pill's overall height are unchanged,
- *  only the pill's content grows a tappable mode tag to the left of the percentage. */
+ *  only the pill's content grows a tappable mode tag to the left of the percentage. In SLO, the
+ *  same ↓/↑ arrows and percentage box instead show/adjust the simulated grade. */
 @Composable
 private fun IntensityRow(
     intensityPercent: Int,
+    gradePercent: Float,
     controlMode: ControlMode,
     enabled: Boolean,
-    onDecrease: () -> Unit,
-    onIncrease: () -> Unit,
+    onDecreaseIntensity: () -> Unit,
+    onIncreaseIntensity: () -> Unit,
+    onDecreaseGrade: () -> Unit,
+    onIncreaseGrade: () -> Unit,
     onToggleMode: () -> Unit,
 ) {
+    val isSlo = controlMode == ControlMode.SLO
     val isHrPlus = controlMode == ControlMode.HR_PLUS
-    val modeColor = if (isHrPlus) ErgHrPlus else ErgModeErg
+    val modeColor = when {
+        isSlo -> ErgModeSlo
+        isHrPlus -> ErgHrPlus
+        else -> ErgModeErg
+    }
+    val modeLabel = when {
+        isSlo -> "SLO"
+        isHrPlus -> "HR+"
+        else -> "ERG"
+    }
+    val onDecrease = if (isSlo) onDecreaseGrade else onDecreaseIntensity
+    val onIncrease = if (isSlo) onIncreaseGrade else onIncreaseIntensity
+    val displayText = if (isSlo) {
+        (if (gradePercent == 0f) "0.0" else "%+.1f".format(gradePercent)) + "%"
+    } else {
+        "$intensityPercent%"
+    }
     // The pill's background is now fixed — direction lives entirely in a small triangle next to
     // the percentage instead of recoloring the whole pill: ▼ blue below target, ▲ amber above,
-    // no glyph exactly at 100%.
+    // no glyph exactly at 100% (or, in SLO, exactly flat).
+    val glyphUp = if (isSlo) gradePercent > 0.05f else intensityPercent > 100
+    val glyphDown = if (isSlo) gradePercent < -0.05f else intensityPercent < 100
     val intensityGlyph = when {
-        intensityPercent > 100 -> "▲"
-        intensityPercent < 100 -> "▼"
+        glyphUp -> "▲"
+        glyphDown -> "▼"
         else -> null
     }
-    val intensityGlyphColor = if (intensityPercent > 100) ErgIntensityUpGlyph else ErgIntensityDownGlyph
-    // Measured so the triangle's center-from-the-right-edge can mirror the ERG/HR+ text's own
-    // center-from-the-left-edge exactly, regardless of "ERG" vs "HR+" having different widths —
+    val intensityGlyphColor = if (glyphUp) ErgIntensityUpGlyph else ErgIntensityDownGlyph
+    // Measured so the triangle's center-from-the-right-edge can mirror the mode tag's own
+    // center-from-the-left-edge exactly, regardless of "ERG"/"HR+"/"SLO" having different widths —
     // a fixed offset would only be symmetric for whichever label happens to be showing.
     var modeTagWidthPx by remember { mutableStateOf(0) }
     val density = LocalDensity.current
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         PillIconButton(
             icon = Icons.Filled.KeyboardArrowDown,
-            contentDescription = "Decrease intensity",
+            contentDescription = if (isSlo) "Decrease grade" else "Decrease intensity",
             onClick = onDecrease,
             enabled = enabled,
             iconSize = 28.8.dp,
             height = 38.4.dp,
             modifier = Modifier.width(40.dp),
         )
-        // The triangle sits on the opposite side of the pill from ERG/HR+ (mirroring it, not
+        // The triangle sits on the opposite side of the pill from the mode tag (mirroring it, not
         // sitting next to the percentage), so it can never touch or shift the percentage —
         // they're not even siblings in the same layout pass.
         Box(
@@ -1706,7 +1794,7 @@ private fun IntensityRow(
                 ) {
                     Text(
                         // Same font size as the percentage next to it.
-                        if (isHrPlus) "HR+" else "ERG",
+                        modeLabel,
                         fontSize = 14.1.sp,
                         fontWeight = FontWeight.Black,
                         color = Color.Black,
@@ -1714,7 +1802,7 @@ private fun IntensityRow(
                 }
                 Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
                     Text(
-                        "$intensityPercent%",
+                        displayText,
                         fontSize = 14.1.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White,
@@ -1733,15 +1821,14 @@ private fun IntensityRow(
                 // above the pill's true center. Drawing it ourselves makes the triangle's visual
                 // center exactly the Canvas's center, which CenterEnd then centers on the pill.
                 val triangleSizeDp = 14.4.dp
-                // ERG/HR+'s text sits exactly at tagWidth/2 from the pill's left edge (the
+                // The mode tag's text sits exactly at tagWidth/2 from the pill's left edge (the
                 // 11.2dp padding is equal on both sides of it inside the tag). Placing the
                 // triangle's own center at that same distance from the right edge makes the two
-                // exactly symmetric regardless of whether "ERG" or "HR+" (different widths) is
-                // showing.
+                // exactly symmetric regardless of which label (different widths) is showing.
                 val modeTagWidthDp = with(density) { modeTagWidthPx.toDp() }
                 val triangleEndPadding = ((modeTagWidthDp - triangleSizeDp) / 2).coerceAtLeast(0.dp)
                 IntensityTriangle(
-                    pointingUp = intensityPercent > 100,
+                    pointingUp = glyphUp,
                     color = intensityGlyphColor,
                     sizeDp = triangleSizeDp,
                     modifier = Modifier
@@ -1752,7 +1839,7 @@ private fun IntensityRow(
         }
         PillIconButton(
             icon = Icons.Filled.KeyboardArrowUp,
-            contentDescription = "Increase intensity",
+            contentDescription = if (isSlo) "Increase grade" else "Increase intensity",
             onClick = onIncrease,
             enabled = enabled,
             iconSize = 28.8.dp,

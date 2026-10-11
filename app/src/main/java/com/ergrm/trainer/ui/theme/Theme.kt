@@ -32,6 +32,9 @@ val ErgHrPlus = Color(0xFFE6598A)
 // respectively) so brightening the HR trace or the ERG mode tag doesn't shift those other meanings.
 val ErgHrLine = Color(0xFFFF0000)
 val ErgModeErg = Color(0xFF2ECC71)
+// SLO mode's own tag color — distinct from ERG's green and HR+'s pink so the 3-state pill always
+// reads unambiguously which mode is active.
+val ErgModeSlo = Color(0xFF1ABC9C)
 // The CORE sensor's skin-temperature pill value, chosen distinct from ErgHrLine/ErgWarn/
 // ZONE_MAX.color — the other three colors in the same pill row — so all three stay tellable apart.
 val ErgSkinTemp = Color(0xFFD49494)

@@ -84,6 +84,7 @@ import com.ergrm.trainer.ui.theme.ErgHrPlus
 import com.ergrm.trainer.ui.theme.ErgIntensityDownGlyph
 import com.ergrm.trainer.ui.theme.ErgIntensityUpGlyph
 import com.ergrm.trainer.ui.theme.ErgModeErg
+import com.ergrm.trainer.ui.theme.ErgModeSlo
 import com.ergrm.trainer.ui.theme.ErgOnSurface
 import com.ergrm.trainer.ui.theme.ErgSkinTemp
 import com.ergrm.trainer.ui.theme.ErgSurface
@@ -195,14 +196,17 @@ fun VitalsScreen(
                     isRunning = workoutState.isRunning,
                     hasStarted = workoutState.hasStarted,
                     intensityPercent = workoutState.intensityPercent,
+                    gradePercent = workoutState.currentGradePercent,
                     controlMode = workoutState.controlMode,
                     onPlay = { viewModel.startWorkout() },
                     onPause = { viewModel.pauseWorkout() },
                     onStopRequested = { showStopConfirm = true },
                     onExtend = { viewModel.extendCurrentInterval() },
                     onSkip = { viewModel.skipStep() },
-                    onDecrease = { viewModel.decreaseIntensity() },
-                    onIncrease = { viewModel.increaseIntensity() },
+                    onDecreaseIntensity = { viewModel.decreaseIntensity() },
+                    onIncreaseIntensity = { viewModel.increaseIntensity() },
+                    onDecreaseGrade = { viewModel.decreaseGrade() },
+                    onIncreaseGrade = { viewModel.increaseGrade() },
                     onToggleMode = { viewModel.toggleControlMode() },
                 )
             }
@@ -252,14 +256,17 @@ private fun VitalsScreenLandscape(
                 isRunning = workoutState.isRunning,
                 hasStarted = workoutState.hasStarted,
                 intensityPercent = workoutState.intensityPercent,
+                gradePercent = workoutState.currentGradePercent,
                 controlMode = workoutState.controlMode,
                 onPlay = { viewModel.startWorkout() },
                 onPause = { viewModel.pauseWorkout() },
                 onStopRequested = onShowStopConfirm,
                 onExtend = { viewModel.extendCurrentInterval() },
                 onSkip = { viewModel.skipStep() },
-                onDecrease = { viewModel.decreaseIntensity() },
-                onIncrease = { viewModel.increaseIntensity() },
+                onDecreaseIntensity = { viewModel.decreaseIntensity() },
+                onIncreaseIntensity = { viewModel.increaseIntensity() },
+                onDecreaseGrade = { viewModel.decreaseGrade() },
+                onIncreaseGrade = { viewModel.increaseGrade() },
                 onToggleMode = { viewModel.toggleControlMode() },
             )
         }
@@ -826,22 +833,44 @@ private fun CompactControlRow(
     isRunning: Boolean,
     hasStarted: Boolean,
     intensityPercent: Int,
+    gradePercent: Float,
     controlMode: ControlMode,
     onPlay: () -> Unit,
     onPause: () -> Unit,
     onStopRequested: () -> Unit,
     onExtend: () -> Unit,
     onSkip: () -> Unit,
-    onDecrease: () -> Unit,
-    onIncrease: () -> Unit,
+    onDecreaseIntensity: () -> Unit,
+    onIncreaseIntensity: () -> Unit,
+    onDecreaseGrade: () -> Unit,
+    onIncreaseGrade: () -> Unit,
     onToggleMode: () -> Unit,
 ) {
     val isPaused = hasStarted && !isRunning
     val mainIcon = when { isRunning -> Icons.Filled.Pause; isPaused -> Icons.Filled.Stop; else -> Icons.Filled.PlayArrow }
     val mainAction = when { isRunning -> onPause; isPaused -> onStopRequested; else -> onPlay }
     val mainColor = if (isPaused) ErgAboveTarget else ErgSurface2
+    val isSlo = controlMode == ControlMode.SLO
     val isHrPlus = controlMode == ControlMode.HR_PLUS
-    val modeColor = if (isHrPlus) ErgHrPlus else ErgModeErg
+    val modeColor = when {
+        isSlo -> ErgModeSlo
+        isHrPlus -> ErgHrPlus
+        else -> ErgModeErg
+    }
+    val modeLabel = when {
+        isSlo -> "SLO"
+        isHrPlus -> "HR+"
+        else -> "ERG"
+    }
+    val onDecrease = if (isSlo) onDecreaseGrade else onDecreaseIntensity
+    val onIncrease = if (isSlo) onIncreaseGrade else onIncreaseIntensity
+    val displayText = if (isSlo) {
+        (if (gradePercent == 0f) "0.0" else "%+.1f".format(gradePercent)) + "%"
+    } else {
+        "$intensityPercent%"
+    }
+    val glyphUp = if (isSlo) gradePercent > 0.05f else intensityPercent > 100
+    val glyphDown = if (isSlo) gradePercent < -0.05f else intensityPercent < 100
 
     Row(
         modifier = Modifier.fillMaxWidth().height(38.4.dp),
@@ -901,7 +930,7 @@ private fun CompactControlRow(
                 contentAlignment = Alignment.Center,
             ) {
                 // Same font size as the percentage next to it.
-                Text(if (isHrPlus) "HR+" else "ERG", fontSize = 12.5.sp, fontWeight = FontWeight.Black, color = Color.Black)
+                Text(modeLabel, fontSize = 12.5.sp, fontWeight = FontWeight.Black, color = Color.Black)
             }
             // Decrease sits closest to the mode circle; increase sits on the far side, next to
             // where the direction triangle appears — same pairing as the main Workout screen's
@@ -913,24 +942,24 @@ private fun CompactControlRow(
             ) {
                 Icon(
                     Icons.Filled.KeyboardArrowDown,
-                    contentDescription = "Decrease intensity",
+                    contentDescription = if (isSlo) "Decrease grade" else "Decrease intensity",
                     tint = ErgOnSurface,
                     modifier = Modifier.size(26.dp),
                 )
             }
             Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                Text("$intensityPercent%", fontSize = 12.5.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                Text(displayText, fontSize = 12.5.sp, fontWeight = FontWeight.Bold, color = Color.White)
             }
-            // Same width as the ERG/HR+ circle (balances it so the % box above stays centered in
-            // the whole pill) — also where the ▲/▼ direction triangle shows, when intensity isn't
-            // 100%, same colors/shape as the main Workout screen's own pill. Sits BEFORE the
+            // Same width as the mode circle (balances it so the % box above stays centered in
+            // the whole pill) — also where the ▲/▼ direction triangle shows, when intensity/grade
+            // isn't flat, same colors/shape as the main Workout screen's own pill. Sits BEFORE the
             // increase arrow (not after it) so the arrow stays the pill's true rightmost element,
             // same as screen 1 — the triangle is adjacent to it, not past it.
             Box(modifier = Modifier.size(38.4.dp), contentAlignment = Alignment.Center) {
-                if (intensityPercent != 100) {
+                if (glyphUp || glyphDown) {
                     IntensityTriangle(
-                        pointingUp = intensityPercent > 100,
-                        color = if (intensityPercent > 100) ErgIntensityUpGlyph else ErgIntensityDownGlyph,
+                        pointingUp = glyphUp,
+                        color = if (glyphUp) ErgIntensityUpGlyph else ErgIntensityDownGlyph,
                         sizeDp = 14.4.dp,
                     )
                 }
@@ -942,7 +971,7 @@ private fun CompactControlRow(
             ) {
                 Icon(
                     Icons.Filled.KeyboardArrowUp,
-                    contentDescription = "Increase intensity",
+                    contentDescription = if (isSlo) "Increase grade" else "Increase intensity",
                     tint = ErgOnSurface,
                     modifier = Modifier.size(26.dp),
                 )

@@ -752,6 +752,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun extendCurrentInterval() = workoutExecutor.extendCurrentStep()
     fun increaseIntensity() = workoutExecutor.increaseIntensity()
     fun decreaseIntensity() = workoutExecutor.decreaseIntensity()
+    fun increaseGrade() = workoutExecutor.increaseGrade()
+    fun decreaseGrade() = workoutExecutor.decreaseGrade()
     fun toggleControlMode() = workoutExecutor.toggleControlMode()
 
     /** Called after the user picks a folder via ACTION_OPEN_DOCUMENT_TREE. */

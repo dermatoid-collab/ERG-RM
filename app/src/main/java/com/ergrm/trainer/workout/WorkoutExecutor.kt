@@ -18,8 +18,18 @@ import kotlin.math.roundToInt
 
 /** ERG sends the file's own %FTP-derived watts to the trainer, as always. HR+ reinterprets the
  *  same per-interval percentage against LTHR instead of FTP, and slowly nudges the power actually
- *  sent so the rider's real heart rate tracks that target — see [WorkoutExecutor.tick]. */
-enum class ControlMode { ERG, HR_PLUS }
+ *  sent so the rider's real heart rate tracks that target — see [WorkoutExecutor.tick]. SLO
+ *  ignores the loaded workout's power/HR targets entirely and instead sends a manually-set grade
+ *  percentage via FTMS simulation mode — see [WorkoutExecutor.setGrade]. */
+enum class ControlMode {
+    ERG, HR_PLUS, SLO;
+
+    fun next(): ControlMode = when (this) {
+        ERG -> HR_PLUS
+        HR_PLUS -> SLO
+        SLO -> ERG
+    }
+}
 
 data class WorkoutRunState(
     val steps: List<WorkoutStep> = emptyList(),
@@ -35,6 +45,10 @@ data class WorkoutRunState(
     /** Live target heart rate in HR+ mode (null in ERG, or before FTP/LTHR are configured) —
      *  the power actually sent to the trainer is [currentTargetWatts] either way. */
     val currentTargetBpm: Int? = null,
+    /** SLO mode only: the grade (±%) currently being sent to the trainer via FTMS simulation
+     *  mode. Resets to 0 (flat) whenever a workout is freshly loaded or exited — manually set
+     *  from there via [WorkoutExecutor.setGrade]/increaseGrade/decreaseGrade. */
+    val currentGradePercent: Float = 0f,
 ) {
     val currentStep: WorkoutStep? get() = steps.getOrNull(currentStepIndex)
     val nextStep: WorkoutStep? get() = steps.getOrNull(currentStepIndex + 1)
@@ -104,6 +118,7 @@ class WorkoutExecutor(
 
     private var tickerJob: Job? = null
     private var lastSentWatts: Int? = null
+    private var lastSentGrade: Float? = null
     // The plan exactly as loaded, before any auto-extend blocks get appended during the ride —
     // so exit() can restore this clean, restartable definition instead of whatever the finished
     // ride's steps list grew into.
@@ -183,8 +198,18 @@ class WorkoutExecutor(
         pushTargetForCurrentStep()
     }
 
-    fun toggleControlMode() =
-        setControlMode(if (_state.value.controlMode == ControlMode.ERG) ControlMode.HR_PLUS else ControlMode.ERG)
+    fun toggleControlMode() = setControlMode(_state.value.controlMode.next())
+
+    /** SLO only: sets the grade sent to the trainer, clamped to ±[AppSettings.maxGradePercent]
+     *  since that's a hardware limit of whichever trainer is connected, not a preference. */
+    fun setGrade(percent: Float) {
+        val maxGrade = settings.value.maxGradePercent
+        _state.value = _state.value.copy(currentGradePercent = percent.coerceIn(-maxGrade, maxGrade))
+        pushTargetForCurrentStep()
+    }
+
+    fun increaseGrade() = setGrade(_state.value.currentGradePercent + settings.value.slopeStepPercent)
+    fun decreaseGrade() = setGrade(_state.value.currentGradePercent - settings.value.slopeStepPercent)
 
     fun start() {
         if (_state.value.steps.isEmpty() || _state.value.isRunning) return
@@ -224,6 +249,7 @@ class WorkoutExecutor(
         tickerJob?.cancel()
         tickerJob = null
         lastSentWatts = null
+        lastSentGrade = null
         resetHrPlusBaseline()
         val mode = _state.value.controlMode
         _state.value = WorkoutRunState(
@@ -267,6 +293,7 @@ class WorkoutExecutor(
         tickerJob?.cancel()
         tickerJob = null
         lastSentWatts = null
+        lastSentGrade = null
         resetHrPlusBaseline()
         _state.value = _state.value.copy(isRunning = false)
     }
@@ -313,6 +340,17 @@ class WorkoutExecutor(
 
     private fun pushTargetForCurrentStep() {
         val s = _state.value
+        // SLO ignores the loaded workout's power targets entirely — it only ever sends the
+        // manually-set grade (see setGrade/increaseGrade/decreaseGrade), independent of which
+        // step the ticker is nominally on.
+        if (s.controlMode == ControlMode.SLO) {
+            if (s.currentGradePercent != lastSentGrade) {
+                lastSentGrade = s.currentGradePercent
+                scope.launch { trainer.setSimulationGrade(s.currentGradePercent) }
+            }
+            recordSample()
+            return
+        }
         val step = s.currentStep ?: return
         val raw = step.targetWattsAt(s.elapsedInStepSec)
         val ergTarget = (raw * s.intensityPercent / 100f).roundToInt()
