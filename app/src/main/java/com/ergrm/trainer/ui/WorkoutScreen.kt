@@ -364,7 +364,7 @@ private fun StatTileGrid(
         actual > target + 15 -> ErgAboveTarget
         else -> ErgAtTarget
     }
-    val zone = zoneFor(target, ftpWatts)
+    val zone = zoneFor(target, ftpWatts, ErgOnSurface)
     val isHrPlus = workoutState.controlMode == ControlMode.HR_PLUS
     // The row a metric lands in decides its color style, not the metric itself: whichever stat
     // sits next to Cadence (row 2) is colored by zone, and whichever sits next to Target (row 3)
@@ -383,7 +383,7 @@ private fun StatTileGrid(
             }
         }
     }
-    val hrZoneColor = live.heartRateBpm?.let { zoneForHr(it, lthrBpm).color } ?: ErgOnSurface
+    val hrZoneColor = live.heartRateBpm?.let { zoneForHr(it, lthrBpm, ErgOnSurface).color } ?: ErgOnSurface
     val hrColor = hrTargetColor ?: hrZoneColor
 
     var intervalShowElapsed by remember { mutableStateOf(false) }
@@ -880,6 +880,10 @@ private fun WorkoutProfileChart(
     // one change.
     val latestZoom = rememberUpdatedState(zoom)
     val latestOnZoomChange = rememberUpdatedState(onZoomChange)
+    // Canvas{} below is a plain DrawScope lambda, not @Composable, so it can't read these
+    // theme-reactive tokens itself — resolved here in the composable body and captured instead.
+    val onSurfaceColor = ErgOnSurface
+    val surface2Color = ErgSurface2
 
     Column(modifier = modifier) {
     Canvas(
@@ -971,7 +975,7 @@ private fun WorkoutProfileChart(
                 h * (wattsAt(visibleEnd) / wattsScale).coerceIn(0.05f, 1f)
             }
 
-            val zone = zoneFor(max(dispStart, dispEnd), ftpWatts)
+            val zone = zoneFor(max(dispStart, dispEnd), ftpWatts, onSurfaceColor)
             val color = mutedZoneColor(zone.color, active = index == currentStepIndex)
             val barPath = Path().apply {
                 moveTo(x0, h - drawStartHeight)
@@ -1044,8 +1048,8 @@ private fun WorkoutProfileChart(
         val bpmTicks = listOf(0.25f, 0.5f, 0.75f, 1f).map { (bpmMin + bpmRange * it).roundToInt() }
         wattsTicks.forEachIndexed { i, watts ->
             val y = yWatts(watts)
-            drawLine(color = ErgOnSurface.copy(alpha = 0.12f), start = Offset(0f, y), end = Offset(w, y), strokeWidth = 2.25f)
-            val wattsLabelResult = textMeasurer.measure("$watts", TextStyle(fontSize = 10.sp, color = ErgOnSurface.copy(alpha = 0.85f)))
+            drawLine(color = onSurfaceColor.copy(alpha = 0.12f), start = Offset(0f, y), end = Offset(w, y), strokeWidth = 2.25f)
+            val wattsLabelResult = textMeasurer.measure("$watts", TextStyle(fontSize = 10.sp, color = onSurfaceColor.copy(alpha = 0.85f)))
             drawText(wattsLabelResult, topLeft = Offset(4.dp.toPx(), y - wattsLabelResult.size.height - 2f))
             val bpmLabelResult = textMeasurer.measure("${bpmTicks[i]}", TextStyle(fontSize = 10.sp, color = ErgHrLine))
             drawText(bpmLabelResult, topLeft = Offset(w - bpmLabelResult.size.width - 4.dp.toPx(), y - bpmLabelResult.size.height - 2f))
@@ -1068,7 +1072,7 @@ private fun WorkoutProfileChart(
                 val selStep = steps[selIndex]
                 val selDispStart = displayWatts(selStep.startWatts, selIndex, currentStepIndex, intensityPercent)
                 val selDispEnd = displayWatts(selStep.endWatts, selIndex, currentStepIndex, intensityPercent)
-                val selZone = zoneFor(max(selDispStart, selDispEnd), ftpWatts)
+                val selZone = zoneFor(max(selDispStart, selDispEnd), ftpWatts, onSurfaceColor)
                 val durationText = formatTime(selStep.durationSec)
                 val wattsText = "${wattsLabel(selDispStart, selDispEnd)} (${selZone.label})"
 
@@ -1081,7 +1085,7 @@ private fun WorkoutProfileChart(
                 var pillX = (sx0 + margin).coerceIn(margin, (w - totalWidth - margin).coerceAtLeast(margin))
                 val pillY = 8.dp.toPx()
 
-                pillX += drawPill(durationText, pillX, pillY, ErgSurface2, ErgOnSurface, textMeasurer) + gap
+                pillX += drawPill(durationText, pillX, pillY, surface2Color, onSurfaceColor, textMeasurer) + gap
                 drawPill(wattsText, pillX, pillY, selZone.color, Color.Black, textMeasurer)
             }
         }
@@ -1096,6 +1100,7 @@ private fun WorkoutProfileChart(
 @Composable
 internal fun ChartTimeAxis(zoom: ChartZoom, totalElapsedSec: Int, totalDurationSec: Int) {
     val textMeasurer = rememberTextMeasurer()
+    val onSurfaceColor = ErgOnSurface
     Canvas(
         modifier = Modifier
             .fillMaxWidth()
@@ -1118,12 +1123,12 @@ internal fun ChartTimeAxis(zoom: ChartZoom, totalElapsedSec: Int, totalDurationS
             // rather than leaving the number to imply its own position. strokeWidth is in dp
             // (not a raw 1f px, which renders sub-dp and nearly invisible on a 3x-density screen).
             drawLine(
-                color = ErgOnSurface.copy(alpha = 0.6f),
+                color = onSurfaceColor.copy(alpha = 0.6f),
                 start = Offset(x, 0f),
                 end = Offset(x, tickHeight),
                 strokeWidth = 1.5.dp.toPx(),
             )
-            val label = textMeasurer.measure("${tSec / 60}", TextStyle(fontSize = 10.sp, color = ErgOnSurface.copy(alpha = 0.6f)))
+            val label = textMeasurer.measure("${tSec / 60}", TextStyle(fontSize = 10.sp, color = onSurfaceColor.copy(alpha = 0.6f)))
             drawText(
                 label,
                 topLeft = Offset((x - label.size.width / 2f).coerceIn(0f, w - label.size.width), tickHeight + tickToLabelGap),
@@ -1149,8 +1154,8 @@ internal val POWER_ZONES = listOf(
 )
 internal val ZONE_MAX = PowerZone("Z7", Color(0xFFA855F7))
 
-internal fun zoneFor(watts: Int, ftpWatts: Int): PowerZone {
-    if (ftpWatts <= 0) return PowerZone("--", ErgOnSurface)
+internal fun zoneFor(watts: Int, ftpWatts: Int, noDataColor: Color): PowerZone {
+    if (ftpWatts <= 0) return PowerZone("--", noDataColor)
     val pct = watts.toFloat() / ftpWatts
     return POWER_ZONES.firstOrNull { pct <= it.first }?.second ?: ZONE_MAX
 }
@@ -1172,8 +1177,8 @@ internal val HR_ZONES = listOf(
     1.05f to POWER_ZONES[5].second,
 )
 
-internal fun zoneForHr(bpm: Int, lthrBpm: Int): PowerZone {
-    if (lthrBpm <= 0) return PowerZone("--", ErgOnSurface)
+internal fun zoneForHr(bpm: Int, lthrBpm: Int, noDataColor: Color): PowerZone {
+    if (lthrBpm <= 0) return PowerZone("--", noDataColor)
     val pct = bpm.toFloat() / lthrBpm
     return HR_ZONES.firstOrNull { pct <= it.first }?.second ?: ZONE_MAX
 }
@@ -1260,7 +1265,7 @@ private fun IntervalDetailBlock(
 ) {
     val scaledStart = (step.startWatts * intensityPercent / 100f).roundToInt()
     val scaledEnd = (step.endWatts * intensityPercent / 100f).roundToInt()
-    val zone = zoneFor(scaledEnd, ftpWatts)
+    val zone = zoneFor(scaledEnd, ftpWatts, ErgOnSurface)
     val valueLabel = if (controlMode == ControlMode.HR_PLUS && ftpWatts > 0) {
         bpmLabel(scaledStart, scaledEnd, ftpWatts, lthrBpm)
     } else {

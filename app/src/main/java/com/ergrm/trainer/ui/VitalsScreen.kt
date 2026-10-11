@@ -304,6 +304,9 @@ private fun CoreSkinHsiChart(
     // after the first recomputed .next() from the same stale zoom, so the chart appeared to
     // "freeze" after one zoom change.
     val latestOnTap = rememberUpdatedState(onTap)
+    // Canvas{} below is a plain DrawScope lambda, not @Composable, so it can't read this
+    // theme-reactive token itself — resolved here in the composable body and captured instead.
+    val onSurfaceColor = ErgOnSurface
 
     Row(modifier = modifier.padding(bottom = NAME_RESERVED_HEIGHT)) {
         AxisColumn(
@@ -342,7 +345,7 @@ private fun CoreSkinHsiChart(
             val h = size.height
             // Same horizontal gridlines, at the same 4 tick heights, as the real chart on Screen 1.
             listOf(0f, 0.25f, 0.5f, 0.75f).forEach { frac ->
-                drawLine(ErgOnSurface.copy(alpha = 0.12f), Offset(0f, h * frac), Offset(w, h * frac), strokeWidth = 2.25f)
+                drawLine(onSurfaceColor.copy(alpha = 0.12f), Offset(0f, h * frac), Offset(w, h * frac), strokeWidth = 2.25f)
             }
             if (samples.size < 2 || totalDurationSec <= 0) return@Canvas
             val (windowStart, windowEnd) = computeChartWindow(zoom, totalElapsedSec, totalDurationSec)
@@ -437,6 +440,9 @@ private fun VitalsPowerChart(
     // gesture coroutine, so onTap must be read through rememberUpdatedState to see later taps'
     // current zoom instead of freezing after the first.
     val latestOnTap = rememberUpdatedState(onTap)
+    // Canvas{} below is a plain DrawScope lambda, not @Composable, so it can't read this
+    // theme-reactive token itself — resolved here in the composable body and captured instead.
+    val onSurfaceColor = ErgOnSurface
 
     Row(modifier = modifier.padding(bottom = NAME_RESERVED_HEIGHT)) {
         AxisColumn(
@@ -481,7 +487,7 @@ private fun VitalsPowerChart(
             val h = size.height
             // Same horizontal gridlines, at the same 4 tick heights, as the real chart on Screen 1.
             listOf(0f, 0.25f, 0.5f, 0.75f).forEach { frac ->
-                drawLine(ErgOnSurface.copy(alpha = 0.12f), Offset(0f, h * frac), Offset(w, h * frac), strokeWidth = 2.25f)
+                drawLine(onSurfaceColor.copy(alpha = 0.12f), Offset(0f, h * frac), Offset(w, h * frac), strokeWidth = 2.25f)
             }
             if (steps.isEmpty() || totalDurationSec <= 0) return@Canvas
             val (windowStart, windowEnd) = computeChartWindow(zoom, totalElapsedSec, totalDurationSec)
@@ -534,7 +540,7 @@ private fun VitalsPowerChart(
 
                 // mutedZoneColor (not the bright zone.color used for the live traces' thresholds)
                 // — matches Screen 1's muted bar fill, brightened only for the current step.
-                val zone = zoneFor(max(dispStart, dispEnd), ftpWatts)
+                val zone = zoneFor(max(dispStart, dispEnd), ftpWatts, onSurfaceColor)
                 val color = mutedZoneColor(zone.color, active = index == currentStepIndex)
                 val path = Path().apply {
                     moveTo(x0, h - drawStartHeight)

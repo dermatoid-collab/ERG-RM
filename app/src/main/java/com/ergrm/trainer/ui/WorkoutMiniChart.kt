@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import com.ergrm.trainer.ui.theme.ErgOnSurface
 import com.ergrm.trainer.workout.WorkoutStep
 import kotlin.math.max
 
@@ -13,6 +14,7 @@ import kotlin.math.max
  *  power rather than a fixed ceiling so a short recovery-only ride doesn't render flat. */
 @Composable
 fun WorkoutMiniChart(steps: List<WorkoutStep>, ftpWatts: Int, modifier: Modifier = Modifier) {
+    val noDataColor = ErgOnSurface
     Canvas(modifier = modifier) {
         if (steps.isEmpty()) return@Canvas
         val totalDuration = steps.sumOf { it.durationSec }.coerceAtLeast(1)
@@ -27,7 +29,7 @@ fun WorkoutMiniChart(steps: List<WorkoutStep>, ftpWatts: Int, modifier: Modifier
             val x1 = w * acc / totalDuration.toFloat()
             val peak = max(step.startWatts, step.endWatts)
             val barHeight = h * (peak.toFloat() / maxWatts).coerceIn(0.08f, 1f)
-            val color = zoneFor(peak, ftpWatts).color
+            val color = zoneFor(peak, ftpWatts, noDataColor).color
             drawRect(
                 color = color,
                 topLeft = Offset(x0, h - barHeight),

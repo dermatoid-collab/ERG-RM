@@ -189,6 +189,10 @@ private fun SessionDetailChart(samples: List<SessionSample>, modifier: Modifier 
     // the finger drags, and then left as-is (not cleared) until the next touch moves it again.
     var selectedIndex by remember(samples) { mutableStateOf<Int?>(null) }
     val textMeasurer = rememberTextMeasurer()
+    // Canvas{} below is a plain DrawScope lambda, not @Composable, so it can't read these
+    // theme-reactive tokens itself — resolved here in the composable body and captured instead.
+    val onSurfaceColor = ErgOnSurface
+    val surfaceColor = ErgSurface
 
     Canvas(
         modifier = modifier.pointerInput(samples) {
@@ -244,10 +248,10 @@ private fun SessionDetailChart(samples: List<SessionSample>, modifier: Modifier 
         selectedIndex?.let { idx ->
             val sample = samples.getOrNull(idx) ?: return@let
             val lineX = x(idx)
-            drawLine(color = ErgOnSurface.copy(alpha = 0.5f), start = Offset(lineX, 0f), end = Offset(lineX, h), strokeWidth = 1.5f)
+            drawLine(color = onSurfaceColor.copy(alpha = 0.5f), start = Offset(lineX, 0f), end = Offset(lineX, h), strokeWidth = 1.5f)
 
             val lines = buildList {
-                add(formatScrubTime(sample.tSec) to ErgOnSurface)
+                add(formatScrubTime(sample.tSec) to onSurfaceColor)
                 add("${sample.watts}W" to Color.White)
                 sample.hrBpm?.let { add("$it bpm" to ErgHrLine) }
                 sample.cadenceRpm?.let { add("$it rpm" to ErgProgressLine) }
@@ -262,7 +266,7 @@ private fun SessionDetailChart(samples: List<SessionSample>, modifier: Modifier 
             val gap = 4.dp.toPx()
             val boxX = if (lineX + gap + boxWidth > w) lineX - gap - boxWidth else lineX + gap
             val boxXClamped = boxX.coerceIn(0f, (w - boxWidth).coerceAtLeast(0f))
-            drawRect(color = ErgSurface, topLeft = Offset(boxXClamped, 0f), size = Size(boxWidth, boxHeight))
+            drawRect(color = surfaceColor, topLeft = Offset(boxXClamped, 0f), size = Size(boxWidth, boxHeight))
             measured.forEachIndexed { i, result ->
                 drawText(result, topLeft = Offset(boxXClamped + padding, padding + rowHeight * i))
             }
@@ -309,6 +313,10 @@ private fun CoreSkinHsiDetailChart(samples: List<SessionSample>, modifier: Modif
     val skinMax = 39.5f
     val hsiMin = 0f
     val hsiMax = 10f
+    // Canvas{} below is a plain DrawScope lambda, not @Composable, so it can't read these
+    // theme-reactive tokens itself — resolved here in the composable body and captured instead.
+    val onSurfaceColor = ErgOnSurface
+    val surfaceColor = ErgSurface
 
     Canvas(
         modifier = modifier.pointerInput(samples) {
@@ -352,10 +360,10 @@ private fun CoreSkinHsiDetailChart(samples: List<SessionSample>, modifier: Modif
         selectedIndex?.let { idx ->
             val sample = samples.getOrNull(idx) ?: return@let
             val lineX = x(idx)
-            drawLine(color = ErgOnSurface.copy(alpha = 0.5f), start = Offset(lineX, 0f), end = Offset(lineX, h), strokeWidth = 1.5f)
+            drawLine(color = onSurfaceColor.copy(alpha = 0.5f), start = Offset(lineX, 0f), end = Offset(lineX, h), strokeWidth = 1.5f)
 
             val lines = buildList {
-                add(formatScrubTime(sample.tSec) to ErgOnSurface)
+                add(formatScrubTime(sample.tSec) to onSurfaceColor)
                 sample.coreTempC?.let { add("%.1f°C".format(it) to ErgBelowTarget) }
                 sample.skinTempC?.let { add("%.1f°C".format(it) to ErgSkinTemp) }
                 sample.heatStrainIndex?.let { add("%.1f HSI".format(it) to ErgAccent) }
@@ -369,7 +377,7 @@ private fun CoreSkinHsiDetailChart(samples: List<SessionSample>, modifier: Modif
             val gap = 4.dp.toPx()
             val boxX = if (lineX + gap + boxWidth > w) lineX - gap - boxWidth else lineX + gap
             val boxXClamped = boxX.coerceIn(0f, (w - boxWidth).coerceAtLeast(0f))
-            drawRect(color = ErgSurface, topLeft = Offset(boxXClamped, 0f), size = Size(boxWidth, boxHeight))
+            drawRect(color = surfaceColor, topLeft = Offset(boxXClamped, 0f), size = Size(boxWidth, boxHeight))
             measured.forEachIndexed { i, result ->
                 drawText(result, topLeft = Offset(boxXClamped + padding, padding + rowHeight * i))
             }
