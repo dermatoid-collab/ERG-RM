@@ -419,10 +419,10 @@ private fun StatsGrid(session: WorkoutSession, stats: SessionStats) {
                 )
             }
         }
-        // Prefers the value stored on the session itself (computed once at save time, see
-        // MainViewModel.exitWorkout) over recomputing it here — falls back to the live derivation
-        // only for sessions saved before that field existed.
-        val htl = session.heatTrainingLoad ?: stats.heatTrainingLoad
+        // Recomputed from the samples so every session reflects the current HTL estimate (see
+        // HeatTrainingLoad.kt) — the value stored at save time is only a fallback for sessions
+        // whose per-second samples aren't available.
+        val htl = stats.heatTrainingLoad ?: session.heatTrainingLoad
         if (htl != null || stats.tss != null) {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
                 // Estimate of CORE's Heat Training Load, see HeatTrainingLoad.kt. Same orange as
