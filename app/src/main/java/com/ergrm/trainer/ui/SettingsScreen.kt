@@ -202,12 +202,12 @@ fun SettingsScreen(
                 .padding(top = 8.dp),
         )
         Text(
-            "Rider and bike+accessories (clothing, gear, bottles) weight are sent to the " +
-                "trainer together so it can compute the right resistance for a given grade — " +
-                "the app never does that math itself. Slope step sets how much each ↓/↑ tap " +
-                "changes the grade in SLO mode. Max grade caps how steep a slope the app will " +
-                "ever request, since it depends on which trainer is connected, not on anything " +
-                "the app can detect — your Elite Direto (1st gen) tops out at 14%.",
+            "Rider and bike+accessories (clothing, gear, bottles) weight, sent together, let " +
+                "the trainer compute the right resistance for a given grade — the app never " +
+                "does that math itself. Slope step sets how much each ↓/↑ tap changes the " +
+                "grade in SLO mode. Max grade caps how steep a slope the app will ever " +
+                "request, since it depends on which trainer is connected, not on anything the " +
+                "app can detect — your Elite Direto (1st gen) tops out at 14%.",
             style = MaterialTheme.typography.bodySmall,
             modifier = Modifier.padding(top = 8.dp, bottom = 16.dp),
         )
@@ -222,6 +222,17 @@ fun SettingsScreen(
             },
             modifier = Modifier.fillMaxWidth(),
         ) { Text("Save") }
+        Text(
+            "Weight isn't sent to the trainer automatically — it shares a Bluetooth setting " +
+                "with the trainer's own app, and an automatic write could silently overwrite " +
+                "what you've set there. Tap below only when you want this app's weight to win.",
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.padding(top = 12.dp, bottom = 8.dp),
+        )
+        OutlinedButton(
+            onClick = { viewModel.sendWeightToTrainer() },
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text("Send weight to trainer now") }
 
         Text(
             "Settings backup",

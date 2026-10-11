@@ -464,6 +464,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** Explicit, rider-triggered write of the current rider+accessories weight to the trainer
+     *  (see TrainerConnection.setWeightKg) — deliberately NOT automatic (e.g. on entering SLO),
+     *  since it writes to a Bluetooth characteristic the trainer's own companion app may also
+     *  use, and an automatic write could silently overwrite a value set there without the rider
+     *  ever asking for that. The snackbar only confirms the write was attempted, not that the
+     *  trainer actually reads or uses it — see Ftms.Uds's own doc comment. */
+    fun sendWeightToTrainer() {
+        viewModelScope.launch {
+            trainerConnection.setWeightKg(settings.value.systemWeightKg)
+            _snackbarMessages.emit("Weight sent to trainer")
+        }
+    }
+
     /** Pulls FTP/LTHR from Intervals.icu for the Settings screen's Sync button — hands whatever
      *  it got back to [onResult] so the screen can fill its (still freely editable) text fields,
      *  rather than saving straight to DataStore itself. Nothing is overwritten here: the rider

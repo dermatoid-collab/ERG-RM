@@ -194,16 +194,14 @@ class WorkoutExecutor(
     /** Switches between ERG (send the file's %FTP-derived watts as-is), HR+ (reinterpret the
      *  same per-interval percentage against LTHR, then slowly correct actual watts toward it),
      *  and SLO (send a manually-set grade instead) — resets the HR+ correction loop so a new
-     *  mode starts from a clean baseline, and on entering SLO, (re-)sends rider+accessories
-     *  weight once, best-effort (see TrainerConnection.setWeightKg) — grade's own physics on the
-     *  trainer depends on it, so it needs to be current whenever SLO actually starts sending. */
+     *  mode starts from a clean baseline. Rider+accessories weight is NOT sent automatically
+     *  here: it risks silently overwriting whatever the rider has configured in the trainer's
+     *  own companion app, on the same shared Bluetooth characteristic — see
+     *  MainViewModel.sendWeightToTrainer, triggered only by an explicit Settings button. */
     fun setControlMode(mode: ControlMode) {
         if (_state.value.controlMode == mode) return
         _state.value = _state.value.copy(controlMode = mode)
         resetHrPlusBaseline()
-        if (mode == ControlMode.SLO) {
-            scope.launch { trainer.setWeightKg(settings.value.systemWeightKg) }
-        }
         pushTargetForCurrentStep()
     }
 
