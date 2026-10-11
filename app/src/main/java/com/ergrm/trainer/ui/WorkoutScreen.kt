@@ -527,9 +527,15 @@ private fun WorkoutStatLines(
     val flooredCore = coreReading?.coreTempC?.let { floorToOneDecimal(it) }
     val flooredHsi = coreReading?.heatStrainIndex?.let { floorToOneDecimal(it) }
 
+    val route = workoutState.routeProfile
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        StatLine("Interval", formatTime(workoutState.remainingInStepSec))
-        StatLine("Total", formatTime(workoutState.totalRemainingSec))
+        if (route != null) {
+            StatLine("Distance", "%.1f km".format(workoutState.routeDistanceM / 1000f))
+            StatLine("Remaining", "%.1f km".format(((route.totalDistanceM - workoutState.routeDistanceM) / 1000f).coerceAtLeast(0f)))
+        } else {
+            StatLine("Interval", formatTime(workoutState.remainingInStepSec))
+            StatLine("Total", formatTime(workoutState.totalRemainingSec))
+        }
         StatLine("Cadence", live.cadenceRpm?.let { "${it.toInt()} rpm" } ?: "--")
         when (mode) {
             ControlMode.HR_PLUS -> {
@@ -650,24 +656,46 @@ private fun StatTileGrid(
     val totalElapsedFraction = if (workoutState.totalDurationSec > 0) workoutState.totalElapsedSec / workoutState.totalDurationSec.toFloat() else 0f
     val totalProgress = if (totalShowElapsed) totalElapsedFraction else 1f - totalElapsedFraction
 
+    val route = workoutState.routeProfile
     Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
-            StatTile(
-                label = "Interval",
-                value = formatTime(if (intervalShowElapsed) workoutState.elapsedInStepSec else workoutState.remainingInStepSec),
-                modifier = Modifier.weight(1f),
-                progress = intervalProgress,
-                progressAnchorEnd = !intervalShowElapsed,
-                onClick = { intervalShowElapsed = !intervalShowElapsed },
-            )
-            StatTile(
-                label = "Total",
-                value = formatTime(if (totalShowElapsed) workoutState.totalElapsedSec else workoutState.totalRemainingSec),
-                modifier = Modifier.weight(1f),
-                progress = totalProgress,
-                progressAnchorEnd = !totalShowElapsed,
-                onClick = { totalShowElapsed = !totalShowElapsed },
-            )
+            if (route != null) {
+                // A GPX route has no time-based "interval"/"total" to show — distance along the
+                // route is the equivalent progress measure here.
+                val routeProgress = (workoutState.routeDistanceM / route.totalDistanceM).coerceIn(0f, 1f)
+                StatTile(
+                    label = "Distance",
+                    value = "%.1f".format(workoutState.routeDistanceM / 1000f),
+                    unit = "km",
+                    modifier = Modifier.weight(1f),
+                    progress = routeProgress,
+                )
+                StatTile(
+                    label = "Remaining",
+                    value = "%.1f".format(((route.totalDistanceM - workoutState.routeDistanceM) / 1000f).coerceAtLeast(0f)),
+                    unit = "km",
+                    modifier = Modifier.weight(1f),
+                    progress = 1f - routeProgress,
+                    progressAnchorEnd = true,
+                )
+            } else {
+                StatTile(
+                    label = "Interval",
+                    value = formatTime(if (intervalShowElapsed) workoutState.elapsedInStepSec else workoutState.remainingInStepSec),
+                    modifier = Modifier.weight(1f),
+                    progress = intervalProgress,
+                    progressAnchorEnd = !intervalShowElapsed,
+                    onClick = { intervalShowElapsed = !intervalShowElapsed },
+                )
+                StatTile(
+                    label = "Total",
+                    value = formatTime(if (totalShowElapsed) workoutState.totalElapsedSec else workoutState.totalRemainingSec),
+                    modifier = Modifier.weight(1f),
+                    progress = totalProgress,
+                    progressAnchorEnd = !totalShowElapsed,
+                    onClick = { totalShowElapsed = !totalShowElapsed },
+                )
+            }
         }
         // The Watts/%FTP tile and the plain HR tile trade positions between modes instead of one
         // relabeling into a second HR tile — in HR+ the trainer is still holding a real power
@@ -1200,7 +1228,9 @@ private fun WorkoutProfileChart(
             }
         },
     ) {
-        if (steps.isEmpty() || totalDurationSec <= 0) return@Canvas
+        // SLO (manual or GPX-route-driven) has no fixed plan, so steps can legitimately be
+        // empty there — every other mode still needs a real plan loaded to draw anything.
+        if (totalDurationSec <= 0 || (steps.isEmpty() && controlMode != ControlMode.SLO)) return@Canvas
         val w = size.width
         val h = size.height
 

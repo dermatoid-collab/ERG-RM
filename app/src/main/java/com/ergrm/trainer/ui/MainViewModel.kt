@@ -13,6 +13,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.IBinder
 import androidx.core.content.ContextCompat
+import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.ergrm.trainer.ble.BleScanner
@@ -47,6 +48,7 @@ import com.ergrm.trainer.library.LibraryRepository
 import com.ergrm.trainer.library.LibraryWorkoutFile
 import com.ergrm.trainer.notify.AppNotifications
 import com.ergrm.trainer.service.TrainerForegroundService
+import com.ergrm.trainer.workout.GpxParser
 import com.ergrm.trainer.workout.WorkoutExecutor
 import com.ergrm.trainer.workout.WorkoutStep
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -521,6 +523,35 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 FetchResult.NoStepsFound -> _workoutLoadState.value = WorkoutLoadState.Empty
                 is FetchResult.Error -> _workoutLoadState.value = WorkoutLoadState.Error(result.message)
             }
+        }
+    }
+
+    /** Loads a GPX track picked via SAF (see AppNav's "GPX route" source) as a SLO route —
+     *  workoutExecutor.loadRoute switches control mode to SLO itself, since a loaded route only
+     *  makes sense there. */
+    fun loadRouteFromGpx(uri: Uri) {
+        _workoutLoadState.value = WorkoutLoadState.Loading
+        viewModelScope.launch {
+            val context = getApplication<Application>()
+            val bytes = try {
+                context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            } catch (t: Exception) {
+                null
+            }
+            if (bytes == null) {
+                _workoutLoadState.value = WorkoutLoadState.Error("Couldn't read that file")
+                return@launch
+            }
+            val name = DocumentFile.fromSingleUri(context, uri)?.name
+                ?.removeSuffix(".gpx")?.removeSuffix(".GPX")
+                ?: "Route"
+            val route = GpxParser.parse(bytes.decodeToString(), name)
+            if (route == null) {
+                _workoutLoadState.value = WorkoutLoadState.Error("That doesn't look like a valid GPX track")
+                return@launch
+            }
+            workoutExecutor.loadRoute(route)
+            _workoutLoadState.value = WorkoutLoadState.Loaded(route.name)
         }
     }
 

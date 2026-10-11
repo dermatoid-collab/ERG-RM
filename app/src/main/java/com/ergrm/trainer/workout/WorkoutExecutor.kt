@@ -47,8 +47,18 @@ data class WorkoutRunState(
     val currentTargetBpm: Int? = null,
     /** SLO mode only: the grade (±%) currently being sent to the trainer via FTMS simulation
      *  mode. Resets to 0 (flat) whenever a workout is freshly loaded or exited — manually set
-     *  from there via [WorkoutExecutor.setGrade]/increaseGrade/decreaseGrade. */
+     *  from there via [WorkoutExecutor.setGrade]/increaseGrade/decreaseGrade, unless
+     *  [routeProfile] is loaded, in which case the route itself drives it (see
+     *  [WorkoutExecutor.advanceRoute]) and manual grade taps are ignored. */
     val currentGradePercent: Float = 0f,
+    /** A GPX route loaded via [WorkoutExecutor.loadRoute] — mutually exclusive with [steps] (one
+     *  replaces the other). Non-null here means grade is driven by position along this route,
+     *  not manual taps. */
+    val routeProfile: RouteProfile? = null,
+    /** How far along [routeProfile] the ride has virtually traveled, estimated each tick from
+     *  the trainer's own reported speed (see [WorkoutExecutor.advanceRoute]) — there's no real
+     *  wheel-on-road distance to measure directly. */
+    val routeDistanceM: Float = 0f,
 ) {
     val currentStep: WorkoutStep? get() = steps.getOrNull(currentStepIndex)
     val nextStep: WorkoutStep? get() = steps.getOrNull(currentStepIndex + 1)
@@ -126,6 +136,10 @@ class WorkoutExecutor(
     // so exit() can restore this clean, restartable definition instead of whatever the finished
     // ride's steps list grew into.
     private var originalSteps: List<WorkoutStep> = emptyList()
+    // Mutually exclusive with originalSteps — whichever was loaded most recently replaces the
+    // other (see load/loadRoute) — restored the same way on exit() so re-starting the same ride
+    // doesn't require re-picking the file.
+    private var originalRoute: RouteProfile? = null
 
     // HR+ only: the power actually being sent, nudged slowly by the correction loop instead of
     // recomputed fresh every tick like the ERG target is — null means "not established yet",
@@ -149,7 +163,7 @@ class WorkoutExecutor(
                     if (pedaling) {
                         // Auto-start from idle, or resume from any pause (auto or manual) —
                         // pedaling again always means "keep going".
-                        if (s.steps.isNotEmpty() && !s.isRunning) {
+                        if ((s.steps.isNotEmpty() || s.routeProfile != null) && !s.isRunning) {
                             start()
                         }
                     } else if (s.isRunning) {
@@ -163,6 +177,7 @@ class WorkoutExecutor(
         stop()
         _sampleHistory.value = emptyList()
         originalSteps = steps
+        originalRoute = null
         // Loading a new workout keeps the rider's ERG/HR+ choice from the previous one, rather
         // than always reverting to ERG.
         val mode = _state.value.controlMode
@@ -175,6 +190,24 @@ class WorkoutExecutor(
         // pedaling), so it never fires here if the rider was already pedaling before this load —
         // without this check the workout would sit loaded but idle until they either tap Start
         // or briefly coast and resume to manufacture a fresh transition.
+        if ((liveData.value.powerWatts ?: 0) > AUTO_START_THRESHOLD_WATTS) {
+            start()
+        }
+    }
+
+    /** Loads a GPX route (see [RouteProfile]) and switches straight to SLO — a loaded route
+     *  only makes sense there, so there's no reason to make the rider toggle modes themselves.
+     *  Replaces any previously loaded time-based workout ([originalSteps]), same as [load]
+     *  replaces any previously loaded route. */
+    fun loadRoute(route: RouteProfile) {
+        stop()
+        _sampleHistory.value = emptyList()
+        originalSteps = emptyList()
+        originalRoute = route
+        _state.value = WorkoutRunState(
+            controlMode = ControlMode.SLO,
+            routeProfile = route,
+        )
         if ((liveData.value.powerWatts ?: 0) > AUTO_START_THRESHOLD_WATTS) {
             start()
         }
@@ -208,8 +241,11 @@ class WorkoutExecutor(
     fun toggleControlMode() = setControlMode(_state.value.controlMode.next())
 
     /** SLO only: sets the grade sent to the trainer, clamped to ±[AppSettings.maxGradePercent]
-     *  since that's a hardware limit of whichever trainer is connected, not a preference. */
+     *  since that's a hardware limit of whichever trainer is connected, not a preference. A
+     *  no-op while a route is loaded — the route itself drives grade every tick (see
+     *  [advanceRoute]), so a manual tap here would just be overwritten on the next tick anyway. */
     fun setGrade(percent: Float) {
+        if (_state.value.routeProfile != null) return
         val maxGrade = settings.value.maxGradePercent
         _state.value = _state.value.copy(currentGradePercent = percent.coerceIn(-maxGrade, maxGrade))
         pushTargetForCurrentStep()
@@ -219,7 +255,8 @@ class WorkoutExecutor(
     fun decreaseGrade() = setGrade(_state.value.currentGradePercent - settings.value.slopeStepPercent)
 
     fun start() {
-        if (_state.value.steps.isEmpty() || _state.value.isRunning) return
+        val s = _state.value
+        if ((s.steps.isEmpty() && s.routeProfile == null) || s.isRunning) return
         _state.value = _state.value.copy(isRunning = true, hasStarted = true)
         tickerJob?.cancel()
         tickerJob = scope.launch {
@@ -263,6 +300,7 @@ class WorkoutExecutor(
             steps = originalSteps,
             totalDurationSec = originalSteps.sumOf { it.durationSec },
             controlMode = mode,
+            routeProfile = originalRoute,
         )
         _sampleHistory.value = emptyList()
         scope.launch { trainer.stop() }
@@ -307,29 +345,55 @@ class WorkoutExecutor(
 
     private fun tick() {
         val s = _state.value
-        val step = s.currentStep ?: return
-
-        val newElapsedInStep = s.elapsedInStepSec + 1
-        if (newElapsedInStep >= step.durationSec) {
-            val nextIndex = s.currentStepIndex + 1
-            resetHrPlusBaseline()
-            if (nextIndex >= s.steps.size) {
-                appendExtensionAndAdvance(s, step.endWatts, s.totalElapsedSec + 1)
-                return
-            }
-            _state.value = s.copy(
-                currentStepIndex = nextIndex,
-                elapsedInStepSec = 0,
-                totalElapsedSec = s.totalElapsedSec + 1,
-            )
+        if (s.steps.isEmpty()) {
+            // A GPX route with no separate time-based workout loaded — nothing to advance by
+            // step index, just the clock (still needed for the chart's x axis and sample
+            // history) and the route's own position, below. totalDurationSec has no real
+            // meaning here (a route's duration depends on how fast the rider goes), so it's
+            // just kept equal to totalElapsedSec — makes the chart's own "full workout" zoom
+            // level naturally mean "zero to now" instead of needing a route-specific case.
+            val newElapsed = s.totalElapsedSec + 1
+            _state.value = s.copy(totalElapsedSec = newElapsed, totalDurationSec = newElapsed)
         } else {
-            _state.value = s.copy(
-                elapsedInStepSec = newElapsedInStep,
-                totalElapsedSec = s.totalElapsedSec + 1,
-            )
+            val step = s.currentStep ?: return
+            val newElapsedInStep = s.elapsedInStepSec + 1
+            if (newElapsedInStep >= step.durationSec) {
+                val nextIndex = s.currentStepIndex + 1
+                resetHrPlusBaseline()
+                if (nextIndex >= s.steps.size) {
+                    appendExtensionAndAdvance(s, step.endWatts, s.totalElapsedSec + 1)
+                    return
+                }
+                _state.value = s.copy(
+                    currentStepIndex = nextIndex,
+                    elapsedInStepSec = 0,
+                    totalElapsedSec = s.totalElapsedSec + 1,
+                )
+            } else {
+                _state.value = s.copy(
+                    elapsedInStepSec = newElapsedInStep,
+                    totalElapsedSec = s.totalElapsedSec + 1,
+                )
+            }
         }
+        advanceRoute()
         pushTargetForCurrentStep()
         maybeApplyHrCorrection()
+    }
+
+    /** No-op unless a route is loaded. Estimates how far the ride has virtually traveled this
+     *  tick from the trainer's own reported speed (there's no real wheel-on-road distance to
+     *  measure directly), then looks up and sets the grade for that position — the rider's
+     *  manual ↓/↑ taps are ignored while a route drives grade (see [setGrade]). */
+    private fun advanceRoute() {
+        val s = _state.value
+        val route = s.routeProfile ?: return
+        val speedKmh = liveData.value.speedKmh ?: return
+        val deltaM = speedKmh * 1000f / 3600f // 1 tick == 1 second
+        val newDistance = (s.routeDistanceM + deltaM).coerceAtMost(route.totalDistanceM)
+        val maxGrade = settings.value.maxGradePercent
+        val grade = route.gradeAt(newDistance).coerceIn(-maxGrade, maxGrade)
+        _state.value = _state.value.copy(routeDistanceM = newDistance, currentGradePercent = grade)
     }
 
     /** Appends another [AUTO_EXTEND_SEC] block at [holdWatts] and moves into it — repeats forever. */

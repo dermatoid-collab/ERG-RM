@@ -647,7 +647,9 @@ private fun VitalsPowerChart(
             listOf(0f, 0.25f, 0.5f, 0.75f).forEach { frac ->
                 drawLine(onSurfaceColor.copy(alpha = 0.12f), Offset(0f, h * frac), Offset(w, h * frac), strokeWidth = 2.25f)
             }
-            if (steps.isEmpty() || totalDurationSec <= 0) return@Canvas
+            // SLO (manual or GPX-route-driven) has no fixed plan, so steps can legitimately be
+            // empty there — every other mode still needs a real plan loaded to draw anything.
+            if (totalDurationSec <= 0 || (steps.isEmpty() && controlMode != ControlMode.SLO)) return@Canvas
             val (windowStart, windowEnd) = computeChartWindow(zoom, totalElapsedSec, totalDurationSec)
             val windowLen = (windowEnd - windowStart).coerceAtLeast(1)
             fun xAt(t: Int) = w * (t - windowStart) / windowLen.toFloat()

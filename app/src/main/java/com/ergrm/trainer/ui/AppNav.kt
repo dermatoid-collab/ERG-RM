@@ -1,5 +1,7 @@
 package com.ergrm.trainer.ui
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColor
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.infiniteRepeatable
@@ -195,7 +197,14 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
                 onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
             }
 
-            // The same 4 items, same order, on every screen's "Other sources" menu (Workout's own
+            // One-off GPX file import (unlike the Library's persistent SAF-tree sync): picking a
+            // route switches straight into SLO, so there's no overlay destination for it here —
+            // just a launcher the menu entry below triggers directly.
+            val gpxPickerLauncher = rememberLauncherForActivityResult(
+                ActivityResultContracts.GetContent(),
+            ) { uri -> if (uri != null) viewModel.loadRouteFromGpx(uri) }
+
+            // The same 5 items, same order, on every screen's "Other sources" menu (Workout's own
             // header included) — each item still works when tapped from the screen it points to,
             // it's just a no-op, so the menu never has to leave anything out to stay consistent.
             val otherSources: List<Pair<String, () -> Unit>> = listOf(
@@ -207,6 +216,12 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
                 "Calendar (Intervals.icu)" to { overlay = Overlay.CALENDAR },
                 "Library (Intervals.icu)" to { overlay = Overlay.INTERVALS_LIBRARY },
                 "Workout Library" to { overlay = Overlay.LIBRARY },
+                "GPX route" to {
+                    AppNavigationEvents.pickerLaunchInFlight = true
+                    overlay = Overlay.NONE
+                    screen = Screen.WORKOUT
+                    gpxPickerLauncher.launch("*/*")
+                },
             )
 
             Scaffold(
