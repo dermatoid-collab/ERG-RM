@@ -41,6 +41,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
@@ -180,7 +181,7 @@ private fun SessionDetailLandscape(session: WorkoutSession, stats: SessionStats,
     ) {
         Column(
             modifier = Modifier
-                .weight(0.36f)
+                .weight(0.3f)
                 .fillMaxHeight()
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -190,12 +191,12 @@ private fun SessionDetailLandscape(session: WorkoutSession, stats: SessionStats,
                 style = MaterialTheme.typography.labelMedium,
                 color = ErgOnSurface.copy(alpha = 0.7f),
             )
-            StatsGrid(session, stats)
+            SessionStatsLines(session, stats)
         }
 
         if (hasWattsChart || hasCoreData) {
             Row(
-                modifier = Modifier.weight(0.64f).fillMaxHeight(),
+                modifier = Modifier.weight(0.7f).fillMaxHeight(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 if (hasWattsChart) {
@@ -459,6 +460,55 @@ private fun CoreSkinHsiDetailChart(samples: List<SessionSample>, modifier: Modif
                 drawText(result, topLeft = Offset(boxXClamped + padding, padding + rowHeight * i))
             }
         }
+    }
+}
+
+/** Plain "label: value" line — the landscape data column's compact stand-in for a boxed
+ *  DetailTile, so the stack of stats takes a fraction of the vertical space the grid of tiles
+ *  would, leaving more width for the charts beside it via this column's own (smaller) weight. */
+@Composable
+private fun StatLine(label: String, value: String, valueColor: Color = ErgOnSurface, modifier: Modifier = Modifier) {
+    Row(modifier = modifier.fillMaxWidth()) {
+        Text("$label: ", style = MaterialTheme.typography.bodyMedium, color = ErgOnSurface.copy(alpha = 0.65f), maxLines = 1)
+        Text(value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = valueColor, maxLines = 1)
+    }
+}
+
+/** Landscape stand-in for [StatsGrid]: the same stats as one flat stack of "label: value" lines
+ *  instead of a grid of tiles. */
+@Composable
+private fun SessionStatsLines(session: WorkoutSession, stats: SessionStats) {
+    val lines = buildList {
+        add(Triple("Duration", formatWorkoutDuration(session.durationSec), ErgOnSurface))
+        add(Triple("Distance", stats.distanceKm?.let { "%.1f km".format(it) } ?: "n/a", ErgOnSurface))
+        add(Triple("Avg speed", stats.avgSpeedKmh?.let { "%.1f km/h".format(it) } ?: "n/a", ErgOnSurface))
+        add(Triple("Work", "${stats.totalKj} kJ", ErgOnSurface))
+        add(Triple("Avg watts", "${stats.avgWatts} W", ErgOnSurface))
+        add(Triple("NP", stats.normalizedWatts?.let { "$it W" } ?: "n/a", ErgOnSurface))
+        add(Triple("Max HR", stats.maxHrBpm?.let { "$it bpm" } ?: "n/a", if (stats.maxHrBpm != null) ErgHrLine else ErgOnSurface))
+        add(Triple("Avg HR", stats.avgHrBpm?.let { "$it bpm" } ?: "n/a", if (stats.avgHrBpm != null) ErgHrLine else ErgOnSurface))
+        add(
+            Triple(
+                "Avg cadence", stats.avgCadenceRpm?.let { "$it rpm" } ?: "n/a",
+                if (stats.avgCadenceRpm != null) ErgProgressLine else ErgOnSurface,
+            ),
+        )
+        if (stats.avgCoreTempC != null) {
+            add(Triple("Avg core temp", "%.2f°C".format(stats.avgCoreTempC), ErgOnSurface))
+            add(Triple("Max core temp", stats.maxCoreTempC?.let { "%.2f°C".format(it) } ?: "n/a", ErgOnSurface))
+            add(Triple("Mins > ${CORE_TEMP_ALERT_C}°", formatMmSs(stats.timeAboveCoreTempSec), ErgOnSurface))
+        }
+        // Prefers the value stored on the session itself (computed once at save time, see
+        // MainViewModel.exitWorkout) over recomputing it here — falls back to the live derivation
+        // only for sessions saved before that field existed.
+        val htl = session.heatTrainingLoad ?: stats.heatTrainingLoad
+        if (htl != null || stats.tss != null) {
+            add(Triple("Core HTL", htl?.let { "%.1f/10".format(it) } ?: "n/a", if (htl != null) ErgHeatLoad else ErgOnSurface))
+            add(Triple("TSS", stats.tss?.toString() ?: "n/a", ErgOnSurface))
+        }
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        lines.forEach { (label, value, color) -> StatLine(label, value, color) }
     }
 }
 

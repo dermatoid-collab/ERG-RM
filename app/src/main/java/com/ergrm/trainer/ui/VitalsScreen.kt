@@ -241,12 +241,12 @@ private fun VitalsScreenLandscape(
     ) {
         Column(
             modifier = Modifier
-                .weight(0.36f)
+                .weight(0.3f)
                 .fillMaxHeight()
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            SummaryTilesGrid(stats = stats, durationSec = workoutState.totalElapsedSec)
+            VitalsSummaryLines(stats = stats, durationSec = workoutState.totalElapsedSec)
             CompactControlRow(
                 hasWorkout = workoutState.steps.isNotEmpty(),
                 isRunning = workoutState.isRunning,
@@ -265,7 +265,7 @@ private fun VitalsScreenLandscape(
         }
 
         Row(
-            modifier = Modifier.weight(0.64f).fillMaxHeight(),
+            modifier = Modifier.weight(0.7f).fillMaxHeight(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
@@ -302,6 +302,42 @@ private fun VitalsScreenLandscape(
                 ChartTimeAxis(zoom = zoom, totalElapsedSec = workoutState.totalElapsedSec, totalDurationSec = workoutState.totalDurationSec)
             }
         }
+    }
+}
+
+/** Plain "label: value" line — the landscape data column's compact stand-in for a GroupCard
+ *  line, so the stack of stats takes a fraction of the vertical space the grouped cards would. */
+@Composable
+private fun StatLine(label: String, value: String, valueColor: Color = ErgOnSurface, modifier: Modifier = Modifier) {
+    Row(modifier = modifier.fillMaxWidth()) {
+        Text("$label: ", style = MaterialTheme.typography.bodyMedium, color = ErgOnSurface.copy(alpha = 0.65f), maxLines = 1)
+        Text(value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = valueColor, maxLines = 1)
+    }
+}
+
+/** Landscape stand-in for [SummaryTilesGrid]: the same 13 stats as one flat stack of
+ *  "label: value" lines instead of 4 grouped cards — much shorter, so this column's own
+ *  (smaller) weight still leaves it readable while giving the charts beside it more width. */
+@Composable
+private fun VitalsSummaryLines(stats: SessionStats, durationSec: Int, modifier: Modifier = Modifier) {
+    val lines = listOf(
+        Triple("Duration", formatTime(durationSec), ErgOnSurface),
+        Triple("Distance", stats.distanceKm?.let { "%.1f km".format(it) } ?: "--", ErgOnSurface),
+        Triple("Avg Speed", stats.avgSpeedKmh?.let { "%.1f km/h".format(it) } ?: "--", ErgOnSurface),
+        Triple("Work", "${stats.totalKj} kJ", ErgOnSurface),
+        Triple("NP", stats.normalizedWatts?.let { "$it W" } ?: "--", ErgOnSurface),
+        Triple("TSS", stats.tss?.toString() ?: "--", ErgOnSurface),
+        Triple("Avg Watts", "${stats.avgWatts} W", ErgOnSurface),
+        Triple("Avg HR", stats.avgHrBpm?.let { "$it bpm" } ?: "--", ErgHrLine),
+        Triple("Max HR", stats.maxHrBpm?.let { "$it bpm" } ?: "--", ErgHrLine),
+        Triple("Avg Cad", stats.avgCadenceRpm?.let { "$it rpm" } ?: "--", ErgCadenceLine),
+        Triple("Avg Core T", stats.avgCoreTempC?.let { "%.2f °C".format(it) } ?: "--", ErgOnSurface),
+        Triple("Max Core T", stats.maxCoreTempC?.let { "%.2f °C".format(it) } ?: "--", ErgOnSurface),
+        Triple("Mins > ${CORE_TEMP_ALERT_C}°", formatMmSs(stats.timeAboveCoreTempSec), ErgOnSurface),
+        Triple("Core HTL", stats.heatTrainingLoad?.let { "%.1f/10".format(it) } ?: "--", ErgHeatLoad),
+    )
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        lines.forEach { (label, value, color) -> StatLine(label, value, color) }
     }
 }
 

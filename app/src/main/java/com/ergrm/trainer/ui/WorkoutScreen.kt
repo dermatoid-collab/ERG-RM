@@ -383,10 +383,10 @@ private fun WorkoutScreenLandscape(
     ) {
         Column(
             modifier = Modifier
-                .weight(0.36f)
+                .weight(0.3f)
                 .fillMaxHeight()
                 .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(7.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp),
         ) {
             if (!chromeCollapsed) {
                 WorkoutHeader(title = workoutTitle, otherSources = otherSources)
@@ -401,9 +401,16 @@ private fun WorkoutScreenLandscape(
             }
             WorkoutStatusLine(loadState)
 
-            StatTileGrid(live, workoutState, settings.ftpWatts, settings.lthrBpm)
+            WorkoutStatLines(live, workoutState, settings.ftpWatts, settings.lthrBpm, coreReading)
 
-            CoreTempTileRow(reading = coreReading)
+            IntervalDetailsSection(
+                current = workoutState.currentStep,
+                next = workoutState.nextStep,
+                ftpWatts = settings.ftpWatts,
+                lthrBpm = settings.lthrBpm,
+                intensityPercent = workoutState.intensityPercent,
+                controlMode = workoutState.controlMode,
+            )
 
             ControlsRow(
                 hasWorkout = workoutState.steps.isNotEmpty(),
@@ -414,15 +421,7 @@ private fun WorkoutScreenLandscape(
                 onExit = onShowStopConfirm,
                 onExtend = { viewModel.extendCurrentInterval() },
                 onSkip = { viewModel.skipStep() },
-            )
-
-            IntervalDetailsSection(
-                current = workoutState.currentStep,
-                next = workoutState.nextStep,
-                ftpWatts = settings.ftpWatts,
-                lthrBpm = settings.lthrBpm,
-                intensityPercent = workoutState.intensityPercent,
-                controlMode = workoutState.controlMode,
+                compact = true,
             )
 
             IntensityRow(
@@ -447,8 +446,83 @@ private fun WorkoutScreenLandscape(
             zoom = effectiveChartZoom,
             onZoomChange = setChartZoom,
             modifier = Modifier
-                .weight(0.64f)
+                .weight(0.7f)
                 .fillMaxHeight(),
+        )
+    }
+}
+
+/** Plain "label: value" line — the landscape data column's compact stand-in for a boxed
+ *  StatTile/DetailTile, so the stack of live readings takes a fraction of the vertical space a
+ *  grid of tiles would, leaving more height (and, via the column's own weight, more width) for
+ *  the chart beside it. */
+@Composable
+private fun StatLine(label: String, value: String, valueColor: Color = ErgOnSurface, modifier: Modifier = Modifier) {
+    Row(modifier = modifier.fillMaxWidth()) {
+        Text("$label: ", style = MaterialTheme.typography.bodyMedium, color = ErgOnSurface.copy(alpha = 0.65f), maxLines = 1)
+        Text(value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = valueColor, maxLines = 1)
+    }
+}
+
+/** Landscape stand-in for [StatTileGrid] + [CoreTempTileRow]: same live values, as stacked text
+ *  lines instead of a grid of tiles. Drops the tap-to-toggle elapsed/remaining and %FTP views —
+ *  one fixed reading per line keeps this genuinely compact; the full interactive tiles are still
+ *  what portrait shows. */
+@Composable
+private fun WorkoutStatLines(
+    live: TrainerSample,
+    workoutState: WorkoutRunState,
+    ftpWatts: Int,
+    lthrBpm: Int,
+    coreReading: CoreTempReading?,
+    modifier: Modifier = Modifier,
+) {
+    val actual = live.powerWatts ?: 0
+    val target = workoutState.currentTargetWatts
+    val powerColor = when {
+        target <= 0 -> ErgOnSurface
+        actual < target - 15 -> ErgWarn
+        actual > target + 15 -> ErgAboveTarget
+        else -> ErgAtTarget
+    }
+    val zone = zoneFor(target, ftpWatts, ErgOnSurface)
+    val isHrPlus = workoutState.controlMode == ControlMode.HR_PLUS
+    val wattsColor = if (isHrPlus) zone.color else powerColor
+    val hrTargetColor = workoutState.currentTargetBpm?.let { hrTarget ->
+        live.heartRateBpm?.let { hrActual ->
+            when {
+                hrActual < hrTarget - 5 -> ErgBelowTarget
+                hrActual > hrTarget + 5 -> ErgAboveTarget
+                else -> ErgAtTarget
+            }
+        }
+    }
+    val hrZoneColor = live.heartRateBpm?.let { zoneForHr(it, lthrBpm, ErgOnSurface).color } ?: ErgOnSurface
+    val hrColor = hrTargetColor ?: hrZoneColor
+    val flooredCore = coreReading?.coreTempC?.let { floorToOneDecimal(it) }
+    val flooredHsi = coreReading?.heatStrainIndex?.let { floorToOneDecimal(it) }
+
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        StatLine("Interval", formatTime(workoutState.remainingInStepSec))
+        StatLine("Total", formatTime(workoutState.totalRemainingSec))
+        StatLine("Cadence", live.cadenceRpm?.let { "${it.toInt()} rpm" } ?: "--")
+        if (isHrPlus) {
+            StatLine("Watts", "$actual W", valueColor = wattsColor)
+            StatLine("Target HR", (workoutState.currentTargetBpm?.toString() ?: "--") + " bpm")
+            StatLine("HR", live.heartRateBpm?.let { "$it bpm" } ?: "--", valueColor = hrColor)
+        } else {
+            StatLine("HR", live.heartRateBpm?.let { "$it bpm" } ?: "--", valueColor = hrColor)
+            StatLine("Target watts", "$target W (${zone.label})", valueColor = zone.color)
+            StatLine("Watts", "$actual W", valueColor = wattsColor)
+        }
+        StatLine("Skin", coreReading?.skinTempC?.let { "%.1f°".format(it) } ?: "--", valueColor = ErgSkinTemp)
+        StatLine(
+            "Core", flooredCore?.let { "%.1f°".format(it) } ?: "--",
+            valueColor = flooredCore?.let { coreColor(it) } ?: ErgOnSurface,
+        )
+        StatLine(
+            "HSI", flooredHsi?.let { "%.1f".format(it) } ?: "--",
+            valueColor = flooredHsi?.let { hsiColor(it) } ?: ErgOnSurface,
         )
     }
 }
@@ -1457,21 +1531,29 @@ private fun ControlsRow(
     onExit: () -> Unit,
     onExtend: () -> Unit,
     onSkip: () -> Unit,
+    // Landscape's data column has far less height to spend on controls than portrait does, so it
+    // asks for the mini scale here instead — same pills, just smaller (close to IntensityRow's
+    // own 38.4dp/28.8dp scale, a notch down).
+    compact: Boolean = false,
 ) {
     val isPaused = hasStarted && !isRunning
     val mainIcon = when { isRunning -> Icons.Filled.Pause; isPaused -> Icons.Filled.Stop; else -> Icons.Filled.PlayArrow }
     val mainAction = when { isRunning -> onPause; isPaused -> onExit; else -> onPlay }
     val mainDescription = when { isRunning -> "Pause"; isPaused -> "Stop"; else -> "Start" }
     val mainContainerColor = if (isPaused) ErgAboveTarget else ErgSurface2
+    val pillHeight = if (compact) 34.dp else 48.dp
+    val pillIconSize = if (compact) 18.dp else 28.dp
+    val addSkipWidth = if (compact) 44.dp else 60.dp
 
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 8.dp)) {
         PillIconButton(
             icon = mainIcon,
             contentDescription = mainDescription,
             onClick = mainAction,
             enabled = hasWorkout,
             containerColor = mainContainerColor,
-            iconSize = 28.dp,
+            iconSize = pillIconSize,
+            height = pillHeight,
             modifier = Modifier.weight(1f),
             // Plain tap in all 3 states (Start/Pause/Stop) — only +5min and Skip require the 2s
             // hold now.
@@ -1481,8 +1563,9 @@ private fun ControlsRow(
             contentDescription = "Add 5 minutes to the interval",
             onClick = onExtend,
             enabled = hasWorkout,
-            iconSize = 28.dp,
-            modifier = Modifier.width(60.dp),
+            iconSize = pillIconSize,
+            height = pillHeight,
+            modifier = Modifier.width(addSkipWidth),
             requireLongPressMillis = 2000L,
         )
         PillIconButton(
@@ -1490,7 +1573,8 @@ private fun ControlsRow(
             contentDescription = "Skip step",
             onClick = onSkip,
             enabled = hasWorkout,
-            iconSize = 28.dp,
+            iconSize = pillIconSize,
+            height = pillHeight,
             modifier = Modifier.weight(1f),
             requireLongPressMillis = 2000L,
         )
