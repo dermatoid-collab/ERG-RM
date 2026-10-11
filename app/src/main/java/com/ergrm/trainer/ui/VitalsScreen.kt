@@ -3,6 +3,8 @@ package com.ergrm.trainer.ui
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
@@ -65,6 +67,7 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.ergrm.trainer.data.AppSettings
 import com.ergrm.trainer.history.CORE_TEMP_ALERT_C
 import com.ergrm.trainer.history.SessionSample
 import com.ergrm.trainer.history.SessionStats
@@ -87,6 +90,7 @@ import com.ergrm.trainer.ui.theme.ErgSurface
 import com.ergrm.trainer.ui.theme.ErgSurface2
 import com.ergrm.trainer.workout.ControlMode
 import com.ergrm.trainer.workout.SamplePoint
+import com.ergrm.trainer.workout.WorkoutRunState
 import com.ergrm.trainer.workout.WorkoutStep
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -130,61 +134,79 @@ fun VitalsScreen(
         )
     }
 
-    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp, vertical = 6.dp)) {
-        SummaryTilesGrid(stats = stats, durationSec = workoutState.totalElapsedSec)
-
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .padding(vertical = 6.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            CoreSkinHsiChart(
-                samples = coreSamples,
-                totalElapsedSec = workoutState.totalElapsedSec,
-                totalDurationSec = workoutState.totalDurationSec,
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        // Same breakpoint as Workout/SessionDetailScreen: wider-than-tall means the phone is
+        // rotated, not a configuration lookup, so this also behaves sensibly on a tablet.
+        if (maxWidth > maxHeight) {
+            VitalsScreenLandscape(
+                viewModel = viewModel,
                 zoom = zoom,
-                onTap = { onZoomChange(zoom.next()) },
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-            )
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(1.5.dp)
-                    .background(ErgOnSurface.copy(alpha = 0.3f)),
-            )
-            VitalsPowerChart(
-                steps = workoutState.steps,
-                currentStepIndex = workoutState.currentStepIndex,
-                totalElapsedSec = workoutState.totalElapsedSec,
-                totalDurationSec = workoutState.totalDurationSec,
+                onZoomChange = onZoomChange,
+                workoutState = workoutState,
+                settings = settings,
                 samples = samples,
-                ftpWatts = settings.ftpWatts,
-                lthrBpm = settings.lthrBpm,
-                intensityPercent = workoutState.intensityPercent,
-                zoom = zoom,
-                onTap = { onZoomChange(zoom.next()) },
-                modifier = Modifier.weight(1f).fillMaxWidth(),
+                coreSamples = coreSamples,
+                stats = stats,
+                onShowStopConfirm = { showStopConfirm = true },
             )
-            ChartTimeAxis(zoom = zoom, totalElapsedSec = workoutState.totalElapsedSec, totalDurationSec = workoutState.totalDurationSec)
-        }
+        } else {
+            Column(modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp, vertical = 6.dp)) {
+                SummaryTilesGrid(stats = stats, durationSec = workoutState.totalElapsedSec)
 
-        CompactControlRow(
-            hasWorkout = workoutState.steps.isNotEmpty(),
-            isRunning = workoutState.isRunning,
-            hasStarted = workoutState.hasStarted,
-            intensityPercent = workoutState.intensityPercent,
-            controlMode = workoutState.controlMode,
-            onPlay = { viewModel.startWorkout() },
-            onPause = { viewModel.pauseWorkout() },
-            onStopRequested = { showStopConfirm = true },
-            onExtend = { viewModel.extendCurrentInterval() },
-            onSkip = { viewModel.skipStep() },
-            onDecrease = { viewModel.decreaseIntensity() },
-            onIncrease = { viewModel.increaseIntensity() },
-            onToggleMode = { viewModel.toggleControlMode() },
-        )
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .padding(vertical = 6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    CoreSkinHsiChart(
+                        samples = coreSamples,
+                        totalElapsedSec = workoutState.totalElapsedSec,
+                        totalDurationSec = workoutState.totalDurationSec,
+                        zoom = zoom,
+                        onTap = { onZoomChange(zoom.next()) },
+                        modifier = Modifier.weight(1f).fillMaxWidth(),
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(1.5.dp)
+                            .background(ErgOnSurface.copy(alpha = 0.3f)),
+                    )
+                    VitalsPowerChart(
+                        steps = workoutState.steps,
+                        currentStepIndex = workoutState.currentStepIndex,
+                        totalElapsedSec = workoutState.totalElapsedSec,
+                        totalDurationSec = workoutState.totalDurationSec,
+                        samples = samples,
+                        ftpWatts = settings.ftpWatts,
+                        lthrBpm = settings.lthrBpm,
+                        intensityPercent = workoutState.intensityPercent,
+                        zoom = zoom,
+                        onTap = { onZoomChange(zoom.next()) },
+                        modifier = Modifier.weight(1f).fillMaxWidth(),
+                    )
+                    ChartTimeAxis(zoom = zoom, totalElapsedSec = workoutState.totalElapsedSec, totalDurationSec = workoutState.totalDurationSec)
+                }
+
+                CompactControlRow(
+                    hasWorkout = workoutState.steps.isNotEmpty(),
+                    isRunning = workoutState.isRunning,
+                    hasStarted = workoutState.hasStarted,
+                    intensityPercent = workoutState.intensityPercent,
+                    controlMode = workoutState.controlMode,
+                    onPlay = { viewModel.startWorkout() },
+                    onPause = { viewModel.pauseWorkout() },
+                    onStopRequested = { showStopConfirm = true },
+                    onExtend = { viewModel.extendCurrentInterval() },
+                    onSkip = { viewModel.skipStep() },
+                    onDecrease = { viewModel.decreaseIntensity() },
+                    onIncrease = { viewModel.increaseIntensity() },
+                    onToggleMode = { viewModel.toggleControlMode() },
+                )
+            }
+        }
     }
 
     VitalsStopDialogs(
@@ -194,6 +216,93 @@ fun VitalsScreen(
         showDiscardConfirm = showDiscardConfirm,
         onDiscardConfirmChange = { showDiscardConfirm = it },
     )
+}
+
+/** Landscape Vitals: summary tiles + controls (the "data") on the left, both charts side by
+ *  side on the right instead of stacked — each gets its own time axis underneath since they're
+ *  no longer sharing one continuous vertical stack. */
+@Composable
+private fun VitalsScreenLandscape(
+    viewModel: MainViewModel,
+    zoom: ChartZoom,
+    onZoomChange: (ChartZoom) -> Unit,
+    workoutState: WorkoutRunState,
+    settings: AppSettings,
+    samples: List<SamplePoint>,
+    coreSamples: List<CoreSamplePoint>,
+    stats: SessionStats,
+    onShowStopConfirm: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Column(
+            modifier = Modifier
+                .weight(0.36f)
+                .fillMaxHeight()
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            SummaryTilesGrid(stats = stats, durationSec = workoutState.totalElapsedSec)
+            CompactControlRow(
+                hasWorkout = workoutState.steps.isNotEmpty(),
+                isRunning = workoutState.isRunning,
+                hasStarted = workoutState.hasStarted,
+                intensityPercent = workoutState.intensityPercent,
+                controlMode = workoutState.controlMode,
+                onPlay = { viewModel.startWorkout() },
+                onPause = { viewModel.pauseWorkout() },
+                onStopRequested = onShowStopConfirm,
+                onExtend = { viewModel.extendCurrentInterval() },
+                onSkip = { viewModel.skipStep() },
+                onDecrease = { viewModel.decreaseIntensity() },
+                onIncrease = { viewModel.increaseIntensity() },
+                onToggleMode = { viewModel.toggleControlMode() },
+            )
+        }
+
+        Row(
+            modifier = Modifier.weight(0.64f).fillMaxHeight(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                CoreSkinHsiChart(
+                    samples = coreSamples,
+                    totalElapsedSec = workoutState.totalElapsedSec,
+                    totalDurationSec = workoutState.totalDurationSec,
+                    zoom = zoom,
+                    onTap = { onZoomChange(zoom.next()) },
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                )
+                ChartTimeAxis(zoom = zoom, totalElapsedSec = workoutState.totalElapsedSec, totalDurationSec = workoutState.totalDurationSec)
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .width(1.5.dp)
+                    .background(ErgOnSurface.copy(alpha = 0.3f)),
+            )
+            Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                VitalsPowerChart(
+                    steps = workoutState.steps,
+                    currentStepIndex = workoutState.currentStepIndex,
+                    totalElapsedSec = workoutState.totalElapsedSec,
+                    totalDurationSec = workoutState.totalDurationSec,
+                    samples = samples,
+                    ftpWatts = settings.ftpWatts,
+                    lthrBpm = settings.lthrBpm,
+                    intensityPercent = workoutState.intensityPercent,
+                    zoom = zoom,
+                    onTap = { onZoomChange(zoom.next()) },
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                )
+                ChartTimeAxis(zoom = zoom, totalElapsedSec = workoutState.totalElapsedSec, totalDurationSec = workoutState.totalDurationSec)
+            }
+        }
+    }
 }
 
 /** 9 session-summary stats, as compact as the real tiles allow — no per-tile toggle like

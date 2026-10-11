@@ -10,6 +10,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -21,6 +22,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -78,6 +81,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.ergrm.trainer.ble.CoreTempReading
 import com.ergrm.trainer.ble.TrainerSample
+import com.ergrm.trainer.data.AppSettings
 import com.ergrm.trainer.ui.theme.ErgAboveTarget
 import com.ergrm.trainer.ui.theme.ErgAccent
 import com.ergrm.trainer.ui.theme.ErgAtTarget
@@ -138,48 +142,104 @@ fun WorkoutScreen(
         viewModel.autoBackupNeeded.collect { reason -> autoBackupDialogReason = reason }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(7.dp),
-    ) {
-        if (!chromeCollapsed) {
-            val loaded = loadState
-            WorkoutHeader(
-                title = when (loaded) {
-                    is WorkoutLoadState.Loaded -> loaded.name
-                    else -> if (workoutState.steps.isNotEmpty()) "Workout" else "No workout loaded"
-                },
+    val workoutTitle = when (val loaded = loadState) {
+        is WorkoutLoadState.Loaded -> loaded.name
+        else -> if (workoutState.steps.isNotEmpty()) "Workout" else "No workout loaded"
+    }
+
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        // Same breakpoint as Vitals/SessionDetailScreen: wider-than-tall means the phone is
+        // rotated, not a configuration lookup, so this also behaves sensibly on a tablet.
+        if (maxWidth > maxHeight) {
+            WorkoutScreenLandscape(
+                viewModel = viewModel,
+                isTrainerConnected = isTrainerConnected,
                 otherSources = otherSources,
+                chromeCollapsed = chromeCollapsed,
+                workoutTitle = workoutTitle,
+                live = live,
+                coreReading = coreReading,
+                workoutState = workoutState,
+                loadState = loadState,
+                samples = samples,
+                settings = settings,
+                effectiveChartZoom = effectiveChartZoom,
+                setChartZoom = setChartZoom,
+                onShowStopConfirm = { showStopConfirm = true },
             )
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(7.dp),
+            ) {
+                if (!chromeCollapsed) {
+                    WorkoutHeader(title = workoutTitle, otherSources = otherSources)
+                }
+
+                if (!isTrainerConnected) {
+                    Text(
+                        "Trainer not connected — power targets won't be sent",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = ErgWarn,
+                    )
+                }
+                WorkoutStatusLine(loadState)
+
+                StatTileGrid(live, workoutState, settings.ftpWatts, settings.lthrBpm)
+
+                CoreTempTileRow(reading = coreReading)
+
+                ControlsRow(
+                    hasWorkout = workoutState.steps.isNotEmpty(),
+                    isRunning = workoutState.isRunning,
+                    hasStarted = workoutState.hasStarted,
+                    onPlay = { viewModel.startWorkout() },
+                    onPause = { viewModel.pauseWorkout() },
+                    onExit = { showStopConfirm = true },
+                    onExtend = { viewModel.extendCurrentInterval() },
+                    onSkip = { viewModel.skipStep() },
+                )
+
+                IntervalDetailsSection(
+                    current = workoutState.currentStep,
+                    next = workoutState.nextStep,
+                    ftpWatts = settings.ftpWatts,
+                    lthrBpm = settings.lthrBpm,
+                    intensityPercent = workoutState.intensityPercent,
+                    controlMode = workoutState.controlMode,
+                )
+
+                ChartCard(
+                    steps = workoutState.steps,
+                    currentStepIndex = workoutState.currentStepIndex,
+                    totalElapsedSec = workoutState.totalElapsedSec,
+                    totalDurationSec = workoutState.totalDurationSec,
+                    samples = samples,
+                    ftpWatts = settings.ftpWatts,
+                    lthrBpm = settings.lthrBpm,
+                    intensityPercent = workoutState.intensityPercent,
+                    zoom = effectiveChartZoom,
+                    onZoomChange = setChartZoom,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                )
+
+                IntensityRow(
+                    intensityPercent = workoutState.intensityPercent,
+                    controlMode = workoutState.controlMode,
+                    enabled = workoutState.steps.isNotEmpty(),
+                    onDecrease = { viewModel.decreaseIntensity() },
+                    onIncrease = { viewModel.increaseIntensity() },
+                    onToggleMode = { viewModel.toggleControlMode() },
+                )
+            }
         }
+    }
 
-        if (!isTrainerConnected) {
-            Text(
-                "Trainer not connected — power targets won't be sent",
-                style = MaterialTheme.typography.bodySmall,
-                color = ErgWarn,
-            )
-        }
-        WorkoutStatusLine(loadState)
-
-        StatTileGrid(live, workoutState, settings.ftpWatts, settings.lthrBpm)
-
-        CoreTempTileRow(reading = coreReading)
-
-        ControlsRow(
-            hasWorkout = workoutState.steps.isNotEmpty(),
-            isRunning = workoutState.isRunning,
-            hasStarted = workoutState.hasStarted,
-            onPlay = { viewModel.startWorkout() },
-            onPause = { viewModel.pauseWorkout() },
-            onExit = { showStopConfirm = true },
-            onExtend = { viewModel.extendCurrentInterval() },
-            onSkip = { viewModel.skipStep() },
-        )
-
-        if (showStopConfirm) {
+    if (showStopConfirm) {
             // A plain Dialog instead of AlertDialog: AlertDialog only has 2 button slots
             // (confirm/dismiss), and this one needs 3 — Discard, Cancel, Save.
             Dialog(onDismissRequest = { showStopConfirm = false }) {
@@ -292,15 +352,88 @@ fun WorkoutScreen(
                 },
             )
         }
+}
 
-        IntervalDetailsSection(
-            current = workoutState.currentStep,
-            next = workoutState.nextStep,
-            ftpWatts = settings.ftpWatts,
-            lthrBpm = settings.lthrBpm,
-            intensityPercent = workoutState.intensityPercent,
-            controlMode = workoutState.controlMode,
-        )
+/** Landscape Workout: data (title, tiles, controls, interval details) on the left, the power
+ *  chart at full height on the right — the chart is the one element that actually benefits from
+ *  the extra width, so it gets most of it; the data column scrolls since landscape leaves far
+ *  less height than portrait for the same stack of tiles. */
+@Composable
+private fun WorkoutScreenLandscape(
+    viewModel: MainViewModel,
+    isTrainerConnected: Boolean,
+    otherSources: List<Pair<String, () -> Unit>>,
+    chromeCollapsed: Boolean,
+    workoutTitle: String,
+    live: TrainerSample,
+    coreReading: CoreTempReading?,
+    workoutState: WorkoutRunState,
+    loadState: WorkoutLoadState,
+    samples: List<SamplePoint>,
+    settings: AppSettings,
+    effectiveChartZoom: ChartZoom,
+    setChartZoom: (ChartZoom) -> Unit,
+    onShowStopConfirm: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Column(
+            modifier = Modifier
+                .weight(0.36f)
+                .fillMaxHeight()
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(7.dp),
+        ) {
+            if (!chromeCollapsed) {
+                WorkoutHeader(title = workoutTitle, otherSources = otherSources)
+            }
+
+            if (!isTrainerConnected) {
+                Text(
+                    "Trainer not connected — power targets won't be sent",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = ErgWarn,
+                )
+            }
+            WorkoutStatusLine(loadState)
+
+            StatTileGrid(live, workoutState, settings.ftpWatts, settings.lthrBpm)
+
+            CoreTempTileRow(reading = coreReading)
+
+            ControlsRow(
+                hasWorkout = workoutState.steps.isNotEmpty(),
+                isRunning = workoutState.isRunning,
+                hasStarted = workoutState.hasStarted,
+                onPlay = { viewModel.startWorkout() },
+                onPause = { viewModel.pauseWorkout() },
+                onExit = onShowStopConfirm,
+                onExtend = { viewModel.extendCurrentInterval() },
+                onSkip = { viewModel.skipStep() },
+            )
+
+            IntervalDetailsSection(
+                current = workoutState.currentStep,
+                next = workoutState.nextStep,
+                ftpWatts = settings.ftpWatts,
+                lthrBpm = settings.lthrBpm,
+                intensityPercent = workoutState.intensityPercent,
+                controlMode = workoutState.controlMode,
+            )
+
+            IntensityRow(
+                intensityPercent = workoutState.intensityPercent,
+                controlMode = workoutState.controlMode,
+                enabled = workoutState.steps.isNotEmpty(),
+                onDecrease = { viewModel.decreaseIntensity() },
+                onIncrease = { viewModel.increaseIntensity() },
+                onToggleMode = { viewModel.toggleControlMode() },
+            )
+        }
 
         ChartCard(
             steps = workoutState.steps,
@@ -314,17 +447,8 @@ fun WorkoutScreen(
             zoom = effectiveChartZoom,
             onZoomChange = setChartZoom,
             modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
-        )
-
-        IntensityRow(
-            intensityPercent = workoutState.intensityPercent,
-            controlMode = workoutState.controlMode,
-            enabled = workoutState.steps.isNotEmpty(),
-            onDecrease = { viewModel.decreaseIntensity() },
-            onIncrease = { viewModel.increaseIntensity() },
-            onToggleMode = { viewModel.toggleControlMode() },
+                .weight(0.64f)
+                .fillMaxHeight(),
         )
     }
 }

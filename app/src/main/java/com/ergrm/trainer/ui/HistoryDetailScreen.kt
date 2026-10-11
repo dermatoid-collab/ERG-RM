@@ -6,12 +6,16 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -102,52 +106,125 @@ fun SessionDetailScreen(session: WorkoutSession, viewModel: MainViewModel, onBac
             }
         }
 
-        // No scroll here (unlike most other screens): charts get weight(1f) each so they share
-        // whatever vertical space is left after the summary tiles below them — which stay at
-        // their natural height — rather than pushing the tiles off-screen under a scrollbar.
+        val hasCoreData = session.samples.any {
+            it.coreTempC != null || it.skinTempC != null || it.heatStrainIndex != null
+        }
+        val hasWattsChart = session.samples.size >= 2
+
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            // Same breakpoint as Workout/Vitals: wider-than-tall means the phone is rotated, not
+            // a configuration lookup, so this also behaves sensibly on a tablet.
+            if (maxWidth > maxHeight) {
+                SessionDetailLandscape(session = session, stats = stats, hasWattsChart = hasWattsChart, hasCoreData = hasCoreData)
+            } else {
+                // No scroll here (unlike most other screens): charts get weight(1f) each so they
+                // share whatever vertical space is left after the summary tiles below them —
+                // which stay at their natural height — rather than pushing the tiles off-screen
+                // under a scrollbar.
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    if (hasWattsChart) {
+                        Card(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                            Column(modifier = Modifier.padding(10.dp, 10.dp, 10.dp, 4.dp).fillMaxSize()) {
+                                SessionDetailChart(
+                                    samples = session.samples,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .weight(1f),
+                                )
+                                ChartLegend(hasHr = stats.avgHrBpm != null, hasCadence = stats.avgCadenceRpm != null)
+                            }
+                        }
+                    }
+
+                    if (hasCoreData) {
+                        Card(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                            Column(modifier = Modifier.padding(10.dp, 10.dp, 10.dp, 4.dp).fillMaxSize()) {
+                                CoreSkinHsiDetailChart(
+                                    samples = session.samples,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .weight(1f),
+                                )
+                                CoreSkinHsiLegend()
+                            }
+                        }
+                    }
+
+                    Text(
+                        "SUMMARY",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = ErgOnSurface.copy(alpha = 0.7f),
+                    )
+                    StatsGrid(session, stats)
+                }
+            }
+        }
+    }
+}
+
+/** Landscape session detail: header + SUMMARY stats (the "data") on the left, the recorded-trace
+ *  charts side by side on the right — whichever of the two is actually present takes the full
+ *  chart zone alone rather than splitting it with an empty neighbor. */
+@Composable
+private fun SessionDetailLandscape(session: WorkoutSession, stats: SessionStats, hasWattsChart: Boolean, hasCoreData: Boolean) {
+    Row(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .weight(0.36f)
+                .fillMaxHeight()
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            val hasCoreData = session.samples.any {
-                it.coreTempC != null || it.skinTempC != null || it.heatStrainIndex != null
-            }
-            if (session.samples.size >= 2) {
-                Card(modifier = Modifier.fillMaxWidth().weight(1f)) {
-                    Column(modifier = Modifier.padding(10.dp, 10.dp, 10.dp, 4.dp).fillMaxSize()) {
-                        SessionDetailChart(
-                            samples = session.samples,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(1f),
-                        )
-                        ChartLegend(hasHr = stats.avgHrBpm != null, hasCadence = stats.avgCadenceRpm != null)
-                    }
-                }
-            }
-
-            if (hasCoreData) {
-                Card(modifier = Modifier.fillMaxWidth().weight(1f)) {
-                    Column(modifier = Modifier.padding(10.dp, 10.dp, 10.dp, 4.dp).fillMaxSize()) {
-                        CoreSkinHsiDetailChart(
-                            samples = session.samples,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(1f),
-                        )
-                        CoreSkinHsiLegend()
-                    }
-                }
-            }
-
             Text(
                 "SUMMARY",
                 style = MaterialTheme.typography.labelMedium,
                 color = ErgOnSurface.copy(alpha = 0.7f),
             )
             StatsGrid(session, stats)
+        }
+
+        if (hasWattsChart || hasCoreData) {
+            Row(
+                modifier = Modifier.weight(0.64f).fillMaxHeight(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                if (hasWattsChart) {
+                    Card(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                        Column(modifier = Modifier.padding(10.dp, 10.dp, 10.dp, 4.dp).fillMaxSize()) {
+                            SessionDetailChart(
+                                samples = session.samples,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f),
+                            )
+                            ChartLegend(hasHr = stats.avgHrBpm != null, hasCadence = stats.avgCadenceRpm != null)
+                        }
+                    }
+                }
+                if (hasCoreData) {
+                    Card(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                        Column(modifier = Modifier.padding(10.dp, 10.dp, 10.dp, 4.dp).fillMaxSize()) {
+                            CoreSkinHsiDetailChart(
+                                samples = session.samples,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f),
+                            )
+                            CoreSkinHsiLegend()
+                        }
+                    }
+                }
+            }
         }
     }
 }
