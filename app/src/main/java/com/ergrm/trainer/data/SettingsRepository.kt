@@ -2,6 +2,7 @@ package com.ergrm.trainer.data
 
 import android.content.Context
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -17,6 +18,13 @@ data class AppSettings(
     val intervalsAthleteId: String = "",
     val ftpWatts: Int = 275,
     val lthrBpm: Int = 174,
+    // SLO (slope simulation) mode settings. systemWeightKg is rider + bike + accessories, sent
+    // to the trainer so its own firmware can compute the right resistance for a given grade —
+    // the app never does that physics itself. maxGradePercent is a soft cap editable here
+    // because it depends on which trainer is connected, not on anything the app can detect.
+    val systemWeightKg: Float = 78f,
+    val slopeStepPercent: Float = 1f,
+    val maxGradePercent: Float = 14f,
     val lastDeviceAddress: String? = null,
     val lastDeviceName: String? = null,
     val lastDeviceNickname: String? = null,
@@ -41,6 +49,9 @@ class SettingsRepository(private val context: Context) {
         val ATHLETE_ID = stringPreferencesKey("intervals_athlete_id")
         val FTP = intPreferencesKey("ftp_watts")
         val LTHR = intPreferencesKey("lthr_bpm")
+        val SYSTEM_WEIGHT = floatPreferencesKey("system_weight_kg")
+        val SLOPE_STEP = floatPreferencesKey("slope_step_percent")
+        val MAX_GRADE = floatPreferencesKey("max_grade_percent")
         val DEVICE_ADDRESS = stringPreferencesKey("last_device_address")
         val DEVICE_NAME = stringPreferencesKey("last_device_name")
         val DEVICE_NICKNAME = stringPreferencesKey("last_device_nickname")
@@ -62,6 +73,9 @@ class SettingsRepository(private val context: Context) {
             intervalsAthleteId = prefs[Keys.ATHLETE_ID] ?: "",
             ftpWatts = prefs[Keys.FTP] ?: 275,
             lthrBpm = prefs[Keys.LTHR] ?: 174,
+            systemWeightKg = prefs[Keys.SYSTEM_WEIGHT] ?: 78f,
+            slopeStepPercent = prefs[Keys.SLOPE_STEP] ?: 1f,
+            maxGradePercent = prefs[Keys.MAX_GRADE] ?: 14f,
             lastDeviceAddress = prefs[Keys.DEVICE_ADDRESS],
             lastDeviceName = prefs[Keys.DEVICE_NAME],
             lastDeviceNickname = prefs[Keys.DEVICE_NICKNAME],
@@ -91,6 +105,14 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun updateLthr(lthrBpm: Int) {
         context.dataStore.edit { prefs -> prefs[Keys.LTHR] = lthrBpm }
+    }
+
+    suspend fun updateSimSettings(systemWeightKg: Float, slopeStepPercent: Float, maxGradePercent: Float) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.SYSTEM_WEIGHT] = systemWeightKg
+            prefs[Keys.SLOPE_STEP] = slopeStepPercent
+            prefs[Keys.MAX_GRADE] = maxGradePercent
+        }
     }
 
     /** A nickname belongs to the device it was set on — reconnecting to the *same* address keeps
@@ -163,6 +185,9 @@ class SettingsRepository(private val context: Context) {
             prefs[Keys.ATHLETE_ID] = s.intervalsAthleteId
             prefs[Keys.FTP] = s.ftpWatts
             prefs[Keys.LTHR] = s.lthrBpm
+            prefs[Keys.SYSTEM_WEIGHT] = s.systemWeightKg
+            prefs[Keys.SLOPE_STEP] = s.slopeStepPercent
+            prefs[Keys.MAX_GRADE] = s.maxGradePercent
             s.lastDeviceAddress?.let { prefs[Keys.DEVICE_ADDRESS] = it }
             s.lastDeviceName?.let { prefs[Keys.DEVICE_NAME] = it }
             s.lastDeviceNickname?.let { prefs[Keys.DEVICE_NICKNAME] = it }

@@ -23,6 +23,7 @@ object Ftms {
     const val OP_REQUEST_CONTROL: Byte = 0x00
     const val OP_RESET: Byte = 0x01
     const val OP_SET_TARGET_POWER: Byte = 0x05
+    const val OP_SET_INDOOR_BIKE_SIMULATION_PARAMETERS: Byte = 0x11
     const val OP_START_OR_RESUME: Byte = 0x07
     const val OP_STOP_OR_PAUSE: Byte = 0x08
     const val OP_RESPONSE_CODE: Byte = -0x80 // 0x80
@@ -35,6 +36,13 @@ object Ftms {
     const val RESULT_INVALID_PARAMETER: Byte = 0x03
     const val RESULT_OPERATION_FAILED: Byte = 0x04
     const val RESULT_CONTROL_NOT_PERMITTED: Byte = 0x05
+
+    // Fixed resistance/aero coefficients for "Set Indoor Bike Simulation Parameters" (SIM/SLO
+    // mode) — typical road bike + rider values, the same defaults Zwift/TrainerDay use. Not
+    // user-configurable: these model the bike/rider's own drag, not something a rider dials in
+    // (unlike grade, which is the whole point of the mode).
+    const val DEFAULT_CRR = 0.004f // coefficient of rolling resistance (road tires, good surface)
+    const val DEFAULT_CW = 0.51f // wind resistance coefficient, kg/m (road bike + rider, drops bars)
 }
 
 /** A single live data sample decoded from the Indoor Bike Data characteristic. */

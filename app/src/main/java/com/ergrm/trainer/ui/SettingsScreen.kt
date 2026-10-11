@@ -39,12 +39,16 @@ fun SettingsScreen(
     settings: AppSettings,
     viewModel: MainViewModel,
     onSave: (apiKey: String, athleteId: String, ftpWatts: Int, lthrBpm: Int) -> Unit,
+    onSaveSim: (systemWeightKg: Float, slopeStepPercent: Float, maxGradePercent: Float) -> Unit,
     onClose: () -> Unit,
 ) {
     var apiKey by remember(settings) { mutableStateOf(settings.intervalsApiKey) }
     var athleteId by remember(settings) { mutableStateOf(settings.intervalsAthleteId) }
     var ftpText by remember(settings) { mutableStateOf(settings.ftpWatts.toString()) }
     var lthrText by remember(settings) { mutableStateOf(settings.lthrBpm.toString()) }
+    var weightText by remember(settings) { mutableStateOf(formatDecimal(settings.systemWeightKg)) }
+    var slopeStepText by remember(settings) { mutableStateOf(formatDecimal(settings.slopeStepPercent)) }
+    var maxGradeText by remember(settings) { mutableStateOf(formatDecimal(settings.maxGradePercent)) }
     val context = LocalContext.current
     var pendingImportUri by remember { mutableStateOf<Uri?>(null) }
 
@@ -152,6 +156,60 @@ fun SettingsScreen(
         TextButton(onClick = onClose, modifier = Modifier.padding(top = 8.dp)) {
             Text("Cancel")
         }
+
+        Text(
+            "SLO (slope simulation)",
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(top = 24.dp, bottom = 8.dp),
+        )
+        OutlinedTextField(
+            value = weightText,
+            onValueChange = { weightText = it.filterDecimal() },
+            label = { Text("System weight (kg)") },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        OutlinedTextField(
+            value = slopeStepText,
+            onValueChange = { slopeStepText = it.filterDecimal() },
+            label = { Text("Slope step (%)") },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp),
+        )
+        OutlinedTextField(
+            value = maxGradeText,
+            onValueChange = { maxGradeText = it.filterDecimal() },
+            label = { Text("Max grade (%)") },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp),
+        )
+        Text(
+            "System weight (you + bike + accessories) is sent to the trainer so it can compute " +
+                "the right resistance for a given grade — the app never does that math itself. " +
+                "Slope step sets how much each ↓/↑ tap changes the grade in SLO mode. Max grade " +
+                "caps how steep a slope the app will ever request, since it depends on which " +
+                "trainer is connected, not on anything the app can detect — your Elite Direto " +
+                "(1st gen) tops out at 14%.",
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.padding(top = 8.dp, bottom = 16.dp),
+        )
+        Button(
+            onClick = {
+                onSaveSim(
+                    weightText.toFloatOrNull() ?: settings.systemWeightKg,
+                    slopeStepText.toFloatOrNull() ?: settings.slopeStepPercent,
+                    maxGradeText.toFloatOrNull() ?: settings.maxGradePercent,
+                )
+            },
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text("Save") }
 
         Text(
             "Settings backup",
@@ -265,5 +323,23 @@ fun SettingsScreen(
                 TextButton(onClick = { pendingImportUri = null }) { Text("Cancel") }
             },
         )
+    }
+}
+
+/** Drops the trailing ".0" a plain Float->String would otherwise show for whole numbers (78kg
+ *  reads as "78", not "78.0"), while still showing real decimals (e.g. a 1.5% slope step). */
+private fun formatDecimal(value: Float): String =
+    if (value == value.toInt().toFloat()) value.toInt().toString() else value.toString()
+
+/** Keeps digits and at most one decimal point — these fields take a plain positive decimal
+ *  number (weight in kg, a percentage), never negative or scientific notation. */
+private fun String.filterDecimal(): String {
+    var seenDot = false
+    return filter { c ->
+        when {
+            c.isDigit() -> true
+            c == '.' && !seenDot -> { seenDot = true; true }
+            else -> false
+        }
     }
 }

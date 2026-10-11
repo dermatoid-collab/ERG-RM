@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withTimeout
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import kotlin.math.roundToInt
 
 sealed interface TrainerConnectionState {
     data object Disconnected : TrainerConnectionState
@@ -93,6 +94,24 @@ class TrainerConnection(
             .order(ByteOrder.LITTLE_ENDIAN)
             .put(Ftms.OP_SET_TARGET_POWER)
             .putShort(watts.toShort())
+            .array()
+        writeControlPoint(cp, payload)
+    }
+
+    /** Sets SLO-mode grade (± %). Op code 0x11 + sint16 LE wind speed (0.001 m/s) + sint16 LE
+     *  grade (0.01%) + uint8 Crr (0.0001) + uint8 Cw (0.01 kg/m) — rolling resistance and wind
+     *  resistance stay fixed at [Ftms.DEFAULT_CRR]/[Ftms.DEFAULT_CW], only grade varies. The
+     *  trainer's own firmware turns these into resistance; the app never computes physics
+     *  itself. */
+    suspend fun setSimulationGrade(gradePercent: Float, windSpeedMps: Float = 0f) {
+        val cp = controlPoint ?: return
+        val payload = ByteBuffer.allocate(7)
+            .order(ByteOrder.LITTLE_ENDIAN)
+            .put(Ftms.OP_SET_INDOOR_BIKE_SIMULATION_PARAMETERS)
+            .putShort((windSpeedMps * 1000f).roundToInt().toShort())
+            .putShort((gradePercent * 100f).roundToInt().toShort())
+            .put((Ftms.DEFAULT_CRR / 0.0001f).roundToInt().toByte())
+            .put((Ftms.DEFAULT_CW / 0.01f).roundToInt().toByte())
             .array()
         writeControlPoint(cp, payload)
     }

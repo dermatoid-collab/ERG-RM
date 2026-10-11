@@ -469,6 +469,7 @@ private fun MainPager(
                 settings = settings,
                 viewModel = viewModel,
                 onSave = viewModel::saveIntervalsSettings,
+                onSaveSim = viewModel::saveSimSettings,
                 onClose = { onOverlayChange(Overlay.NONE) },
             )
         }

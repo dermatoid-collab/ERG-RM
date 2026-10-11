@@ -458,6 +458,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun saveSimSettings(systemWeightKg: Float, slopeStepPercent: Float, maxGradePercent: Float) {
+        viewModelScope.launch {
+            settingsRepository.updateSimSettings(systemWeightKg, slopeStepPercent, maxGradePercent)
+        }
+    }
+
     /** Pulls FTP/LTHR from Intervals.icu for the Settings screen's Sync button — hands whatever
      *  it got back to [onResult] so the screen can fill its (still freely editable) text fields,
      *  rather than saving straight to DataStore itself. Nothing is overwritten here: the rider
