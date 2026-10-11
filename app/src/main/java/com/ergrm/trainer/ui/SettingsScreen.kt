@@ -39,14 +39,15 @@ fun SettingsScreen(
     settings: AppSettings,
     viewModel: MainViewModel,
     onSave: (apiKey: String, athleteId: String, ftpWatts: Int, lthrBpm: Int) -> Unit,
-    onSaveSim: (systemWeightKg: Float, slopeStepPercent: Float, maxGradePercent: Float) -> Unit,
+    onSaveSim: (riderWeightKg: Float, accessoriesWeightKg: Float, slopeStepPercent: Float, maxGradePercent: Float) -> Unit,
     onClose: () -> Unit,
 ) {
     var apiKey by remember(settings) { mutableStateOf(settings.intervalsApiKey) }
     var athleteId by remember(settings) { mutableStateOf(settings.intervalsAthleteId) }
     var ftpText by remember(settings) { mutableStateOf(settings.ftpWatts.toString()) }
     var lthrText by remember(settings) { mutableStateOf(settings.lthrBpm.toString()) }
-    var weightText by remember(settings) { mutableStateOf(formatDecimal(settings.systemWeightKg)) }
+    var riderWeightText by remember(settings) { mutableStateOf(formatDecimal(settings.riderWeightKg)) }
+    var accessoriesWeightText by remember(settings) { mutableStateOf(formatDecimal(settings.accessoriesWeightKg)) }
     var slopeStepText by remember(settings) { mutableStateOf(formatDecimal(settings.slopeStepPercent)) }
     var maxGradeText by remember(settings) { mutableStateOf(formatDecimal(settings.maxGradePercent)) }
     val context = LocalContext.current
@@ -163,12 +164,22 @@ fun SettingsScreen(
             modifier = Modifier.padding(top = 24.dp, bottom = 8.dp),
         )
         OutlinedTextField(
-            value = weightText,
-            onValueChange = { weightText = it.filterDecimal() },
-            label = { Text("System weight (kg)") },
+            value = riderWeightText,
+            onValueChange = { riderWeightText = it.filterDecimal() },
+            label = { Text("Rider weight (kg)") },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
             modifier = Modifier.fillMaxWidth(),
+        )
+        OutlinedTextField(
+            value = accessoriesWeightText,
+            onValueChange = { accessoriesWeightText = it.filterDecimal() },
+            label = { Text("Bike + accessories weight (kg)") },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp),
         )
         OutlinedTextField(
             value = slopeStepText,
@@ -191,19 +202,20 @@ fun SettingsScreen(
                 .padding(top = 8.dp),
         )
         Text(
-            "System weight (you + bike + accessories) is sent to the trainer so it can compute " +
-                "the right resistance for a given grade — the app never does that math itself. " +
-                "Slope step sets how much each ↓/↑ tap changes the grade in SLO mode. Max grade " +
-                "caps how steep a slope the app will ever request, since it depends on which " +
-                "trainer is connected, not on anything the app can detect — your Elite Direto " +
-                "(1st gen) tops out at 14%.",
+            "Rider and bike+accessories (clothing, gear, bottles) weight are sent to the " +
+                "trainer together so it can compute the right resistance for a given grade — " +
+                "the app never does that math itself. Slope step sets how much each ↓/↑ tap " +
+                "changes the grade in SLO mode. Max grade caps how steep a slope the app will " +
+                "ever request, since it depends on which trainer is connected, not on anything " +
+                "the app can detect — your Elite Direto (1st gen) tops out at 14%.",
             style = MaterialTheme.typography.bodySmall,
             modifier = Modifier.padding(top = 8.dp, bottom = 16.dp),
         )
         Button(
             onClick = {
                 onSaveSim(
-                    weightText.toFloatOrNull() ?: settings.systemWeightKg,
+                    riderWeightText.toFloatOrNull() ?: settings.riderWeightKg,
+                    accessoriesWeightText.toFloatOrNull() ?: settings.accessoriesWeightKg,
                     slopeStepText.toFloatOrNull() ?: settings.slopeStepPercent,
                     maxGradeText.toFloatOrNull() ?: settings.maxGradePercent,
                 )

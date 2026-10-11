@@ -18,11 +18,14 @@ data class AppSettings(
     val intervalsAthleteId: String = "",
     val ftpWatts: Int = 275,
     val lthrBpm: Int = 174,
-    // SLO (slope simulation) mode settings. systemWeightKg is rider + bike + accessories, sent
-    // to the trainer so its own firmware can compute the right resistance for a given grade —
-    // the app never does that physics itself. maxGradePercent is a soft cap editable here
-    // because it depends on which trainer is connected, not on anything the app can detect.
-    val systemWeightKg: Float = 78f,
+    // SLO (slope simulation) mode settings. Rider and accessories (bike + clothing + gear +
+    // bottles) weight are kept separate since they're naturally entered/changed separately, but
+    // sent to the trainer together as one system weight (see systemWeightKg below) so its own
+    // firmware can compute the right resistance for a given grade — the app never does that
+    // physics itself. maxGradePercent is a soft cap editable here because it depends on which
+    // trainer is connected, not on anything the app can detect.
+    val riderWeightKg: Float = 62f,
+    val accessoriesWeightKg: Float = 10f,
     val slopeStepPercent: Float = 1f,
     val maxGradePercent: Float = 14f,
     val lastDeviceAddress: String? = null,
@@ -40,6 +43,11 @@ data class AppSettings(
     val backupFolderName: String? = null,
 ) {
     val intervalsConfigured: Boolean get() = intervalsApiKey.isNotBlank() && intervalsAthleteId.isNotBlank()
+
+    /** What actually gets sent to the trainer for SLO mode — rider and accessories weight are
+     *  only kept separate for the Settings UI, since that's naturally how a rider thinks about
+     *  (and updates) them; the trainer's own physics just wants one total. */
+    val systemWeightKg: Float get() = riderWeightKg + accessoriesWeightKg
 }
 
 class SettingsRepository(private val context: Context) {
@@ -49,7 +57,8 @@ class SettingsRepository(private val context: Context) {
         val ATHLETE_ID = stringPreferencesKey("intervals_athlete_id")
         val FTP = intPreferencesKey("ftp_watts")
         val LTHR = intPreferencesKey("lthr_bpm")
-        val SYSTEM_WEIGHT = floatPreferencesKey("system_weight_kg")
+        val RIDER_WEIGHT = floatPreferencesKey("rider_weight_kg")
+        val ACCESSORIES_WEIGHT = floatPreferencesKey("accessories_weight_kg")
         val SLOPE_STEP = floatPreferencesKey("slope_step_percent")
         val MAX_GRADE = floatPreferencesKey("max_grade_percent")
         val DEVICE_ADDRESS = stringPreferencesKey("last_device_address")
@@ -73,7 +82,8 @@ class SettingsRepository(private val context: Context) {
             intervalsAthleteId = prefs[Keys.ATHLETE_ID] ?: "",
             ftpWatts = prefs[Keys.FTP] ?: 275,
             lthrBpm = prefs[Keys.LTHR] ?: 174,
-            systemWeightKg = prefs[Keys.SYSTEM_WEIGHT] ?: 78f,
+            riderWeightKg = prefs[Keys.RIDER_WEIGHT] ?: 62f,
+            accessoriesWeightKg = prefs[Keys.ACCESSORIES_WEIGHT] ?: 10f,
             slopeStepPercent = prefs[Keys.SLOPE_STEP] ?: 1f,
             maxGradePercent = prefs[Keys.MAX_GRADE] ?: 14f,
             lastDeviceAddress = prefs[Keys.DEVICE_ADDRESS],
@@ -107,9 +117,10 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit { prefs -> prefs[Keys.LTHR] = lthrBpm }
     }
 
-    suspend fun updateSimSettings(systemWeightKg: Float, slopeStepPercent: Float, maxGradePercent: Float) {
+    suspend fun updateSimSettings(riderWeightKg: Float, accessoriesWeightKg: Float, slopeStepPercent: Float, maxGradePercent: Float) {
         context.dataStore.edit { prefs ->
-            prefs[Keys.SYSTEM_WEIGHT] = systemWeightKg
+            prefs[Keys.RIDER_WEIGHT] = riderWeightKg
+            prefs[Keys.ACCESSORIES_WEIGHT] = accessoriesWeightKg
             prefs[Keys.SLOPE_STEP] = slopeStepPercent
             prefs[Keys.MAX_GRADE] = maxGradePercent
         }
@@ -185,7 +196,8 @@ class SettingsRepository(private val context: Context) {
             prefs[Keys.ATHLETE_ID] = s.intervalsAthleteId
             prefs[Keys.FTP] = s.ftpWatts
             prefs[Keys.LTHR] = s.lthrBpm
-            prefs[Keys.SYSTEM_WEIGHT] = s.systemWeightKg
+            prefs[Keys.RIDER_WEIGHT] = s.riderWeightKg
+            prefs[Keys.ACCESSORIES_WEIGHT] = s.accessoriesWeightKg
             prefs[Keys.SLOPE_STEP] = s.slopeStepPercent
             prefs[Keys.MAX_GRADE] = s.maxGradePercent
             s.lastDeviceAddress?.let { prefs[Keys.DEVICE_ADDRESS] = it }

@@ -458,9 +458,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun saveSimSettings(systemWeightKg: Float, slopeStepPercent: Float, maxGradePercent: Float) {
+    fun saveSimSettings(riderWeightKg: Float, accessoriesWeightKg: Float, slopeStepPercent: Float, maxGradePercent: Float) {
         viewModelScope.launch {
-            settingsRepository.updateSimSettings(systemWeightKg, slopeStepPercent, maxGradePercent)
+            settingsRepository.updateSimSettings(riderWeightKg, accessoriesWeightKg, slopeStepPercent, maxGradePercent)
         }
     }
 
