@@ -123,7 +123,7 @@ object GpxParser {
             if (segDist <= 0.0) continue
             while (nextMark <= cumDist + segDist) {
                 val frac = ((nextMark - cumDist) / segDist).coerceIn(0.0, 1.0)
-                val ele = a.ele + (b.ele - a.ele) * frac
+                val ele = a.ele + (b.ele - a.ele) * frac.toFloat()
                 result += nextMark.toFloat() to ele
                 nextMark += segmentLengthM
             }
