@@ -221,6 +221,8 @@ fun WorkoutScreen(
                     ftpWatts = settings.ftpWatts,
                     lthrBpm = settings.lthrBpm,
                     intensityPercent = workoutState.intensityPercent,
+                    controlMode = workoutState.controlMode,
+                    maxGradePercent = settings.maxGradePercent,
                     zoom = effectiveChartZoom,
                     onZoomChange = setChartZoom,
                     modifier = Modifier
@@ -450,6 +452,8 @@ private fun WorkoutScreenLandscape(
             ftpWatts = settings.ftpWatts,
             lthrBpm = settings.lthrBpm,
             intensityPercent = workoutState.intensityPercent,
+            controlMode = workoutState.controlMode,
+            maxGradePercent = settings.maxGradePercent,
             zoom = effectiveChartZoom,
             onZoomChange = setChartZoom,
             modifier = Modifier
@@ -1023,6 +1027,7 @@ private data class ChartInputs(
     val totalDurationSec: Int,
     val intensityPercent: Int,
     val ftpWatts: Int,
+    val controlMode: ControlMode,
 )
 
 @Composable
@@ -1035,6 +1040,8 @@ private fun ChartCard(
     ftpWatts: Int,
     lthrBpm: Int,
     intensityPercent: Int,
+    controlMode: ControlMode,
+    maxGradePercent: Float,
     zoom: ChartZoom,
     onZoomChange: (ChartZoom) -> Unit,
     modifier: Modifier = Modifier,
@@ -1053,6 +1060,8 @@ private fun ChartCard(
             ftpWatts = ftpWatts,
             lthrBpm = lthrBpm,
             intensityPercent = intensityPercent,
+            controlMode = controlMode,
+            maxGradePercent = maxGradePercent,
             zoom = zoom,
             onZoomChange = onZoomChange,
             modifier = Modifier
@@ -1110,6 +1119,8 @@ private fun WorkoutProfileChart(
     ftpWatts: Int,
     lthrBpm: Int,
     intensityPercent: Int,
+    controlMode: ControlMode,
+    maxGradePercent: Float,
     zoom: ChartZoom,
     onZoomChange: (ChartZoom) -> Unit,
     modifier: Modifier = Modifier,
@@ -1134,7 +1145,7 @@ private fun WorkoutProfileChart(
     var selectedStepIndex by remember { mutableStateOf<Int?>(null) }
     val textMeasurer = rememberTextMeasurer()
     val latestInputs = rememberUpdatedState(
-        ChartInputs(steps, currentStepIndex, totalElapsedSec, totalDurationSec, intensityPercent, ftpWatts),
+        ChartInputs(steps, currentStepIndex, totalElapsedSec, totalDurationSec, intensityPercent, ftpWatts, controlMode),
     )
     // zoom/onZoomChange are read inside the pointerInput(Unit) gesture coroutine below, which
     // launches once and never restarts — without rememberUpdatedState it would keep seeing the
@@ -1176,6 +1187,10 @@ private fun WorkoutProfileChart(
                     return@awaitEachGesture
                 }
                 val inputs = latestInputs.value
+                // SLO has no workout bars to tap — the loaded plan's steps are irrelevant to
+                // what's actually being sent to the trainer, so a tooltip built from them would
+                // just show stale/misleading power numbers.
+                if (inputs.controlMode == ControlMode.SLO) return@awaitEachGesture
                 if (inputs.steps.isEmpty() || inputs.totalDurationSec <= 0) return@awaitEachGesture
                 val (windowStart, windowEnd) = computeChartWindow(latestZoom.value, inputs.totalElapsedSec, inputs.totalDurationSec)
                 val windowLen = (windowEnd - windowStart).coerceAtLeast(1)
@@ -1196,67 +1211,96 @@ private fun WorkoutProfileChart(
         fun yBpm(bpm: Int): Float = h - h * (((bpm - bpmMin) / bpmRange) * (1f - CHART_TOP_HEADROOM)).coerceIn(0f, 1f)
         fun yCad(rpm: Int): Float = h - h * (rpm.toFloat() / cadScale).coerceIn(0f, 1f)
 
-        var acc = 0
-        var previousEndBarHeight = 0f
-        steps.forEachIndexed { index, step ->
-            val stepStart = acc
-            val stepEnd = acc + step.durationSec
-            acc = stepEnd
-            if (stepEnd < windowStart || stepStart > windowEnd) return@forEachIndexed
+        if (controlMode == ControlMode.SLO) {
+            // SLO has no fixed power plan to draw as bars — the loaded workout's steps are
+            // ignored by the trainer in this mode (see WorkoutExecutor.pushTargetForCurrentStep).
+            // Draw the recorded grade history instead, as a filled area around a 0% zero line —
+            // same x axis/time window and zoom as everything else on this chart.
+            val zeroY = h / 2f
+            drawLine(color = onSurfaceColor.copy(alpha = 0.18f), start = Offset(0f, zeroY), end = Offset(w, zeroY), strokeWidth = 1.5f)
+            val gradeSamples = samples.filter { it.tSec in windowStart..windowEnd && it.gradePercent != null }
+            if (gradeSamples.size >= 2) {
+                val maxGrade = maxGradePercent.coerceAtLeast(0.1f)
+                fun yGrade(grade: Float): Float =
+                    zeroY - (grade / maxGrade).coerceIn(-1f, 1f) * zeroY * (1f - CHART_TOP_HEADROOM)
+                val areaPath = Path().apply {
+                    moveTo(xAt(gradeSamples.first().tSec), zeroY)
+                    gradeSamples.forEach { s -> lineTo(xAt(s.tSec), yGrade(s.gradePercent!!)) }
+                    lineTo(xAt(gradeSamples.last().tSec), zeroY)
+                    close()
+                }
+                drawPath(path = areaPath, color = ErgModeSlo.copy(alpha = 0.35f))
+                drawPoints(
+                    points = gradeSamples.map { Offset(xAt(it.tSec), yGrade(it.gradePercent!!)) },
+                    pointMode = PointMode.Polygon,
+                    color = ErgModeSlo,
+                    strokeWidth = 3f,
+                    cap = StrokeCap.Round,
+                )
+            }
+        } else {
+            var acc = 0
+            var previousEndBarHeight = 0f
+            steps.forEachIndexed { index, step ->
+                val stepStart = acc
+                val stepEnd = acc + step.durationSec
+                acc = stepEnd
+                if (stepEnd < windowStart || stepStart > windowEnd) return@forEachIndexed
 
-            val dispStart = displayWatts(step.startWatts, index, currentStepIndex, intensityPercent)
-            val dispEnd = displayWatts(step.endWatts, index, currentStepIndex, intensityPercent)
-            // A ramp's start/end differ, so the bar is a sloped trapezoid instead of a flat
-            // rectangle — a steady step just has startBarHeight == endBarHeight, which draws the
-            // same flat shape as before. These are the TRUE heights at the step's real
-            // boundaries, used below only for the inter-step divider bookkeeping.
-            val startBarHeight = h * (dispStart.toFloat() / wattsScale).coerceIn(0.05f, 1f)
-            val endBarHeight = h * (dispEnd.toFloat() / wattsScale).coerceIn(0.05f, 1f)
+                val dispStart = displayWatts(step.startWatts, index, currentStepIndex, intensityPercent)
+                val dispEnd = displayWatts(step.endWatts, index, currentStepIndex, intensityPercent)
+                // A ramp's start/end differ, so the bar is a sloped trapezoid instead of a flat
+                // rectangle — a steady step just has startBarHeight == endBarHeight, which draws the
+                // same flat shape as before. These are the TRUE heights at the step's real
+                // boundaries, used below only for the inter-step divider bookkeeping.
+                val startBarHeight = h * (dispStart.toFloat() / wattsScale).coerceIn(0.05f, 1f)
+                val endBarHeight = h * (dispEnd.toFloat() / wattsScale).coerceIn(0.05f, 1f)
 
-            // When a zoomed-in window truncates this step (a ramp scrolled partway off-screen),
-            // the trapezoid's visible edge needs the ramp's actual interpolated value at that
-            // truncation point, not the value at the step's real start/end — otherwise the edge
-            // doesn't line up with the power line it's meant to sit under (only noticeable at
-            // 20min/5min zoom, not at "fit" where every step boundary is already on-screen).
-            val durationSec = step.durationSec.coerceAtLeast(1)
-            fun wattsAt(tSec: Int): Float {
-                val frac = (tSec - stepStart).toFloat() / durationSec
-                return dispStart + (dispEnd - dispStart) * frac
-            }
-            val visibleStart = stepStart.coerceAtLeast(windowStart)
-            val visibleEnd = stepEnd.coerceAtMost(windowEnd)
-            val x0 = xAt(visibleStart).coerceIn(0f, w)
-            val x1 = xAt(visibleEnd).coerceIn(0f, w)
-            val drawStartHeight = if (visibleStart == stepStart) {
-                startBarHeight
-            } else {
-                h * (wattsAt(visibleStart) / wattsScale).coerceIn(0.05f, 1f)
-            }
-            val drawEndHeight = if (visibleEnd == stepEnd) {
-                endBarHeight
-            } else {
-                h * (wattsAt(visibleEnd) / wattsScale).coerceIn(0.05f, 1f)
-            }
+                // When a zoomed-in window truncates this step (a ramp scrolled partway off-screen),
+                // the trapezoid's visible edge needs the ramp's actual interpolated value at that
+                // truncation point, not the value at the step's real start/end — otherwise the edge
+                // doesn't line up with the power line it's meant to sit under (only noticeable at
+                // 20min/5min zoom, not at "fit" where every step boundary is already on-screen).
+                val durationSec = step.durationSec.coerceAtLeast(1)
+                fun wattsAt(tSec: Int): Float {
+                    val frac = (tSec - stepStart).toFloat() / durationSec
+                    return dispStart + (dispEnd - dispStart) * frac
+                }
+                val visibleStart = stepStart.coerceAtLeast(windowStart)
+                val visibleEnd = stepEnd.coerceAtMost(windowEnd)
+                val x0 = xAt(visibleStart).coerceIn(0f, w)
+                val x1 = xAt(visibleEnd).coerceIn(0f, w)
+                val drawStartHeight = if (visibleStart == stepStart) {
+                    startBarHeight
+                } else {
+                    h * (wattsAt(visibleStart) / wattsScale).coerceIn(0.05f, 1f)
+                }
+                val drawEndHeight = if (visibleEnd == stepEnd) {
+                    endBarHeight
+                } else {
+                    h * (wattsAt(visibleEnd) / wattsScale).coerceIn(0.05f, 1f)
+                }
 
-            val zone = zoneFor(max(dispStart, dispEnd), ftpWatts, onSurfaceColor)
-            val color = mutedZoneColor(zone.color, active = index == currentStepIndex)
-            val barPath = Path().apply {
-                moveTo(x0, h - drawStartHeight)
-                lineTo(x1, h - drawEndHeight)
-                lineTo(x1, h)
-                lineTo(x0, h)
-                close()
-            }
-            drawPath(path = barPath, color = color)
+                val zone = zoneFor(max(dispStart, dispEnd), ftpWatts, onSurfaceColor)
+                val color = mutedZoneColor(zone.color, active = index == currentStepIndex)
+                val barPath = Path().apply {
+                    moveTo(x0, h - drawStartHeight)
+                    lineTo(x1, h - drawEndHeight)
+                    lineTo(x1, h)
+                    lineTo(x0, h)
+                    close()
+                }
+                drawPath(path = barPath, color = color)
 
-            // Thin light-blue divider between consecutive intervals — stops at the top of the
-            // taller of the two bar edges meeting at this boundary instead of running into the
-            // empty area above them.
-            if (stepStart in windowStart..windowEnd && index > 0) {
-                val dividerHeight = max(previousEndBarHeight, startBarHeight)
-                drawLine(color = ErgDivider, start = Offset(x0, h - dividerHeight), end = Offset(x0, h), strokeWidth = 0.75f)
+                // Thin light-blue divider between consecutive intervals — stops at the top of the
+                // taller of the two bar edges meeting at this boundary instead of running into the
+                // empty area above them.
+                if (stepStart in windowStart..windowEnd && index > 0) {
+                    val dividerHeight = max(previousEndBarHeight, startBarHeight)
+                    drawLine(color = ErgDivider, start = Offset(x0, h - dividerHeight), end = Offset(x0, h), strokeWidth = 0.75f)
+                }
+                previousEndBarHeight = endBarHeight
             }
-            previousEndBarHeight = endBarHeight
         }
 
         // Live traces recorded during the workout: cadence under HR under power.

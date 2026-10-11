@@ -184,6 +184,8 @@ fun VitalsScreen(
                         ftpWatts = settings.ftpWatts,
                         lthrBpm = settings.lthrBpm,
                         intensityPercent = workoutState.intensityPercent,
+                        controlMode = workoutState.controlMode,
+                        maxGradePercent = settings.maxGradePercent,
                         zoom = zoom,
                         onTap = { onZoomChange(zoom.next()) },
                         modifier = Modifier.weight(1f).fillMaxWidth(),
@@ -302,6 +304,8 @@ private fun VitalsScreenLandscape(
                     ftpWatts = settings.ftpWatts,
                     lthrBpm = settings.lthrBpm,
                     intensityPercent = workoutState.intensityPercent,
+                    controlMode = workoutState.controlMode,
+                    maxGradePercent = settings.maxGradePercent,
                     zoom = zoom,
                     onTap = { onZoomChange(zoom.next()) },
                     modifier = Modifier.weight(1f).fillMaxWidth(),
@@ -578,6 +582,8 @@ private fun VitalsPowerChart(
     ftpWatts: Int,
     lthrBpm: Int,
     intensityPercent: Int,
+    controlMode: ControlMode,
+    maxGradePercent: Float,
     zoom: ChartZoom,
     onTap: () -> Unit,
     modifier: Modifier = Modifier,
@@ -649,61 +655,88 @@ private fun VitalsPowerChart(
             fun yBpm(bpm: Int) = h - h * (((bpm - bpmMin) / bpmRange) * (1f - CHART_TOP_HEADROOM)).coerceIn(0f, 1f)
             fun yCad(rpm: Int) = h - h * (rpm.toFloat() / cadScale).coerceIn(0f, 1f)
 
-            var acc = 0
-            steps.forEachIndexed { index, step ->
-                val stepStart = acc
-                val stepEnd = acc + step.durationSec
-                acc = stepEnd
-                if (stepEnd < windowStart || stepStart > windowEnd) return@forEachIndexed
+            if (controlMode == ControlMode.SLO) {
+                // SLO has no fixed power plan to draw as bars — see WorkoutProfileChart's own
+                // identical branch (Screen 1) for why. Draw the recorded grade history instead.
+                val zeroY = h / 2f
+                drawLine(color = onSurfaceColor.copy(alpha = 0.18f), start = Offset(0f, zeroY), end = Offset(w, zeroY), strokeWidth = 1.5f)
+                val gradeSamples = samples.filter { it.tSec in windowStart..windowEnd && it.gradePercent != null }
+                if (gradeSamples.size >= 2) {
+                    val maxGrade = maxGradePercent.coerceAtLeast(0.1f)
+                    fun yGrade(grade: Float): Float =
+                        zeroY - (grade / maxGrade).coerceIn(-1f, 1f) * zeroY * (1f - CHART_TOP_HEADROOM)
+                    val areaPath = Path().apply {
+                        moveTo(xAt(gradeSamples.first().tSec), zeroY)
+                        gradeSamples.forEach { s -> lineTo(xAt(s.tSec), yGrade(s.gradePercent!!)) }
+                        lineTo(xAt(gradeSamples.last().tSec), zeroY)
+                        close()
+                    }
+                    drawPath(path = areaPath, color = ErgModeSlo.copy(alpha = 0.35f))
+                    drawPoints(
+                        points = gradeSamples.map { Offset(xAt(it.tSec), yGrade(it.gradePercent!!)) },
+                        pointMode = PointMode.Polygon,
+                        color = ErgModeSlo,
+                        strokeWidth = 3f,
+                        cap = StrokeCap.Round,
+                    )
+                }
+            } else {
+                var acc = 0
+                steps.forEachIndexed { index, step ->
+                    val stepStart = acc
+                    val stepEnd = acc + step.durationSec
+                    acc = stepEnd
+                    if (stepEnd < windowStart || stepStart > windowEnd) return@forEachIndexed
 
-                val dispStart = displayWatts(step.startWatts, index, currentStepIndex, intensityPercent)
-                val dispEnd = displayWatts(step.endWatts, index, currentStepIndex, intensityPercent)
-                // Same 5%-of-height floor as Screen 1's real chart's bars (distinct from yWatts(),
-                // which floors at 0 for the power TRACE) — without it, a ramp step whose start (or
-                // end) is near 0W draws that edge at zero height, i.e. the bar visibly collapses to
-                // nothing right where the ramp is lowest, usually its left edge.
-                val startBarHeight = h * (dispStart.toFloat() / wattsScale).coerceIn(0.05f, 1f)
-                val endBarHeight = h * (dispEnd.toFloat() / wattsScale).coerceIn(0.05f, 1f)
+                    val dispStart = displayWatts(step.startWatts, index, currentStepIndex, intensityPercent)
+                    val dispEnd = displayWatts(step.endWatts, index, currentStepIndex, intensityPercent)
+                    // Same 5%-of-height floor as Screen 1's real chart's bars (distinct from yWatts(),
+                    // which floors at 0 for the power TRACE) — without it, a ramp step whose start (or
+                    // end) is near 0W draws that edge at zero height, i.e. the bar visibly collapses to
+                    // nothing right where the ramp is lowest, usually its left edge.
+                    val startBarHeight = h * (dispStart.toFloat() / wattsScale).coerceIn(0.05f, 1f)
+                    val endBarHeight = h * (dispEnd.toFloat() / wattsScale).coerceIn(0.05f, 1f)
 
-                // Same ramp-truncation interpolation as Screen 1's real chart (see
-                // WorkoutProfileChart) — when the zoomed window cuts a ramp step partway through,
-                // the trapezoid's visible edge needs the interpolated watts at that exact cut
-                // point, not the step's true start/end, or the edge won't line up with the power
-                // line under it.
-                val durationSec = step.durationSec.coerceAtLeast(1)
-                fun wattsAt(tSec: Int): Float {
-                    val frac = (tSec - stepStart).toFloat() / durationSec
-                    return dispStart + (dispEnd - dispStart) * frac
-                }
-                val visibleStart = stepStart.coerceAtLeast(windowStart)
-                val visibleEnd = stepEnd.coerceAtMost(windowEnd)
-                val x0 = xAt(visibleStart).coerceIn(0f, w)
-                val x1 = xAt(visibleEnd).coerceIn(0f, w)
-                val drawStartHeight = if (visibleStart == stepStart) {
-                    startBarHeight
-                } else {
-                    h * (wattsAt(visibleStart) / wattsScale).coerceIn(0.05f, 1f)
-                }
-                val drawEndHeight = if (visibleEnd == stepEnd) {
-                    endBarHeight
-                } else {
-                    h * (wattsAt(visibleEnd) / wattsScale).coerceIn(0.05f, 1f)
-                }
+                    // Same ramp-truncation interpolation as Screen 1's real chart (see
+                    // WorkoutProfileChart) — when the zoomed window cuts a ramp step partway through,
+                    // the trapezoid's visible edge needs the interpolated watts at that exact cut
+                    // point, not the step's true start/end, or the edge won't line up with the power
+                    // line under it.
+                    val durationSec = step.durationSec.coerceAtLeast(1)
+                    fun wattsAt(tSec: Int): Float {
+                        val frac = (tSec - stepStart).toFloat() / durationSec
+                        return dispStart + (dispEnd - dispStart) * frac
+                    }
+                    val visibleStart = stepStart.coerceAtLeast(windowStart)
+                    val visibleEnd = stepEnd.coerceAtMost(windowEnd)
+                    val x0 = xAt(visibleStart).coerceIn(0f, w)
+                    val x1 = xAt(visibleEnd).coerceIn(0f, w)
+                    val drawStartHeight = if (visibleStart == stepStart) {
+                        startBarHeight
+                    } else {
+                        h * (wattsAt(visibleStart) / wattsScale).coerceIn(0.05f, 1f)
+                    }
+                    val drawEndHeight = if (visibleEnd == stepEnd) {
+                        endBarHeight
+                    } else {
+                        h * (wattsAt(visibleEnd) / wattsScale).coerceIn(0.05f, 1f)
+                    }
 
-                // mutedZoneColor (not the bright zone.color used for the live traces' thresholds)
-                // — matches Screen 1's muted bar fill, brightened only for the current step.
-                val zone = zoneFor(max(dispStart, dispEnd), ftpWatts, onSurfaceColor)
-                val color = mutedZoneColor(zone.color, active = index == currentStepIndex)
-                val path = Path().apply {
-                    moveTo(x0, h - drawStartHeight)
-                    lineTo(x1, h - drawEndHeight)
-                    lineTo(x1, h)
-                    lineTo(x0, h)
-                    close()
-                }
-                drawPath(path, color = color)
-                if (stepStart in windowStart..windowEnd && index > 0) {
-                    drawLine(ErgDivider.copy(alpha = 0.5f), Offset(x0, h - startBarHeight), Offset(x0, h), strokeWidth = 1.dp.toPx())
+                    // mutedZoneColor (not the bright zone.color used for the live traces' thresholds)
+                    // — matches Screen 1's muted bar fill, brightened only for the current step.
+                    val zone = zoneFor(max(dispStart, dispEnd), ftpWatts, onSurfaceColor)
+                    val color = mutedZoneColor(zone.color, active = index == currentStepIndex)
+                    val path = Path().apply {
+                        moveTo(x0, h - drawStartHeight)
+                        lineTo(x1, h - drawEndHeight)
+                        lineTo(x1, h)
+                        lineTo(x0, h)
+                        close()
+                    }
+                    drawPath(path, color = color)
+                    if (stepStart in windowStart..windowEnd && index > 0) {
+                        drawLine(ErgDivider.copy(alpha = 0.5f), Offset(x0, h - startBarHeight), Offset(x0, h), strokeWidth = 1.dp.toPx())
+                    }
                 }
             }
             // Same 3 live traces, same draw order (cadence under HR under power) and the same

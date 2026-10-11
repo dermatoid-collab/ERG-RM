@@ -65,6 +65,9 @@ data class SamplePoint(
     val hrBpm: Int?,
     val cadenceRpm: Int?,
     val speedKmh: Float?,
+    // SLO mode only: the grade (±%) being sent to the trainer at this instant — null in ERG/HR+,
+    // so the chart can tell "flat/not in SLO" apart from "genuinely 0% grade".
+    val gradePercent: Float? = null,
 )
 
 private const val AUTO_EXTEND_SEC = 300
@@ -410,12 +413,14 @@ class WorkoutExecutor(
     private fun recordSample() {
         if (!_state.value.isRunning) return
         val live = liveData.value
+        val s = _state.value
         val sample = SamplePoint(
-            tSec = _state.value.totalElapsedSec,
+            tSec = s.totalElapsedSec,
             watts = live.powerWatts ?: 0,
             hrBpm = live.heartRateBpm,
             cadenceRpm = live.cadenceRpm?.toInt(),
             speedKmh = live.speedKmh,
+            gradePercent = if (s.controlMode == ControlMode.SLO) s.currentGradePercent else null,
         )
         _sampleHistory.value = (_sampleHistory.value + sample).takeLast(MAX_SAMPLE_HISTORY)
     }
