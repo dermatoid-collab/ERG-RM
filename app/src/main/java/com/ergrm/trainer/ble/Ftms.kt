@@ -45,6 +45,23 @@ object Ftms {
     const val DEFAULT_CW = 0.51f // wind resistance coefficient, kg/m (road bike + rider, drops bars)
 }
 
+/**
+ * Bluetooth SIG User Data Service (UDS) — separate from FTMS. Rider weight has no field anywhere
+ * in the Fitness Machine Control Point, so it's sent here instead: a direct write to the Weight
+ * characteristic, skipping UDS's own user-selection dance (User Control Point/User Index) since
+ * most single-rider trainer setups only ever have one implicit user anyway. Best-effort: this
+ * write isn't acknowledged by the FTMS Control Point's own response mechanism, and whether the
+ * trainer's firmware actually reads this service at all (versus relying on a weight configured
+ * through its own companion app) is unconfirmed — see TrainerConnection.setWeightKg.
+ */
+object Uds {
+    private fun sig(shortUuid: String): UUID =
+        UUID.fromString("0000$shortUuid-0000-1000-8000-00805f9b34fb")
+
+    val SERVICE_USER_DATA: UUID = sig("181c")
+    val CHAR_WEIGHT: UUID = sig("2a98")
+}
+
 /** A single live data sample decoded from the Indoor Bike Data characteristic. */
 data class TrainerSample(
     val speedKmh: Float? = null,

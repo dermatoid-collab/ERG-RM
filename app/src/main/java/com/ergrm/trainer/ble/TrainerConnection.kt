@@ -116,6 +116,21 @@ class TrainerConnection(
         writeControlPoint(cp, payload)
     }
 
+    /** Best-effort rider+accessories weight write to the standalone Bluetooth SIG User Data
+     *  Service Weight characteristic (0x2A98) — see [Uds]'s own doc comment for why this exists
+     *  and how confident to be in it actually affecting SLO's simulated resistance. uint16 LE,
+     *  resolution 0.005 kg. No-ops silently if the connected device doesn't expose this service
+     *  at all (common — it's optional even for FTMS-conformant trainers). */
+    suspend fun setWeightKg(weightKg: Float) {
+        val g = gatt ?: return
+        val characteristic = g.getService(Uds.SERVICE_USER_DATA)?.getCharacteristic(Uds.CHAR_WEIGHT) ?: return
+        val payload = ByteBuffer.allocate(2)
+            .order(ByteOrder.LITTLE_ENDIAN)
+            .putShort((weightKg / 0.005f).roundToInt().toShort())
+            .array()
+        writeCharacteristicPlain(characteristic, payload)
+    }
+
     suspend fun startOrResume() {
         val cp = controlPoint ?: return
         writeControlPoint(cp, byteArrayOf(Ftms.OP_START_OR_RESUME))
@@ -153,6 +168,34 @@ class TrainerConnection(
             } finally {
                 pendingOp = null
                 pendingControlResponse = null
+            }
+        }
+    }
+
+    /** Plain characteristic write + write-ack wait, no FTMS-style indication response — for
+     *  characteristics outside the Fitness Machine Control Point (so far, just [setWeightKg]'s
+     *  User Data Service write), which have no such response to wait for in the first place. */
+    private suspend fun writeCharacteristicPlain(characteristic: BluetoothGattCharacteristic, payload: ByteArray) {
+        val g = gatt ?: return
+        gattMutex.withLock {
+            val opDeferred = CompletableDeferred<Boolean>()
+            pendingOp = opDeferred
+            characteristic.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+            @Suppress("DEPRECATION")
+            characteristic.value = payload
+            @Suppress("DEPRECATION")
+            val started = g.writeCharacteristic(characteristic)
+            if (!started) {
+                pendingOp = null
+                return
+            }
+            try {
+                withTimeout(4000) { opDeferred.await() }
+            } catch (t: Throwable) {
+                // Best-effort — see setWeightKg's own doc comment on whether this write even
+                // reaches anything the trainer's firmware reads.
+            } finally {
+                pendingOp = null
             }
         }
     }

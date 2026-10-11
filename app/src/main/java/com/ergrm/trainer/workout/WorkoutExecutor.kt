@@ -191,13 +191,19 @@ class WorkoutExecutor(
     fun increaseIntensity() = setIntensity(_state.value.intensityPercent + INTENSITY_STEP_PERCENT)
     fun decreaseIntensity() = setIntensity(_state.value.intensityPercent - INTENSITY_STEP_PERCENT)
 
-    /** Switches between ERG (send the file's %FTP-derived watts as-is) and HR+ (reinterpret the
-     *  same per-interval percentage against LTHR, then slowly correct actual watts toward it) —
-     *  resets the correction loop so the new mode starts from a clean baseline. */
+    /** Switches between ERG (send the file's %FTP-derived watts as-is), HR+ (reinterpret the
+     *  same per-interval percentage against LTHR, then slowly correct actual watts toward it),
+     *  and SLO (send a manually-set grade instead) — resets the HR+ correction loop so a new
+     *  mode starts from a clean baseline, and on entering SLO, (re-)sends rider+accessories
+     *  weight once, best-effort (see TrainerConnection.setWeightKg) — grade's own physics on the
+     *  trainer depends on it, so it needs to be current whenever SLO actually starts sending. */
     fun setControlMode(mode: ControlMode) {
         if (_state.value.controlMode == mode) return
         _state.value = _state.value.copy(controlMode = mode)
         resetHrPlusBaseline()
+        if (mode == ControlMode.SLO) {
+            scope.launch { trainer.setWeightKg(settings.value.systemWeightKg) }
+        }
         pushTargetForCurrentStep()
     }
 
