@@ -354,13 +354,15 @@ private fun VitalsSummaryLines(stats: SessionStats, durationSec: Int, modifier: 
 
 /** One [GroupCard] line — [unit] renders separately from [value] in a plain (non-bold) weight,
  *  so a long unit like "km/h" doesn't force the whole bold string wide enough to clip inside the
- *  card's half-width column. Empty when the stat has no unit or its value is the "--" fallback. */
-private data class StatRow(val label: String, val value: String, val unit: String = "", val color: Color = ErgOnSurface)
+ *  card's half-width column. Empty when the stat has no unit or its value is the "--" fallback.
+ *  [color] has no default — the Erg* tokens it would otherwise default to are @Composable
+ *  getters, which this plain data class can't call from a constructor default. */
+private data class StatRow(val label: String, val value: String, val unit: String, val color: Color)
 
-private fun numRow(label: String, value: Float?, unit: String, decimals: Int = 1, color: Color = ErgOnSurface): StatRow =
+private fun numRow(label: String, value: Float?, unit: String, color: Color, decimals: Int = 1): StatRow =
     StatRow(label, value?.let { "%.${decimals}f".format(it) } ?: "--", if (value != null) unit else "", color)
 
-private fun intRow(label: String, value: Int?, unit: String, color: Color = ErgOnSurface): StatRow =
+private fun intRow(label: String, value: Int?, unit: String, color: Color): StatRow =
     StatRow(label, value?.toString() ?: "--", if (value != null) unit else "", color)
 
 /** 9 session-summary stats, as compact as the real tiles allow — no per-tile toggle like
@@ -371,28 +373,29 @@ private fun SummaryTilesGrid(stats: SessionStats, durationSec: Int, modifier: Mo
     // "Label: value", so a card's height follows its own line count instead of every tile
     // sharing one fixed height. HR-red/cadence-blue/HTL-orange coloring as requested, echoing
     // the same colors their respective chart lines use below.
+    val onSurface = ErgOnSurface
     val topLeft = listOf(
-        StatRow("Duration", formatTime(durationSec)),
-        numRow("Distance", stats.distanceKm, "km"),
-        numRow("Avg Speed", stats.avgSpeedKmh, "km/h"),
+        StatRow("Duration", formatTime(durationSec), "", onSurface),
+        numRow("Distance", stats.distanceKm, "km", onSurface),
+        numRow("Avg Speed", stats.avgSpeedKmh, "km/h", onSurface),
     )
     val topRight = listOf(
-        StatRow("Work", "${stats.totalKj}", "kJ"),
-        intRow("NP", stats.normalizedWatts, "W"),
-        StatRow("TSS", stats.tss?.toString() ?: "--"),
+        StatRow("Work", "${stats.totalKj}", "kJ", onSurface),
+        intRow("NP", stats.normalizedWatts, "W", onSurface),
+        StatRow("TSS", stats.tss?.toString() ?: "--", "", onSurface),
     )
     val bottomLeft = listOf(
-        StatRow("Avg Watts", "${stats.avgWatts}", "W"),
+        StatRow("Avg Watts", "${stats.avgWatts}", "W", onSurface),
         intRow("Avg HR", stats.avgHrBpm, "bpm", ErgHrLine),
         intRow("Max HR", stats.maxHrBpm, "bpm", ErgHrLine),
         intRow("Avg Cad", stats.avgCadenceRpm, "rpm", ErgCadenceLine),
     )
     val bottomRight = listOf(
-        numRow("Avg Core T", stats.avgCoreTempC, "°C", decimals = 2),
-        numRow("Max Core T", stats.maxCoreTempC, "°C", decimals = 2),
-        StatRow("Mins > ${CORE_TEMP_ALERT_C}°", formatMmSs(stats.timeAboveCoreTempSec)),
+        numRow("Avg Core T", stats.avgCoreTempC, "°C", onSurface, decimals = 2),
+        numRow("Max Core T", stats.maxCoreTempC, "°C", onSurface, decimals = 2),
+        StatRow("Mins > ${CORE_TEMP_ALERT_C}°", formatMmSs(stats.timeAboveCoreTempSec), "", onSurface),
         // See HeatTrainingLoad.kt — same estimate the History detail view now shows.
-        StatRow("Core HTL", stats.heatTrainingLoad?.let { "%.1f/10".format(it) } ?: "--", color = ErgHeatLoad),
+        StatRow("Core HTL", stats.heatTrainingLoad?.let { "%.1f/10".format(it) } ?: "--", "", ErgHeatLoad),
     )
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(5.dp)) {
         Row(
