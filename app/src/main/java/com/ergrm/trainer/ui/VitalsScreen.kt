@@ -1002,7 +1002,7 @@ private fun CompactControlRow(
                     .size(38.4.dp)
                     .clip(RoundedCornerShape(50))
                     .background(modeColor)
-                    .clickable(enabled = canAdjustMode, onClick = onToggleMode),
+                    .requireLongPress(canAdjustMode, 1000L, onToggleMode),
                 contentAlignment = Alignment.Center,
             ) {
                 // Same font size as the percentage next to it.

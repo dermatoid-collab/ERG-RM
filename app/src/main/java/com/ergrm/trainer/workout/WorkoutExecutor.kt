@@ -78,6 +78,11 @@ data class SamplePoint(
     // SLO mode only: the grade (±%) being sent to the trainer at this instant — null in ERG/HR+,
     // so the chart can tell "flat/not in SLO" apart from "genuinely 0% grade".
     val gradePercent: Float? = null,
+    // GPX-route rides only: how far along the route this sample was recorded (mirrors
+    // WorkoutRunState.routeDistanceM at that instant) — lets the chart plot recorded
+    // power/HR/cadence against distance instead of elapsed time, alongside the full route
+    // profile shown from the start. Null outside a route ride.
+    val distanceM: Float? = null,
 )
 
 private const val AUTO_EXTEND_SEC = 300
@@ -489,6 +494,7 @@ class WorkoutExecutor(
             cadenceRpm = live.cadenceRpm?.toInt(),
             speedKmh = live.speedKmh,
             gradePercent = if (s.controlMode == ControlMode.SLO) s.currentGradePercent else null,
+            distanceM = s.routeProfile?.let { s.routeDistanceM },
         )
         _sampleHistory.value = (_sampleHistory.value + sample).takeLast(MAX_SAMPLE_HISTORY)
     }

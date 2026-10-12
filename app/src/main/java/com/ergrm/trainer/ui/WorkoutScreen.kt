@@ -102,6 +102,7 @@ import com.ergrm.trainer.ui.theme.ErgSurface
 import com.ergrm.trainer.ui.theme.ErgSurface2
 import com.ergrm.trainer.ui.theme.ErgWarn
 import com.ergrm.trainer.workout.ControlMode
+import com.ergrm.trainer.workout.RouteProfile
 import com.ergrm.trainer.workout.SamplePoint
 import com.ergrm.trainer.workout.WorkoutRunState
 import com.ergrm.trainer.workout.WorkoutStep
@@ -227,6 +228,8 @@ fun WorkoutScreen(
                     intensityPercent = workoutState.intensityPercent,
                     controlMode = workoutState.controlMode,
                     maxGradePercent = settings.maxGradePercent,
+                    routeProfile = workoutState.routeProfile,
+                    routeDistanceM = workoutState.routeDistanceM,
                     zoom = effectiveChartZoom,
                     onZoomChange = setChartZoom,
                     modifier = Modifier
@@ -458,6 +461,8 @@ private fun WorkoutScreenLandscape(
             intensityPercent = workoutState.intensityPercent,
             controlMode = workoutState.controlMode,
             maxGradePercent = settings.maxGradePercent,
+            routeProfile = workoutState.routeProfile,
+            routeDistanceM = workoutState.routeDistanceM,
             zoom = effectiveChartZoom,
             onZoomChange = setChartZoom,
             modifier = Modifier
@@ -984,6 +989,22 @@ enum class ChartZoom(val windowSec: Int?, val scrollThresholdSec: Int) {
 /** Spacing between minute labels on the axis below the chart. Fixed for the two zoomed-in
  *  levels; at FULL it scales with the workout's own total length so a 3-hour plan doesn't end
  *  up with 18 crowded labels the way a fixed 10-minute step would. */
+/** "Nice" km spacing for [ChartTimeAxis]'s route-mode ticks — a handful of labels across
+ *  whatever the route's total distance turns out to be, same spirit as [axisLabelIntervalMin]. */
+internal fun distanceLabelIntervalKm(totalKm: Float): Float = when {
+    totalKm <= 5f -> 1f
+    totalKm <= 15f -> 2f
+    totalKm <= 40f -> 5f
+    totalKm <= 80f -> 10f
+    totalKm <= 150f -> 20f
+    else -> 50f
+}
+
+/** Whole km when the step is whole (10, 20…), one decimal when it isn't (1.0, 2.0) — matches how
+ *  [distanceLabelIntervalKm]'s steps are either whole already or sub-integer. */
+internal fun formatAxisKm(km: Float): String =
+    if (km == km.toInt().toFloat()) "${km.toInt()}" else "%.1f".format(km)
+
 internal fun axisLabelIntervalMin(zoom: ChartZoom, totalDurationSec: Int): Int = when (zoom) {
     ChartZoom.FIVE_MIN -> 1
     ChartZoom.TWENTY_MIN -> 5
@@ -1074,6 +1095,8 @@ private fun ChartCard(
     intensityPercent: Int,
     controlMode: ControlMode,
     maxGradePercent: Float,
+    routeProfile: RouteProfile?,
+    routeDistanceM: Float,
     zoom: ChartZoom,
     onZoomChange: (ChartZoom) -> Unit,
     modifier: Modifier = Modifier,
@@ -1094,6 +1117,8 @@ private fun ChartCard(
             intensityPercent = intensityPercent,
             controlMode = controlMode,
             maxGradePercent = maxGradePercent,
+            routeProfile = routeProfile,
+            routeDistanceM = routeDistanceM,
             zoom = zoom,
             onZoomChange = onZoomChange,
             modifier = Modifier
@@ -1158,6 +1183,8 @@ private fun WorkoutProfileChart(
     intensityPercent: Int,
     controlMode: ControlMode,
     maxGradePercent: Float,
+    routeProfile: RouteProfile?,
+    routeDistanceM: Float,
     zoom: ChartZoom,
     onZoomChange: (ChartZoom) -> Unit,
     modifier: Modifier = Modifier,
@@ -1243,8 +1270,11 @@ private fun WorkoutProfileChart(
         },
     ) {
         // SLO (manual or GPX-route-driven) has no fixed plan, so steps can legitimately be
-        // empty there — every other mode still needs a real plan loaded to draw anything.
-        if (totalDurationSec <= 0 || (steps.isEmpty() && controlMode != ControlMode.SLO)) return@Canvas
+        // empty there — every other mode still needs a real plan loaded to draw anything. A GPX
+        // route's own total distance is known immediately on load, unlike totalDurationSec (which
+        // only starts growing once the ride actually ticks) — so a route bypasses the
+        // totalDurationSec gate too, to show its full profile before the rider presses Play.
+        if ((totalDurationSec <= 0 && routeProfile == null) || (steps.isEmpty() && controlMode != ControlMode.SLO)) return@Canvas
         val w = size.width
         val h = size.height
 
@@ -1255,32 +1285,65 @@ private fun WorkoutProfileChart(
         fun yBpm(bpm: Int): Float = h - h * (((bpm - bpmMin) / bpmRange) * (1f - CHART_TOP_HEADROOM)).coerceIn(0f, 1f)
         fun yCad(rpm: Int): Float = h - h * (rpm.toFloat() / cadScale).coerceIn(0f, 1f)
 
+        // A GPX route's whole profile is known the moment it's loaded — unlike a time-based plan,
+        // whose total duration depends on how fast the rider goes — so it's drawn in full right
+        // away, on a distance x axis, instead of growing in from recorded history like everything
+        // else on this chart. Manual SLO (no route) has no such total, so it keeps the original
+        // "recorded history only" behavior.
+        val routeActive = controlMode == ControlMode.SLO && routeProfile != null && routeProfile.totalDistanceM > 0f
+        fun xAtDist(d: Float): Float = w * (d / routeProfile!!.totalDistanceM).coerceIn(0f, 1f)
+
         if (controlMode == ControlMode.SLO) {
             // SLO has no fixed power plan to draw as bars — the loaded workout's steps are
             // ignored by the trainer in this mode (see WorkoutExecutor.pushTargetForCurrentStep).
-            // Draw the recorded grade history instead, as a filled area around a 0% zero line —
-            // same x axis/time window and zoom as everything else on this chart.
+            // Draw the grade profile instead, as a filled area around a 0% zero line.
             val zeroY = h / 2f
             drawLine(color = onSurfaceColor.copy(alpha = 0.18f), start = Offset(0f, zeroY), end = Offset(w, zeroY), strokeWidth = 1.5f)
-            val gradeSamples = samples.filter { it.tSec in windowStart..windowEnd && it.gradePercent != null }
-            if (gradeSamples.size >= 2) {
-                val maxGrade = maxGradePercent.coerceAtLeast(0.1f)
-                fun yGrade(grade: Float): Float =
-                    zeroY - (grade / maxGrade).coerceIn(-1f, 1f) * zeroY * (1f - CHART_TOP_HEADROOM)
-                val areaPath = Path().apply {
-                    moveTo(xAt(gradeSamples.first().tSec), zeroY)
-                    gradeSamples.forEach { s -> lineTo(xAt(s.tSec), yGrade(s.gradePercent!!)) }
-                    lineTo(xAt(gradeSamples.last().tSec), zeroY)
-                    close()
+            val maxGrade = maxGradePercent.coerceAtLeast(0.1f)
+            fun yGrade(grade: Float): Float =
+                zeroY - (grade / maxGrade).coerceIn(-1f, 1f) * zeroY * (1f - CHART_TOP_HEADROOM)
+
+            if (routeActive) {
+                val route = routeProfile!!
+                val segLen = route.segmentLengthM
+                val outline = mutableListOf<Offset>()
+                route.gradePercents.forEachIndexed { i, grade ->
+                    val y = yGrade(grade)
+                    outline += Offset(xAtDist(i * segLen), y)
+                    outline += Offset(xAtDist((i + 1) * segLen), y)
                 }
-                drawPath(path = areaPath, color = ErgModeSlo.copy(alpha = 0.35f))
-                drawPoints(
-                    points = gradeSamples.map { Offset(xAt(it.tSec), yGrade(it.gradePercent!!)) },
-                    pointMode = PointMode.Polygon,
-                    color = ErgModeSlo,
-                    strokeWidth = 3f,
-                    cap = StrokeCap.Round,
-                )
+                if (outline.size >= 2) {
+                    val areaPath = Path().apply {
+                        moveTo(0f, zeroY)
+                        outline.forEach { lineTo(it.x, it.y) }
+                        lineTo(w, zeroY)
+                        close()
+                    }
+                    drawPath(path = areaPath, color = ErgModeSlo.copy(alpha = 0.35f))
+                    drawPoints(points = outline, pointMode = PointMode.Polygon, color = ErgModeSlo, strokeWidth = 3f, cap = StrokeCap.Round)
+                }
+                // "You are here" — distance-based, since the x axis is distance in this mode (the
+                // usual elapsed-time progress line below is skipped for the same reason).
+                val hereX = xAtDist(routeDistanceM)
+                drawLine(color = ErgProgressLine, start = Offset(hereX, 0f), end = Offset(hereX, h), strokeWidth = 2.5f)
+            } else {
+                val gradeSamples = samples.filter { it.tSec in windowStart..windowEnd && it.gradePercent != null }
+                if (gradeSamples.size >= 2) {
+                    val areaPath = Path().apply {
+                        moveTo(xAt(gradeSamples.first().tSec), zeroY)
+                        gradeSamples.forEach { s -> lineTo(xAt(s.tSec), yGrade(s.gradePercent!!)) }
+                        lineTo(xAt(gradeSamples.last().tSec), zeroY)
+                        close()
+                    }
+                    drawPath(path = areaPath, color = ErgModeSlo.copy(alpha = 0.35f))
+                    drawPoints(
+                        points = gradeSamples.map { Offset(xAt(it.tSec), yGrade(it.gradePercent!!)) },
+                        pointMode = PointMode.Polygon,
+                        color = ErgModeSlo,
+                        strokeWidth = 3f,
+                        cap = StrokeCap.Round,
+                    )
+                }
             }
         } else {
             var acc = 0
@@ -1347,12 +1410,15 @@ private fun WorkoutProfileChart(
             }
         }
 
-        // Live traces recorded during the workout: cadence under HR under power.
-        val visibleSamples = samples.filter { it.tSec in windowStart..windowEnd }
+        // Live traces recorded during the workout: cadence under HR under power. Plotted by
+        // distance (against the full route) on a GPX route, by elapsed time otherwise — xOf picks
+        // the mapping that matches whichever x axis this chart is currently drawing.
+        val visibleSamples = if (routeActive) samples.filter { it.distanceM != null } else samples.filter { it.tSec in windowStart..windowEnd }
+        fun xOf(s: SamplePoint): Float = if (routeActive) xAtDist(s.distanceM!!) else xAt(s.tSec)
         if (visibleSamples.size >= 2) {
-            val cadPoints = visibleSamples.mapNotNull { s -> s.cadenceRpm?.let { Offset(xAt(s.tSec), yCad(it)) } }
-            val hrPoints = visibleSamples.mapNotNull { s -> s.hrBpm?.let { Offset(xAt(s.tSec), yBpm(it)) } }
-            val powerPoints = visibleSamples.map { Offset(xAt(it.tSec), yWatts(it.watts)) }
+            val cadPoints = visibleSamples.mapNotNull { s -> s.cadenceRpm?.let { Offset(xOf(s), yCad(it)) } }
+            val hrPoints = visibleSamples.mapNotNull { s -> s.hrBpm?.let { Offset(xOf(s), yBpm(it)) } }
+            val powerPoints = visibleSamples.map { Offset(xOf(it), yWatts(it.watts)) }
 
             if (cadPoints.size >= 2) {
                 drawPoints(
@@ -1385,8 +1451,9 @@ private fun WorkoutProfileChart(
 
         // Progress line: a thin light-blue line at full chart height marking elapsed time —
         // pinned at the window's left edge until computeChartWindow starts scrolling to keep it
-        // at its scroll threshold position (see ChartZoom/computeChartWindow).
-        if (totalElapsedSec in windowStart..windowEnd) {
+        // at its scroll threshold position (see ChartZoom/computeChartWindow). Skipped for a GPX
+        // route, which already drew its own distance-based "you are here" line above.
+        if (!routeActive && totalElapsedSec in windowStart..windowEnd) {
             val progressX = xAt(totalElapsedSec).coerceIn(0f, w)
             drawLine(color = ErgProgressLine, start = Offset(progressX, 0f), end = Offset(progressX, h), strokeWidth = 2.5f)
         }
@@ -1441,7 +1508,14 @@ private fun WorkoutProfileChart(
             }
         }
     }
-    ChartTimeAxis(zoom = zoom, totalElapsedSec = totalElapsedSec, totalDurationSec = totalDurationSec)
+    ChartTimeAxis(
+        zoom = zoom,
+        totalElapsedSec = totalElapsedSec,
+        totalDurationSec = totalDurationSec,
+        // routeProfile is non-null only in SLO (see WorkoutExecutor.loadRoute), so no extra
+        // controlMode check is needed here.
+        routeProfile = routeProfile,
+    )
     }
 }
 
@@ -1449,7 +1523,15 @@ private fun WorkoutProfileChart(
  *  about the chart (scale, colors, zoom-tap area, traces, tooltip) is untouched; this only adds
  *  the axis strip and, by taking a fixed height for it, shortens the Canvas above by that much. */
 @Composable
-internal fun ChartTimeAxis(zoom: ChartZoom, totalElapsedSec: Int, totalDurationSec: Int) {
+internal fun ChartTimeAxis(
+    zoom: ChartZoom,
+    totalElapsedSec: Int,
+    totalDurationSec: Int,
+    // Non-null only for a GPX route in SLO — draws km ticks across the whole known route
+    // distance instead of minute ticks across the recorded-so-far time window (see
+    // WorkoutProfileChart's own identical fork for why).
+    routeProfile: RouteProfile? = null,
+) {
     val textMeasurer = rememberTextMeasurer()
     val onSurfaceColor = ErgOnSurface
     Canvas(
@@ -1457,8 +1539,32 @@ internal fun ChartTimeAxis(zoom: ChartZoom, totalElapsedSec: Int, totalDurationS
             .fillMaxWidth()
             .height(20.dp),
     ) {
-        if (totalDurationSec <= 0) return@Canvas
         val w = size.width
+        val route = routeProfile
+        if (route != null && route.totalDistanceM > 0f) {
+            val totalKm = route.totalDistanceM / 1000f
+            val intervalKm = distanceLabelIntervalKm(totalKm)
+            val tickHeight = 4.dp.toPx()
+            val tickToLabelGap = 2.dp.toPx()
+            var km = intervalKm
+            while (km < totalKm) {
+                val x = w * (km / totalKm)
+                drawLine(
+                    color = onSurfaceColor.copy(alpha = 0.6f),
+                    start = Offset(x, 0f),
+                    end = Offset(x, tickHeight),
+                    strokeWidth = 1.5.dp.toPx(),
+                )
+                val label = textMeasurer.measure(formatAxisKm(km), TextStyle(fontSize = 10.sp, color = onSurfaceColor.copy(alpha = 0.6f)))
+                drawText(
+                    label,
+                    topLeft = Offset((x - label.size.width / 2f).coerceIn(0f, w - label.size.width), tickHeight + tickToLabelGap),
+                )
+                km += intervalKm
+            }
+            return@Canvas
+        }
+        if (totalDurationSec <= 0) return@Canvas
         val (windowStart, windowEnd) = computeChartWindow(zoom, totalElapsedSec, totalDurationSec)
         val windowLen = (windowEnd - windowStart).coerceAtLeast(1)
         fun xAt(t: Int): Float = w * (t - windowStart) / windowLen.toFloat()
@@ -1872,7 +1978,7 @@ private fun IntensityRow(
                         .fillMaxHeight()
                         .clip(RoundedCornerShape(50))
                         .background(modeColor)
-                        .clickable(enabled = enabled, onClick = onToggleMode)
+                        .requireLongPress(enabled, 1000L, onToggleMode)
                         // Measures the tag's total width (text + padding on both sides) — placed
                         // before .padding() in the chain so the reported size includes it, since
                         // this is the same full colored capsule the triangle needs to mirror.
