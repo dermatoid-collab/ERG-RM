@@ -193,7 +193,11 @@ fun WorkoutScreen(
                 CoreTempTileRow(reading = coreReading)
 
                 ControlsRow(
-                    hasWorkout = workoutState.steps.isNotEmpty(),
+                    // A GPX-route ride has no steps of its own (see WorkoutExecutor.loadRoute),
+                    // so steps.isNotEmpty() alone would leave Play permanently disabled — the
+                    // same bug for every one of these 4 hasWorkout call sites across this file and
+                    // VitalsScreen.kt.
+                    hasWorkout = workoutState.steps.isNotEmpty() || workoutState.routeProfile != null,
                     isRunning = workoutState.isRunning,
                     hasStarted = workoutState.hasStarted,
                     onPlay = { viewModel.startWorkout() },
@@ -419,7 +423,7 @@ private fun WorkoutScreenLandscape(
             )
 
             ControlsRow(
-                hasWorkout = workoutState.steps.isNotEmpty(),
+                hasWorkout = workoutState.steps.isNotEmpty() || workoutState.routeProfile != null,
                 isRunning = workoutState.isRunning,
                 hasStarted = workoutState.hasStarted,
                 onPlay = { viewModel.startWorkout() },

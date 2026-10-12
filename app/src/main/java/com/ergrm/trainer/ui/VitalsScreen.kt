@@ -195,7 +195,9 @@ fun VitalsScreen(
                 }
 
                 CompactControlRow(
-                    hasWorkout = workoutState.steps.isNotEmpty(),
+                    // See WorkoutScreen's identical note — a GPX-route ride has no steps of its
+                    // own, so steps.isNotEmpty() alone leaves Play permanently disabled.
+                    hasWorkout = workoutState.steps.isNotEmpty() || workoutState.routeProfile != null,
                     isRunning = workoutState.isRunning,
                     hasStarted = workoutState.hasStarted,
                     intensityPercent = workoutState.intensityPercent,
@@ -255,7 +257,7 @@ private fun VitalsScreenLandscape(
         ) {
             VitalsSummaryLines(stats = stats, durationSec = workoutState.totalElapsedSec)
             CompactControlRow(
-                hasWorkout = workoutState.steps.isNotEmpty(),
+                hasWorkout = workoutState.steps.isNotEmpty() || workoutState.routeProfile != null,
                 isRunning = workoutState.isRunning,
                 hasStarted = workoutState.hasStarted,
                 intensityPercent = workoutState.intensityPercent,
