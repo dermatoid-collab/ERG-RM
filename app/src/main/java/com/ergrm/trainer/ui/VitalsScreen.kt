@@ -198,6 +198,7 @@ fun VitalsScreen(
                     // See WorkoutScreen's identical note — a GPX-route ride has no steps of its
                     // own, so steps.isNotEmpty() alone leaves Play permanently disabled.
                     hasWorkout = workoutState.steps.isNotEmpty() || workoutState.routeProfile != null,
+                    canAdjustMode = workoutState.steps.isNotEmpty(),
                     isRunning = workoutState.isRunning,
                     hasStarted = workoutState.hasStarted,
                     intensityPercent = workoutState.intensityPercent,
@@ -258,6 +259,7 @@ private fun VitalsScreenLandscape(
             VitalsSummaryLines(stats = stats, durationSec = workoutState.totalElapsedSec)
             CompactControlRow(
                 hasWorkout = workoutState.steps.isNotEmpty() || workoutState.routeProfile != null,
+                canAdjustMode = workoutState.steps.isNotEmpty(),
                 isRunning = workoutState.isRunning,
                 hasStarted = workoutState.hasStarted,
                 intensityPercent = workoutState.intensityPercent,
@@ -899,6 +901,11 @@ private val NAME_RESERVED_HEIGHT = 18.dp
 @Composable
 private fun CompactControlRow(
     hasWorkout: Boolean,
+    // Separate from hasWorkout: a GPX route has no steps to switch away from SLO for (and no
+    // manual grade to nudge, since the route itself drives it — see WorkoutExecutor.setGrade),
+    // so the mode tag and +/- arrows stay locked to SLO during a route even though Play etc. are
+    // enabled. False whenever hasWorkout is false too (nothing loaded at all).
+    canAdjustMode: Boolean,
     isRunning: Boolean,
     hasStarted: Boolean,
     intensityPercent: Int,
@@ -995,7 +1002,7 @@ private fun CompactControlRow(
                     .size(38.4.dp)
                     .clip(RoundedCornerShape(50))
                     .background(modeColor)
-                    .clickable(enabled = hasWorkout, onClick = onToggleMode),
+                    .clickable(enabled = canAdjustMode, onClick = onToggleMode),
                 contentAlignment = Alignment.Center,
             ) {
                 // Same font size as the percentage next to it.
@@ -1006,7 +1013,7 @@ private fun CompactControlRow(
             // own pill (increase/▲ together on the right, decrease/▼ together on the left).
             IconButton(
                 onClick = onDecrease,
-                enabled = hasWorkout,
+                enabled = canAdjustMode,
                 modifier = Modifier.padding(start = 3.dp).size(30.dp),
             ) {
                 Icon(
@@ -1035,7 +1042,7 @@ private fun CompactControlRow(
             }
             IconButton(
                 onClick = onIncrease,
-                enabled = hasWorkout,
+                enabled = canAdjustMode,
                 modifier = Modifier.padding(end = 3.dp).size(30.dp),
             ) {
                 Icon(
