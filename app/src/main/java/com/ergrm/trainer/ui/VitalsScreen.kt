@@ -959,7 +959,7 @@ private fun CompactControlRow(
                 containerColor = mainColor,
                 modifier = Modifier.size(38.4.dp),
                 // Plain tap in all 3 states (Start/Pause/Stop) — only +5min and Skip require the
-                // 2s hold now.
+                // 1s hold now.
             )
             CompactButton(
                 icon = Icons.Filled.Add,
@@ -967,7 +967,7 @@ private fun CompactControlRow(
                 onClick = onExtend,
                 enabled = hasWorkout,
                 modifier = Modifier.size(38.4.dp),
-                requireLongPressMillis = 2000L,
+                requireLongPressMillis = 1000L,
             )
             CompactButton(
                 icon = Icons.Filled.SkipNext,
@@ -975,7 +975,7 @@ private fun CompactControlRow(
                 onClick = onSkip,
                 enabled = hasWorkout,
                 modifier = Modifier.size(38.4.dp),
-                requireLongPressMillis = 2000L,
+                requireLongPressMillis = 1000L,
             )
         }
         Row(

@@ -1715,7 +1715,7 @@ private fun ControlsRow(
             iconSize = pillIconSize,
             height = pillHeight,
             modifier = Modifier.width(addSkipWidth),
-            requireLongPressMillis = 2000L,
+            requireLongPressMillis = 1000L,
         )
         PillIconButton(
             icon = Icons.Filled.SkipNext,
@@ -1725,7 +1725,7 @@ private fun ControlsRow(
             iconSize = pillIconSize,
             height = pillHeight,
             modifier = Modifier.weight(1f),
-            requireLongPressMillis = 2000L,
+            requireLongPressMillis = 1000L,
         )
     }
 }
