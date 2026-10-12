@@ -41,6 +41,8 @@ data class AppSettings(
     val libraryFolderName: String? = null,
     val backupFolderUri: String? = null,
     val backupFolderName: String? = null,
+    val gpxFolderUri: String? = null,
+    val gpxFolderName: String? = null,
 ) {
     val intervalsConfigured: Boolean get() = intervalsApiKey.isNotBlank() && intervalsAthleteId.isNotBlank()
 
@@ -74,6 +76,8 @@ class SettingsRepository(private val context: Context) {
         val LIBRARY_FOLDER_NAME = stringPreferencesKey("library_folder_name")
         val BACKUP_FOLDER_URI = stringPreferencesKey("backup_folder_uri")
         val BACKUP_FOLDER_NAME = stringPreferencesKey("backup_folder_name")
+        val GPX_FOLDER_URI = stringPreferencesKey("gpx_folder_uri")
+        val GPX_FOLDER_NAME = stringPreferencesKey("gpx_folder_name")
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { prefs ->
@@ -99,6 +103,8 @@ class SettingsRepository(private val context: Context) {
             libraryFolderName = prefs[Keys.LIBRARY_FOLDER_NAME],
             backupFolderUri = prefs[Keys.BACKUP_FOLDER_URI],
             backupFolderName = prefs[Keys.BACKUP_FOLDER_NAME],
+            gpxFolderUri = prefs[Keys.GPX_FOLDER_URI],
+            gpxFolderName = prefs[Keys.GPX_FOLDER_NAME],
         )
     }
 
@@ -187,6 +193,13 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
+    suspend fun setGpxFolder(uri: String, name: String) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.GPX_FOLDER_URI] = uri
+            prefs[Keys.GPX_FOLDER_NAME] = name
+        }
+    }
+
     /** Restores every field from a backup in one atomic write. Nullable fields are only written
      *  when present in the backup, so restoring an older backup (from before a field existed)
      *  can't clobber a value set since then with a null. */
@@ -213,6 +226,8 @@ class SettingsRepository(private val context: Context) {
             s.libraryFolderName?.let { prefs[Keys.LIBRARY_FOLDER_NAME] = it }
             s.backupFolderUri?.let { prefs[Keys.BACKUP_FOLDER_URI] = it }
             s.backupFolderName?.let { prefs[Keys.BACKUP_FOLDER_NAME] = it }
+            s.gpxFolderUri?.let { prefs[Keys.GPX_FOLDER_URI] = it }
+            s.gpxFolderName?.let { prefs[Keys.GPX_FOLDER_NAME] = it }
         }
     }
 }

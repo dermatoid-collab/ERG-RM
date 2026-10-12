@@ -69,6 +69,15 @@ fun SettingsScreen(
         }
     }
 
+    val gpxFolderPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocumentTree(),
+    ) { uri ->
+        if (uri != null) {
+            val name = DocumentFile.fromTreeUri(context, uri)?.name ?: "Folder"
+            viewModel.onGpxFolderPicked(uri, name)
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -302,6 +311,33 @@ fun SettingsScreen(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(if (settings.backupFolderUri == null) "Choose auto-backup folder" else "Change auto-backup folder")
+        }
+
+        Text(
+            "GPX routes folder",
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(top = 24.dp, bottom = 8.dp),
+        )
+        Text(
+            if (settings.gpxFolderUri == null) {
+                "No folder set. Pick one (e.g. a synced Drive folder) and \"GPX route\" in " +
+                    "Other sources lists its .gpx files directly instead of opening the system " +
+                    "file picker each time."
+            } else {
+                "GPX folder: ${settings.gpxFolderName}. \"GPX route\" in Other sources lists " +
+                    "its .gpx files directly."
+            },
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+        OutlinedButton(
+            onClick = {
+                AppNavigationEvents.pickerLaunchInFlight = true
+                gpxFolderPicker.launch(null)
+            },
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(if (settings.gpxFolderUri == null) "Choose GPX folder" else "Change GPX folder")
         }
 
         Text(

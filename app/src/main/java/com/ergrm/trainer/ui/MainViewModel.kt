@@ -43,6 +43,9 @@ import com.ergrm.trainer.intervals.IntervalsRepository
 import com.ergrm.trainer.intervals.LibraryFetchResult
 import com.ergrm.trainer.intervals.LibraryFolderGroup
 import com.ergrm.trainer.intervals.LibraryWorkout
+import com.ergrm.trainer.library.GpxImportResult
+import com.ergrm.trainer.library.GpxLibraryRepository
+import com.ergrm.trainer.library.GpxRouteFile
 import com.ergrm.trainer.library.LibraryImportResult
 import com.ergrm.trainer.library.LibraryRepository
 import com.ergrm.trainer.library.LibraryWorkoutFile
@@ -100,6 +103,13 @@ sealed interface LibraryUiState {
     data class Error(val message: String) : LibraryUiState
 }
 
+sealed interface GpxLibraryUiState {
+    data object NoFolder : GpxLibraryUiState
+    data object Loading : GpxLibraryUiState
+    data class Loaded(val files: List<GpxRouteFile>) : GpxLibraryUiState
+    data class Error(val message: String) : GpxLibraryUiState
+}
+
 /** One CORE sensor reading, time-aligned with [MainViewModel.sampleHistory] via [tSec] — the
  *  Vitals screen's CORE/SKIN/HSI chart traces this the same way the power/HR/cadence chart
  *  traces [com.ergrm.trainer.workout.SamplePoint]. */
@@ -117,6 +127,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val settingsRepository = SettingsRepository(application)
     private val intervalsRepository = IntervalsRepository()
     private val libraryRepository = LibraryRepository(application)
+    private val gpxLibraryRepository = GpxLibraryRepository(application)
     private val historyRepository = SessionHistoryRepository(application)
     private val backupRepository = BackupRepository(application, settingsRepository, historyRepository)
 
@@ -191,6 +202,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _libraryState = MutableStateFlow<LibraryUiState>(LibraryUiState.NoFolder)
     val libraryState: StateFlow<LibraryUiState> = _libraryState.asStateFlow()
 
+    private val _gpxLibraryState = MutableStateFlow<GpxLibraryUiState>(GpxLibraryUiState.NoFolder)
+    val gpxLibraryState: StateFlow<GpxLibraryUiState> = _gpxLibraryState.asStateFlow()
+
     private val _sessionHistory = MutableStateFlow<List<WorkoutSession>>(emptyList())
     val sessionHistory: StateFlow<List<WorkoutSession>> = _sessionHistory.asStateFlow()
 
@@ -223,6 +237,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val folder = settingsRepository.settings.map { it.libraryFolderUri }.first()
             if (folder != null) refreshLibrary()
+        }
+        viewModelScope.launch {
+            val folder = settingsRepository.settings.map { it.gpxFolderUri }.first()
+            if (folder != null) refreshGpxLibrary()
         }
         viewModelScope.launch {
             combine(connectionState, workoutState) { conn, workout -> conn to workout }
@@ -852,6 +870,50 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     )
                 }
                 is LibraryImportResult.Error -> _workoutLoadState.value = WorkoutLoadState.Error(result.message)
+            }
+        }
+    }
+
+    /** Same folder-picking pattern as [onLibraryFolderPicked], for a separate GPX routes folder —
+     *  kept apart from the workout-plan library folder since the two file types are naturally
+     *  organized separately (e.g. two different synced Drive folders). */
+    fun onGpxFolderPicked(uri: Uri, displayName: String) {
+        getApplication<Application>().contentResolver.takePersistableUriPermission(
+            uri,
+            Intent.FLAG_GRANT_READ_URI_PERMISSION,
+        )
+        viewModelScope.launch {
+            settingsRepository.setGpxFolder(uri.toString(), displayName)
+            refreshGpxLibrary()
+        }
+    }
+
+    fun refreshGpxLibrary() {
+        val folderUriString = settings.value.gpxFolderUri
+        if (folderUriString == null) {
+            _gpxLibraryState.value = GpxLibraryUiState.NoFolder
+            return
+        }
+        _gpxLibraryState.value = GpxLibraryUiState.Loading
+        viewModelScope.launch {
+            try {
+                val files = gpxLibraryRepository.listRoutes(Uri.parse(folderUriString))
+                _gpxLibraryState.value = GpxLibraryUiState.Loaded(files)
+            } catch (t: Exception) {
+                _gpxLibraryState.value = GpxLibraryUiState.Error(t.message ?: t.javaClass.simpleName)
+            }
+        }
+    }
+
+    fun importGpxFromLibrary(file: GpxRouteFile) {
+        _workoutLoadState.value = WorkoutLoadState.Loading
+        viewModelScope.launch {
+            when (val result = gpxLibraryRepository.importRoute(file.uri, file.name)) {
+                is GpxImportResult.Success -> {
+                    workoutExecutor.loadRoute(result.route)
+                    _workoutLoadState.value = WorkoutLoadState.Loaded(result.route.name)
+                }
+                is GpxImportResult.Error -> _workoutLoadState.value = WorkoutLoadState.Error(result.message)
             }
         }
     }

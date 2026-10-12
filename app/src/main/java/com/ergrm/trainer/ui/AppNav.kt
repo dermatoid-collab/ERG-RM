@@ -68,7 +68,7 @@ import com.ergrm.trainer.ui.theme.ErgRmTheme
 import com.ergrm.trainer.ui.theme.ErgWarn
 
 private enum class Screen { CONNECT, WORKOUT }
-private enum class Overlay { NONE, SETTINGS, LIBRARY, HISTORY, CALENDAR, INTERVALS_LIBRARY }
+private enum class Overlay { NONE, SETTINGS, LIBRARY, HISTORY, CALENDAR, INTERVALS_LIBRARY, GPX_LIBRARY }
 
 // See ActiveWorkoutPager's doc comment: large enough to feel infinite, small enough that
 // HorizontalPager's internal fling/snap math over this range doesn't hit Infinity/NaN.
@@ -197,9 +197,9 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
                 onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
             }
 
-            // One-off GPX file import (unlike the Library's persistent SAF-tree sync): picking a
-            // route switches straight into SLO, so there's no overlay destination for it here —
-            // just a launcher the menu entry below triggers directly.
+            // Fallback for when no GPX folder is set in Settings (see Overlay.GPX_LIBRARY below
+            // for the folder-backed path) — a one-off system file picker; picking a route
+            // switches straight into SLO either way.
             val gpxPickerLauncher = rememberLauncherForActivityResult(
                 ActivityResultContracts.GetContent(),
             ) { uri -> if (uri != null) viewModel.loadRouteFromGpx(uri) }
@@ -217,10 +217,16 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
                 "Library (Intervals.icu)" to { overlay = Overlay.INTERVALS_LIBRARY },
                 "Workout Library" to { overlay = Overlay.LIBRARY },
                 "GPX route" to {
-                    AppNavigationEvents.pickerLaunchInFlight = true
-                    overlay = Overlay.NONE
-                    screen = Screen.WORKOUT
-                    gpxPickerLauncher.launch("*/*")
+                    // A folder set in Settings gives a pickable list, same as Workout Library —
+                    // otherwise fall back to the one-off system file picker.
+                    if (settings.gpxFolderUri != null) {
+                        overlay = Overlay.GPX_LIBRARY
+                    } else {
+                        AppNavigationEvents.pickerLaunchInFlight = true
+                        overlay = Overlay.NONE
+                        screen = Screen.WORKOUT
+                        gpxPickerLauncher.launch("*/*")
+                    }
                 },
             )
 
@@ -314,6 +320,14 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
                         overlay == Overlay.INTERVALS_LIBRARY -> IntervalsLibraryScreen(
                             viewModel,
                             onPicked = { overlay = Overlay.NONE },
+                            otherSources = otherSources,
+                        )
+                        overlay == Overlay.GPX_LIBRARY -> GpxLibraryScreen(
+                            viewModel,
+                            onPicked = {
+                                overlay = Overlay.NONE
+                                screen = Screen.WORKOUT
+                            },
                             otherSources = otherSources,
                         )
                         screen == Screen.WORKOUT && workoutState.hasStarted && chromeCollapsed ->
