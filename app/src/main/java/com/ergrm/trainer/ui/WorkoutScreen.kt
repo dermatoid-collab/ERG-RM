@@ -1296,37 +1296,40 @@ private fun WorkoutProfileChart(
         if (controlMode == ControlMode.SLO) {
             // SLO has no fixed power plan to draw as bars — the loaded workout's steps are
             // ignored by the trainer in this mode (see WorkoutExecutor.pushTargetForCurrentStep).
-            // Draw the grade profile instead, as a filled area around a 0% zero line.
-            val zeroY = h / 2f
-            drawLine(color = onSurfaceColor.copy(alpha = 0.18f), start = Offset(0f, zeroY), end = Offset(w, zeroY), strokeWidth = 1.5f)
-            val maxGrade = maxGradePercent.coerceAtLeast(0.1f)
-            fun yGrade(grade: Float): Float =
-                zeroY - (grade / maxGrade).coerceIn(-1f, 1f) * zeroY * (1f - CHART_TOP_HEADROOM)
-
             if (routeActive) {
+                // GPX route: draw the route's real elevation profile — the instantaneous grade is
+                // already shown numerically in the Grade tile, so the chart itself shows the
+                // climb/descent shape instead, scaled to the route's own min/max elevation.
                 val route = routeProfile!!
-                val segLen = route.segmentLengthM
-                val outline = mutableListOf<Offset>()
-                route.gradePercents.forEachIndexed { i, grade ->
-                    val y = yGrade(grade)
-                    outline += Offset(xAtDist(i * segLen), y)
-                    outline += Offset(xAtDist((i + 1) * segLen), y)
-                }
-                if (outline.size >= 2) {
+                val elevations = route.elevationsM
+                if (elevations.size >= 2) {
+                    val minEle = elevations.min()
+                    val maxEle = elevations.max()
+                    val eleRange = (maxEle - minEle).coerceAtLeast(1f)
+                    fun yEle(ele: Float): Float = h - h * ((ele - minEle) / eleRange) * (1f - CHART_TOP_HEADROOM)
+                    val segLen = route.segmentLengthM
+                    val points = elevations.mapIndexed { i, ele -> Offset(xAtDist(i * segLen), yEle(ele)) }
                     val areaPath = Path().apply {
-                        moveTo(0f, zeroY)
-                        outline.forEach { lineTo(it.x, it.y) }
-                        lineTo(w, zeroY)
+                        moveTo(points.first().x, h)
+                        points.forEach { lineTo(it.x, it.y) }
+                        lineTo(points.last().x, h)
                         close()
                     }
                     drawPath(path = areaPath, color = ErgModeSlo.copy(alpha = 0.35f))
-                    drawPoints(points = outline, pointMode = PointMode.Polygon, color = ErgModeSlo, strokeWidth = 3f, cap = StrokeCap.Round)
+                    drawPoints(points = points, pointMode = PointMode.Polygon, color = ErgModeSlo, strokeWidth = 3f, cap = StrokeCap.Round)
                 }
                 // "You are here" — distance-based, since the x axis is distance in this mode (the
                 // usual elapsed-time progress line below is skipped for the same reason).
                 val hereX = xAtDist(routeDistanceM)
                 drawLine(color = ErgProgressLine, start = Offset(hereX, 0f), end = Offset(hereX, h), strokeWidth = 2.5f)
             } else {
+                // Manual SLO (no route, no elevation data) — draw the recorded grade history
+                // instead, as a filled area around a 0% zero line.
+                val zeroY = h / 2f
+                drawLine(color = onSurfaceColor.copy(alpha = 0.18f), start = Offset(0f, zeroY), end = Offset(w, zeroY), strokeWidth = 1.5f)
+                val maxGrade = maxGradePercent.coerceAtLeast(0.1f)
+                fun yGrade(grade: Float): Float =
+                    zeroY - (grade / maxGrade).coerceIn(-1f, 1f) * zeroY * (1f - CHART_TOP_HEADROOM)
                 val gradeSamples = samples.filter { it.tSec in windowStart..windowEnd && it.gradePercent != null }
                 if (gradeSamples.size >= 2) {
                     val areaPath = Path().apply {

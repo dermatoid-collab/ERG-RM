@@ -22,6 +22,11 @@ data class RouteProfile(
     // One grade value (%) per segment — gradePercents[i] is the grade from
     // i*segmentLengthM to (i+1)*segmentLengthM.
     val gradePercents: List<Float>,
+    // Elevation (m) at each segment boundary — elevationsM[i] is the elevation at
+    // i*segmentLengthM, so this has exactly one more entry than gradePercents. Kept alongside
+    // the derived grades so the chart can draw the route's real elevation profile, not just its
+    // per-segment steepness.
+    val elevationsM: List<Float>,
 ) {
     val totalDistanceM: Float get() = gradePercents.size * segmentLengthM
 
@@ -49,7 +54,7 @@ object GpxParser {
             val riseM = resampled[i + 1].second - resampled[i].second
             riseM / segmentLengthM * 100f
         }
-        return RouteProfile(name, segmentLengthM, grades)
+        return RouteProfile(name, segmentLengthM, grades, resampled.map { it.second })
     }
 
     private data class RawPoint(val lat: Double, val lon: Double, val ele: Float)
