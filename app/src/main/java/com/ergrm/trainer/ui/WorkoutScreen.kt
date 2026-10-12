@@ -1111,6 +1111,11 @@ internal const val CHART_TOP_HEADROOM = 0.08f
  *  height; the bottom quarter selects whatever interval is at that x for its tooltip instead. */
 private const val CHART_ZOOM_TAP_FRACTION = 0.75f
 
+/** How long a chart's tap-to-zoom gesture waits for the finger to lift before giving up on it —
+ *  see the comment at its pointerInput's awaitEachGesture for why this exists. Generous relative
+ *  to any real tap or short press, short enough to recover quickly from one stuck gesture. */
+private const val GESTURE_UP_TIMEOUT_MS = 1500L
+
 /**
  * Watts ceiling for the chart's Y axis, fixed relative to FTP (not auto-fit to the data) so that
  * raising or lowering the live %FTP intensity actually changes bar heights against a stable
@@ -1200,7 +1205,12 @@ private fun WorkoutProfileChart(
             // Track down-then-up directly instead, which only cares where the finger lifted.
             awaitEachGesture {
                 awaitFirstDown()
-                val up = waitForUpOrCancellation() ?: return@awaitEachGesture
+                // A swipe that starts on this chart (e.g. between Workout and Vitals, or between
+                // the 5 main screens) can get claimed by the enclosing HorizontalPager partway
+                // through, without ever delivering a clean up/cancel back to this gesture — which
+                // otherwise leaves awaitEachGesture parked here forever, silently swallowing every
+                // later tap. The timeout bounds how long one stuck gesture can block the next.
+                val up = withTimeoutOrNull(GESTURE_UP_TIMEOUT_MS) { waitForUpOrCancellation() } ?: return@awaitEachGesture
                 val offset = up.position
                 // Top 75% of the chart cycles zoom; the bottom quarter selects whatever interval
                 // sits at that x for its tooltip, even where that particular bar falls short of

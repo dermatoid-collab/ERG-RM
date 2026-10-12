@@ -95,6 +95,7 @@ import com.ergrm.trainer.workout.WorkoutRunState
 import com.ergrm.trainer.workout.WorkoutStep
 import kotlin.math.max
 import kotlin.math.roundToInt
+import kotlinx.coroutines.withTimeoutOrNull
 
 /** Screen 2 of the active-workout pager (Task #75): a "Vitals & Analytics" view sharing only the
  *  minibar with the dashboard (Screen 1, today's WorkoutScreen) — session summary tiles and two
@@ -443,6 +444,11 @@ private fun GroupCard(lines: List<StatRow>, modifier: Modifier = Modifier) {
     }
 }
 
+/** How long a chart's tap-to-zoom gesture waits for the finger to lift before giving up on it —
+ *  see the comment at its pointerInput's awaitEachGesture for why this exists. Generous relative
+ *  to any real tap or short press, short enough to recover quickly from one stuck gesture. */
+private const val GESTURE_UP_TIMEOUT_MS = 1500L
+
 /** CORE/SKIN/HSI over the whole ride. CORE and HSI are drawn one short segment at a time so each
  *  can take the exact same color its tile would show for that instant (same thresholds as
  *  [coreColor]/[hsiColor]) — SKIN stays [ErgSkinTemp] throughout, since its tile has no
@@ -511,7 +517,13 @@ private fun CoreSkinHsiChart(
                 .pointerInput(Unit) {
                     awaitEachGesture {
                         awaitFirstDown()
-                        waitForUpOrCancellation() ?: return@awaitEachGesture
+                        // A swipe that starts on this chart (e.g. between Workout and Vitals) can
+                        // get claimed by the enclosing HorizontalPager partway through, without
+                        // ever delivering a clean up/cancel back to this gesture — which otherwise
+                        // leaves awaitEachGesture parked here forever, silently swallowing every
+                        // later tap. The timeout bounds how long one stuck gesture can block the
+                        // next (see WorkoutScreen's identical fix on its own zoom-tap gesture).
+                        withTimeoutOrNull(GESTURE_UP_TIMEOUT_MS) { waitForUpOrCancellation() } ?: return@awaitEachGesture
                         latestOnTap.value()
                     }
                 },
@@ -655,7 +667,8 @@ private fun VitalsPowerChart(
                 .pointerInput(Unit) {
                     awaitEachGesture {
                         awaitFirstDown()
-                        waitForUpOrCancellation() ?: return@awaitEachGesture
+                        // Same stuck-gesture fix as CoreSkinHsiChart above — see its comment.
+                        withTimeoutOrNull(GESTURE_UP_TIMEOUT_MS) { waitForUpOrCancellation() } ?: return@awaitEachGesture
                         latestOnTap.value()
                     }
                 },
