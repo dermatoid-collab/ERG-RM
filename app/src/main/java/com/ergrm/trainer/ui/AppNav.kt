@@ -437,7 +437,7 @@ private fun pageFor(overlay: Overlay, screen: Screen): Int = when (overlay) {
     Overlay.LIBRARY -> 2
     Overlay.HISTORY -> 3
     Overlay.SETTINGS -> 4
-    Overlay.CALENDAR, Overlay.INTERVALS_LIBRARY -> 0 // unreachable here — see the when{} in ErgRmApp
+    Overlay.CALENDAR, Overlay.INTERVALS_LIBRARY, Overlay.GPX_LIBRARY -> 0 // unreachable here — see the when{} in ErgRmApp
 }
 
 /** Swipe between the app's 5 main destinations (Task #73), bounded (no wrap at either end) —
