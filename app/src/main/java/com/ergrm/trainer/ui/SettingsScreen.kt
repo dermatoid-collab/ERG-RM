@@ -4,11 +4,19 @@ import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -24,15 +32,20 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.documentfile.provider.DocumentFile
 import com.ergrm.trainer.BuildConfig
 import com.ergrm.trainer.data.AppSettings
+import com.ergrm.trainer.ui.theme.ThemeMode
+import com.ergrm.trainer.ui.theme.themeSwatches
 
 @Composable
 fun SettingsScreen(
@@ -85,6 +98,32 @@ fun SettingsScreen(
             .padding(16.dp),
     ) {
         Text("Settings", style = MaterialTheme.typography.titleLarge)
+
+        Text(
+            "Theme",
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(top = 24.dp, bottom = 8.dp),
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            ThemeMode.entries.chunked(3).forEach { rowModes ->
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    rowModes.forEach { mode ->
+                        ThemeOptionCard(
+                            mode = mode,
+                            selected = settings.themeMode == mode,
+                            onClick = { viewModel.setThemeMode(mode) },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    // Keeps the last, possibly-shorter row's cards the same width as every other
+                    // row's instead of stretching to fill the gap.
+                    repeat(3 - rowModes.size) { Box(modifier = Modifier.weight(1f)) }
+                }
+            }
+        }
 
         Text(
             "Intervals.icu",
@@ -400,5 +439,48 @@ private fun String.filterDecimal(): String {
             c == '.' && !seenDot -> { seenDot = true; true }
             else -> false
         }
+    }
+}
+
+/** One selectable theme: its name plus a row of swatches from [themeSwatches] (background,
+ *  primary, secondary, tertiary) so a rider can tell palettes apart without applying each one
+ *  first. A colored border marks the currently active theme. */
+@Composable
+private fun ThemeOptionCard(
+    mode: ThemeMode,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val swatches = themeSwatches(mode)
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .border(
+                width = if (selected) 2.dp else 0.dp,
+                color = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                shape = RoundedCornerShape(10.dp),
+            )
+            .clickable(onClick = onClick)
+            .padding(8.dp),
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            swatches.forEach { color ->
+                Box(
+                    modifier = Modifier
+                        .size(16.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(color),
+                )
+            }
+        }
+        Text(
+            mode.label,
+            style = MaterialTheme.typography.labelSmall,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 6.dp),
+        )
     }
 }

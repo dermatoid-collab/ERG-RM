@@ -76,7 +76,11 @@ private const val VIRTUAL_PAGE_COUNT = 100_000
 
 @Composable
 fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
-    ErgRmTheme {
+    // Read before ErgRmTheme so the rider's chosen mode (Settings) can actually reach it —
+    // everything else below still reads settings from its own local val (collecting the same
+    // flow twice is harmless, but one read is simpler).
+    val settings by viewModel.settings.collectAsState()
+    ErgRmTheme(mode = settings.themeMode) {
         Surface(color = MaterialTheme.colorScheme.background) {
             var overlay by remember { mutableStateOf(Overlay.NONE) }
             var screen by remember { mutableStateOf(Screen.WORKOUT) }
@@ -106,7 +110,6 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
             val hrConnectionState by viewModel.hrConnectionState.collectAsState()
             val isScanning by viewModel.isScanning.collectAsState()
             val isHrScanning by viewModel.isHrScanning.collectAsState()
-            val settings by viewModel.settings.collectAsState()
             val isConnected = connectionState is TrainerConnectionState.Ready
             val snackbarHostState = remember { SnackbarHostState() }
 

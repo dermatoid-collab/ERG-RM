@@ -51,6 +51,7 @@ import com.ergrm.trainer.library.LibraryRepository
 import com.ergrm.trainer.library.LibraryWorkoutFile
 import com.ergrm.trainer.notify.AppNotifications
 import com.ergrm.trainer.service.TrainerForegroundService
+import com.ergrm.trainer.ui.theme.ThemeMode
 import com.ergrm.trainer.workout.GpxParser
 import com.ergrm.trainer.workout.WorkoutExecutor
 import com.ergrm.trainer.workout.WorkoutStep
@@ -481,6 +482,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun saveSimSettings(riderWeightKg: Float, accessoriesWeightKg: Float, slopeStepPercent: Float, maxGradePercent: Float) {
         viewModelScope.launch {
             settingsRepository.updateSimSettings(riderWeightKg, accessoriesWeightKg, slopeStepPercent, maxGradePercent)
+        }
+    }
+
+    fun setThemeMode(mode: ThemeMode) {
+        viewModelScope.launch {
+            settingsRepository.setThemeMode(mode)
         }
     }
 

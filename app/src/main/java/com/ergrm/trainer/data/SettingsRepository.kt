@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.ergrm.trainer.ui.theme.ThemeMode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.Serializable
@@ -43,6 +44,7 @@ data class AppSettings(
     val backupFolderName: String? = null,
     val gpxFolderUri: String? = null,
     val gpxFolderName: String? = null,
+    val themeMode: ThemeMode = ThemeMode.ERG_RM_LEGACY,
 ) {
     val intervalsConfigured: Boolean get() = intervalsApiKey.isNotBlank() && intervalsAthleteId.isNotBlank()
 
@@ -78,6 +80,7 @@ class SettingsRepository(private val context: Context) {
         val BACKUP_FOLDER_NAME = stringPreferencesKey("backup_folder_name")
         val GPX_FOLDER_URI = stringPreferencesKey("gpx_folder_uri")
         val GPX_FOLDER_NAME = stringPreferencesKey("gpx_folder_name")
+        val THEME_MODE = stringPreferencesKey("theme_mode")
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { prefs ->
@@ -105,6 +108,8 @@ class SettingsRepository(private val context: Context) {
             backupFolderName = prefs[Keys.BACKUP_FOLDER_NAME],
             gpxFolderUri = prefs[Keys.GPX_FOLDER_URI],
             gpxFolderName = prefs[Keys.GPX_FOLDER_NAME],
+            themeMode = prefs[Keys.THEME_MODE]?.let { name -> ThemeMode.entries.find { it.name == name } }
+                ?: ThemeMode.ERG_RM_LEGACY,
         )
     }
 
@@ -200,6 +205,10 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
+    suspend fun setThemeMode(mode: ThemeMode) {
+        context.dataStore.edit { prefs -> prefs[Keys.THEME_MODE] = mode.name }
+    }
+
     /** Restores every field from a backup in one atomic write. Nullable fields are only written
      *  when present in the backup, so restoring an older backup (from before a field existed)
      *  can't clobber a value set since then with a null. */
@@ -228,6 +237,7 @@ class SettingsRepository(private val context: Context) {
             s.backupFolderName?.let { prefs[Keys.BACKUP_FOLDER_NAME] = it }
             s.gpxFolderUri?.let { prefs[Keys.GPX_FOLDER_URI] = it }
             s.gpxFolderName?.let { prefs[Keys.GPX_FOLDER_NAME] = it }
+            prefs[Keys.THEME_MODE] = s.themeMode.name
         }
     }
 }
