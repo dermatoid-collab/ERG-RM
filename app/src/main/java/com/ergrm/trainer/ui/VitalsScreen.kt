@@ -352,6 +352,17 @@ private fun VitalsSummaryLines(stats: SessionStats, durationSec: Int, modifier: 
     }
 }
 
+/** One [GroupCard] line — [unit] renders separately from [value] in a plain (non-bold) weight,
+ *  so a long unit like "km/h" doesn't force the whole bold string wide enough to clip inside the
+ *  card's half-width column. Empty when the stat has no unit or its value is the "--" fallback. */
+private data class StatRow(val label: String, val value: String, val unit: String = "", val color: Color = ErgOnSurface)
+
+private fun numRow(label: String, value: Float?, unit: String, decimals: Int = 1, color: Color = ErgOnSurface): StatRow =
+    StatRow(label, value?.let { "%.${decimals}f".format(it) } ?: "--", if (value != null) unit else "", color)
+
+private fun intRow(label: String, value: Int?, unit: String, color: Color = ErgOnSurface): StatRow =
+    StatRow(label, value?.toString() ?: "--", if (value != null) unit else "", color)
+
 /** 9 session-summary stats, as compact as the real tiles allow — no per-tile toggle like
  *  Screen 1's StatTiles, since there's nothing to toggle (each is a single fixed total). */
 @Composable
@@ -361,27 +372,27 @@ private fun SummaryTilesGrid(stats: SessionStats, durationSec: Int, modifier: Mo
     // sharing one fixed height. HR-red/cadence-blue/HTL-orange coloring as requested, echoing
     // the same colors their respective chart lines use below.
     val topLeft = listOf(
-        Triple("Duration", formatTime(durationSec), ErgOnSurface),
-        Triple("Distance", stats.distanceKm?.let { "%.1f km".format(it) } ?: "--", ErgOnSurface),
-        Triple("Avg Speed", stats.avgSpeedKmh?.let { "%.1f km/h".format(it) } ?: "--", ErgOnSurface),
+        StatRow("Duration", formatTime(durationSec)),
+        numRow("Distance", stats.distanceKm, "km"),
+        numRow("Avg Speed", stats.avgSpeedKmh, "km/h"),
     )
     val topRight = listOf(
-        Triple("Work", "${stats.totalKj} kJ", ErgOnSurface),
-        Triple("NP", stats.normalizedWatts?.let { "$it W" } ?: "--", ErgOnSurface),
-        Triple("TSS", stats.tss?.toString() ?: "--", ErgOnSurface),
+        StatRow("Work", "${stats.totalKj}", "kJ"),
+        intRow("NP", stats.normalizedWatts, "W"),
+        StatRow("TSS", stats.tss?.toString() ?: "--"),
     )
     val bottomLeft = listOf(
-        Triple("Avg Watts", "${stats.avgWatts} W", ErgOnSurface),
-        Triple("Avg HR", stats.avgHrBpm?.let { "$it bpm" } ?: "--", ErgHrLine),
-        Triple("Max HR", stats.maxHrBpm?.let { "$it bpm" } ?: "--", ErgHrLine),
-        Triple("Avg Cad", stats.avgCadenceRpm?.let { "$it rpm" } ?: "--", ErgCadenceLine),
+        StatRow("Avg Watts", "${stats.avgWatts}", "W"),
+        intRow("Avg HR", stats.avgHrBpm, "bpm", ErgHrLine),
+        intRow("Max HR", stats.maxHrBpm, "bpm", ErgHrLine),
+        intRow("Avg Cad", stats.avgCadenceRpm, "rpm", ErgCadenceLine),
     )
     val bottomRight = listOf(
-        Triple("Avg Core T", stats.avgCoreTempC?.let { "%.2f °C".format(it) } ?: "--", ErgOnSurface),
-        Triple("Max Core T", stats.maxCoreTempC?.let { "%.2f °C".format(it) } ?: "--", ErgOnSurface),
-        Triple("Mins > ${CORE_TEMP_ALERT_C}°", formatMmSs(stats.timeAboveCoreTempSec), ErgOnSurface),
+        numRow("Avg Core T", stats.avgCoreTempC, "°C", decimals = 2),
+        numRow("Max Core T", stats.maxCoreTempC, "°C", decimals = 2),
+        StatRow("Mins > ${CORE_TEMP_ALERT_C}°", formatMmSs(stats.timeAboveCoreTempSec)),
         // See HeatTrainingLoad.kt — same estimate the History detail view now shows.
-        Triple("Core HTL", stats.heatTrainingLoad?.let { "%.1f/10".format(it) } ?: "--", ErgHeatLoad),
+        StatRow("Core HTL", stats.heatTrainingLoad?.let { "%.1f/10".format(it) } ?: "--", color = ErgHeatLoad),
     )
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(5.dp)) {
         Row(
@@ -407,7 +418,7 @@ private fun formatMmSs(totalSeconds: Int): String =
     "%02d:%02d".format(totalSeconds / 60, totalSeconds % 60)
 
 @Composable
-private fun GroupCard(lines: List<Triple<String, String, Color>>, modifier: Modifier = Modifier) {
+private fun GroupCard(lines: List<StatRow>, modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
             .fillMaxHeight()
@@ -415,10 +426,15 @@ private fun GroupCard(lines: List<Triple<String, String, Color>>, modifier: Modi
             .padding(horizontal = 10.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.Center,
     ) {
-        lines.forEach { (label, value, valueColor) ->
+        lines.forEach { row ->
             Row {
-                Text("$label: ", fontSize = 16.sp, color = ErgOnSurface.copy(alpha = 0.65f), maxLines = 1)
-                Text(value, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = valueColor, maxLines = 1)
+                Text("${row.label}: ", fontSize = 16.sp, color = ErgOnSurface.copy(alpha = 0.65f), maxLines = 1)
+                Text(row.value, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = row.color, maxLines = 1)
+                // Plain (non-bold) unit, same color as the value — keeps the number the visual
+                // focus and the whole line narrow enough that it doesn't clip the card's edge.
+                if (row.unit.isNotEmpty()) {
+                    Text(" ${row.unit}", fontSize = 16.sp, color = row.color, maxLines = 1)
+                }
             }
         }
     }
