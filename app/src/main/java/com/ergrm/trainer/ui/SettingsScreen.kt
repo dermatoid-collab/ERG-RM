@@ -100,32 +100,6 @@ fun SettingsScreen(
         Text("Settings", style = MaterialTheme.typography.titleLarge)
 
         Text(
-            "Theme",
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(top = 24.dp, bottom = 8.dp),
-        )
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            ThemeMode.entries.chunked(3).forEach { rowModes ->
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    rowModes.forEach { mode ->
-                        ThemeOptionCard(
-                            mode = mode,
-                            selected = settings.themeMode == mode,
-                            onClick = { viewModel.setThemeMode(mode) },
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
-                    // Keeps the last, possibly-shorter row's cards the same width as every other
-                    // row's instead of stretching to fill the gap.
-                    repeat(3 - rowModes.size) { Box(modifier = Modifier.weight(1f)) }
-                }
-            }
-        }
-
-        Text(
             "Intervals.icu",
             style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.padding(top = 24.dp, bottom = 8.dp),
@@ -390,6 +364,32 @@ fun SettingsScreen(
                 "from a Garmin device synced to Intervals.icu.",
             style = MaterialTheme.typography.bodySmall,
         )
+
+        Text(
+            "Theme",
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(top = 24.dp, bottom = 8.dp),
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            ThemeMode.entries.chunked(3).forEach { rowModes ->
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    rowModes.forEach { mode ->
+                        ThemeOptionCard(
+                            mode = mode,
+                            selected = settings.themeMode == mode,
+                            onClick = { viewModel.setThemeMode(mode) },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    // Keeps the last, possibly-shorter row's cards the same width as every other
+                    // row's instead of stretching to fill the gap.
+                    repeat(3 - rowModes.size) { Box(modifier = Modifier.weight(1f)) }
+                }
+            }
+        }
 
         Text(
             "#${BuildConfig.VERSION_CODE} · ${BuildConfig.BUILD_DATE} · ©RM",
