@@ -56,6 +56,7 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PointMode
 import androidx.compose.ui.graphics.StrokeCap
@@ -649,6 +650,8 @@ private fun VitalsPowerChart(
     // Canvas{} below is a plain DrawScope lambda, not @Composable, so it can't read this
     // theme-reactive token itself — resolved here in the composable body and captured instead.
     val onSurfaceColor = ErgOnSurface
+    val isLightTheme = MaterialTheme.colorScheme.background.luminance() > 0.5f
+    val powerColor = powerTraceColor(isLightTheme)
 
     Row(modifier = modifier.padding(bottom = NAME_RESERVED_HEIGHT)) {
         AxisColumn(
@@ -670,8 +673,8 @@ private fun VitalsPowerChart(
             ),
             liveValueText = last?.watts?.toString() ?: "--",
             liveFraction = last?.watts?.let { (1f - it / wattsScale).coerceIn(0f, 1f) } ?: 1f,
-            // Same white as the power trace it sits beside.
-            valueColor = Color.White,
+            // Same color as the power trace it sits beside.
+            valueColor = powerColor,
         )
         Canvas(
             modifier = Modifier
@@ -776,7 +779,7 @@ private fun VitalsPowerChart(
                     // mutedZoneColor (not the bright zone.color used for the live traces' thresholds)
                     // — matches Screen 1's muted bar fill, brightened only for the current step.
                     val zone = zoneFor(max(dispStart, dispEnd), ftpWatts, onSurfaceColor)
-                    val color = mutedZoneColor(zone.color, active = index == currentStepIndex)
+                    val color = mutedZoneColor(zone.color, active = index == currentStepIndex, isLightTheme = isLightTheme)
                     val path = Path().apply {
                         moveTo(x0, h - drawStartHeight)
                         lineTo(x1, h - drawEndHeight)
@@ -793,7 +796,7 @@ private fun VitalsPowerChart(
             // Same 3 live traces, same draw order (cadence under HR under power) and the same
             // drawPoints/Polygon/round-cap approach, as Screen 1's real chart — continuous solid
             // lines throughout, including cadence (no dashing), and the actual achieved power
-            // drawn in white on top of the target-zone bars below it.
+            // drawn in powerColor on top of the target-zone bars below it.
             val visibleSamples = samples.filter { it.tSec in windowStart..windowEnd }
             if (visibleSamples.size >= 2) {
                 val cadPoints = visibleSamples.mapNotNull { s -> s.cadenceRpm?.let { Offset(xAt(s.tSec), yCad(it)) } }
@@ -807,7 +810,7 @@ private fun VitalsPowerChart(
                     drawPoints(points = hrPoints, pointMode = PointMode.Polygon, color = ErgHrLine, strokeWidth = 4f, cap = StrokeCap.Round)
                 }
                 if (powerPoints.size >= 2) {
-                    drawPoints(points = powerPoints, pointMode = PointMode.Polygon, color = Color.White, strokeWidth = 4f, cap = StrokeCap.Round)
+                    drawPoints(points = powerPoints, pointMode = PointMode.Polygon, color = powerColor, strokeWidth = 4f, cap = StrokeCap.Round)
                 }
             }
         }

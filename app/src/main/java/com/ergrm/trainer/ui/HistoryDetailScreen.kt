@@ -36,6 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.PointMode
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.input.pointer.pointerInput
@@ -232,13 +233,14 @@ private fun SessionDetailLandscape(session: WorkoutSession, stats: SessionStats,
 
 @Composable
 private fun ChartLegend(hasHr: Boolean, hasCadence: Boolean) {
+    val isLightTheme = MaterialTheme.colorScheme.background.luminance() > 0.5f
     Row(
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = 6.dp, bottom = 6.dp),
     ) {
-        LegendEntry("Watts", Color.White)
+        LegendEntry("Watts", powerTraceColor(isLightTheme))
         if (hasHr) LegendEntry("HR", ErgHrLine)
         if (hasCadence) LegendEntry("Cadence", ErgProgressLine)
     }
@@ -271,6 +273,7 @@ private fun SessionDetailChart(samples: List<SessionSample>, modifier: Modifier 
     // theme-reactive tokens itself — resolved here in the composable body and captured instead.
     val onSurfaceColor = ErgOnSurface
     val surfaceColor = ErgSurface
+    val powerColor = powerTraceColor(MaterialTheme.colorScheme.background.luminance() > 0.5f)
 
     Canvas(
         modifier = modifier.pointerInput(samples) {
@@ -319,7 +322,7 @@ private fun SessionDetailChart(samples: List<SessionSample>, modifier: Modifier 
         }
 
         val wattsPoints = smoothedWatts.mapIndexed { i, v -> Offset(x(i), yWatts(v ?: 0f)) }
-        drawPoints(points = wattsPoints, pointMode = PointMode.Polygon, color = Color.White, strokeWidth = 3f, cap = StrokeCap.Round)
+        drawPoints(points = wattsPoints, pointMode = PointMode.Polygon, color = powerColor, strokeWidth = 3f, cap = StrokeCap.Round)
 
         // Scrub indicator: vertical line at the selected sample + a tooltip box with that
         // sample's time, watts, HR and cadence, each colored to match its own trace above.
@@ -330,7 +333,7 @@ private fun SessionDetailChart(samples: List<SessionSample>, modifier: Modifier 
 
             val lines = buildList {
                 add(formatScrubTime(sample.tSec) to onSurfaceColor)
-                add("${sample.watts}W" to Color.White)
+                add("${sample.watts}W" to powerColor)
                 sample.hrBpm?.let { add("$it bpm" to ErgHrLine) }
                 sample.cadenceRpm?.let { add("$it rpm" to ErgProgressLine) }
             }

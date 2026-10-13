@@ -60,6 +60,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PointMode
@@ -1158,13 +1159,21 @@ internal fun chartMaxBpm(lthrBpm: Int): Float = if (lthrBpm > 0) 1.1f * lthrBpm 
 internal const val CHART_BPM_MIN = 50f
 internal const val CHART_MAX_CADENCE = 140f
 
-/** Blends a zone's bright accent color toward near-black so bar fills read as muted background,
- *  never as bright as the power/HR/cadence trace lines drawn on top of them. */
-internal fun mutedZoneColor(zoneColor: Color, active: Boolean): Color {
-    val base = Color(0xFF14171D)
+/** Blends a zone's bright accent color toward near-black (dark themes) or a light neutral (light
+ *  themes) so bar fills read as muted background, never as bright as the power/HR/cadence trace
+ *  lines drawn on top of them. Blending toward near-black on a light theme produced muddy,
+ *  low-contrast olive/navy bars — the same math reads as "muted background" only when the
+ *  surface itself is dark. */
+internal fun mutedZoneColor(zoneColor: Color, active: Boolean, isLightTheme: Boolean = false): Color {
+    val base = if (isLightTheme) Color(0xFFDAD4C0) else Color(0xFF14171D)
     val t = if (active) 0.62f else 0.35f
     return lerp(base, zoneColor, t)
 }
+
+/** The power trace line (and anything meant to match it — axis labels, legends, tooltips): white
+ *  reads fine on every dark theme's near-black background but disappears on a light one, so light
+ *  themes get a distinct, saturated purple instead. */
+internal fun powerTraceColor(isLightTheme: Boolean): Color = if (isLightTheme) Color(0xFFA000FF) else Color.White
 
 /** Steps at or after [currentStepIndex] reflect a live intensity change; earlier ones are
  *  history and stay as originally ridden. */
@@ -1222,6 +1231,8 @@ private fun WorkoutProfileChart(
     // theme-reactive tokens itself — resolved here in the composable body and captured instead.
     val onSurfaceColor = ErgOnSurface
     val surface2Color = ErgSurface2
+    val isLightTheme = MaterialTheme.colorScheme.background.luminance() > 0.5f
+    val powerColor = powerTraceColor(isLightTheme)
 
     Column(modifier = modifier) {
     Canvas(
@@ -1392,7 +1403,7 @@ private fun WorkoutProfileChart(
                 }
 
                 val zone = zoneFor(max(dispStart, dispEnd), ftpWatts, onSurfaceColor)
-                val color = mutedZoneColor(zone.color, active = index == currentStepIndex)
+                val color = mutedZoneColor(zone.color, active = index == currentStepIndex, isLightTheme = isLightTheme)
                 val barPath = Path().apply {
                     moveTo(x0, h - drawStartHeight)
                     lineTo(x1, h - drawEndHeight)
@@ -1445,7 +1456,7 @@ private fun WorkoutProfileChart(
                 drawPoints(
                     points = powerPoints,
                     pointMode = PointMode.Polygon,
-                    color = Color.White,
+                    color = powerColor,
                     strokeWidth = 4f,
                     cap = StrokeCap.Round,
                 )
