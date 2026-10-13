@@ -143,7 +143,6 @@ fun VitalsScreen(
         // rotated, not a configuration lookup, so this also behaves sensibly on a tablet.
         if (maxWidth > maxHeight) {
             VitalsScreenLandscape(
-                viewModel = viewModel,
                 zoom = zoom,
                 onZoomChange = onZoomChange,
                 workoutState = workoutState,
@@ -151,7 +150,6 @@ fun VitalsScreen(
                 samples = samples,
                 coreSamples = coreSamples,
                 stats = stats,
-                onShowStopConfirm = { showStopConfirm = true },
             )
         } else {
             Column(modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp, vertical = 6.dp)) {
@@ -235,7 +233,6 @@ fun VitalsScreen(
  *  no longer sharing one continuous vertical stack. */
 @Composable
 private fun VitalsScreenLandscape(
-    viewModel: MainViewModel,
     zoom: ChartZoom,
     onZoomChange: (ChartZoom) -> Unit,
     workoutState: WorkoutRunState,
@@ -243,7 +240,6 @@ private fun VitalsScreenLandscape(
     samples: List<SamplePoint>,
     coreSamples: List<CoreSamplePoint>,
     stats: SessionStats,
-    onShowStopConfirm: () -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -251,37 +247,22 @@ private fun VitalsScreenLandscape(
             .padding(horizontal = 10.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
+        // No controls here any more (Task landscape-redesign): Play/pause/stop and the mode pill
+        // stay reachable by swiping to the Workout screen, which shares this same active-workout
+        // pager. Dropping them frees enough height that every stat line, HTL included, is visible
+        // without scrolling, and lets this column shrink so both charts get more width.
         Column(
             modifier = Modifier
-                .weight(0.3f)
+                .weight(0.19f)
                 .fillMaxHeight()
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             VitalsSummaryLines(stats = stats, durationSec = workoutState.totalElapsedSec)
-            CompactControlRow(
-                hasWorkout = workoutState.steps.isNotEmpty() || workoutState.routeProfile != null,
-                canAdjustMode = workoutState.steps.isNotEmpty(),
-                isRunning = workoutState.isRunning,
-                hasStarted = workoutState.hasStarted,
-                intensityPercent = workoutState.intensityPercent,
-                gradePercent = workoutState.currentGradePercent,
-                controlMode = workoutState.controlMode,
-                onPlay = { viewModel.startWorkout() },
-                onPause = { viewModel.pauseWorkout() },
-                onStopRequested = onShowStopConfirm,
-                onExtend = { viewModel.extendCurrentInterval() },
-                onSkip = { viewModel.skipStep() },
-                onDecreaseIntensity = { viewModel.decreaseIntensity() },
-                onIncreaseIntensity = { viewModel.increaseIntensity() },
-                onDecreaseGrade = { viewModel.decreaseGrade() },
-                onIncreaseGrade = { viewModel.increaseGrade() },
-                onToggleMode = { viewModel.toggleControlMode() },
-            )
         }
 
         Row(
-            modifier = Modifier.weight(0.7f).fillMaxHeight(),
+            modifier = Modifier.weight(0.81f).fillMaxHeight(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Column(modifier = Modifier.weight(1f).fillMaxHeight()) {

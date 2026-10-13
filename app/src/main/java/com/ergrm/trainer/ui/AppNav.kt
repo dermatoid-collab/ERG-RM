@@ -10,6 +10,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -526,11 +527,25 @@ private fun Minibar(
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surface)
             .statusBarsPadding()
-            .padding(start = 4.dp, end = 12.dp),
+            .padding(start = 8.dp, end = 12.dp, top = 4.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconButton(onClick = onBack) {
-            Icon(Icons.Filled.ArrowBack, contentDescription = "Expand", tint = MaterialTheme.colorScheme.onSurface)
+        // Plain clickable Box instead of IconButton: IconButton enforces a 48dp minimum touch
+        // target regardless of its icon's own size, which alone was dictating this whole bar's
+        // height — landscape has far less of it to spare than portrait does.
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .clickable(onClick = onBack),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.Filled.ArrowBack,
+                contentDescription = "Expand",
+                tint = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.size(20.dp),
+            )
         }
         // weight(1f) bounds the Text to the space actually left between the back arrow and the
         // Bluetooth icon, so maxLines=1/overflow=Ellipsis can kick in on a long title — an

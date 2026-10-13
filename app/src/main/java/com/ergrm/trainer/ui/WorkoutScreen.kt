@@ -397,7 +397,10 @@ private fun WorkoutScreenLandscape(
     ) {
         Column(
             modifier = Modifier
-                .weight(0.3f)
+                // Now/Next moved onto the chart itself (see ChartCard's overlayCurrentStep), so
+                // this column no longer needs to fit it — narrowed accordingly, the chart takes
+                // the width it frees.
+                .weight(0.22f)
                 .fillMaxHeight()
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(5.dp),
@@ -416,15 +419,6 @@ private fun WorkoutScreenLandscape(
             WorkoutStatusLine(loadState)
 
             WorkoutStatLines(live, workoutState, settings.ftpWatts, settings.lthrBpm, coreReading)
-
-            IntervalDetailsSection(
-                current = workoutState.currentStep,
-                next = workoutState.nextStep,
-                ftpWatts = settings.ftpWatts,
-                lthrBpm = settings.lthrBpm,
-                intensityPercent = workoutState.intensityPercent,
-                controlMode = workoutState.controlMode,
-            )
 
             ControlsRow(
                 hasWorkout = workoutState.steps.isNotEmpty() || workoutState.routeProfile != null,
@@ -466,8 +460,10 @@ private fun WorkoutScreenLandscape(
             routeDistanceM = workoutState.routeDistanceM,
             zoom = effectiveChartZoom,
             onZoomChange = setChartZoom,
+            overlayCurrentStep = workoutState.currentStep,
+            overlayNextStep = workoutState.nextStep,
             modifier = Modifier
-                .weight(0.7f)
+                .weight(0.78f)
                 .fillMaxHeight(),
         )
     }
@@ -560,7 +556,7 @@ private fun WorkoutStatLines(
             }
             ControlMode.ERG -> {
                 StatLine("HR", live.heartRateBpm?.let { "$it bpm" } ?: "--", valueColor = hrColor)
-                StatLine("Target watts", "$target W (${zone.label})", valueColor = zone.color)
+                StatLine("Target W", "$target W", valueColor = zone.color)
                 StatLine("Watts", "$actual W", valueColor = wattsColor)
             }
         }
@@ -1100,6 +1096,12 @@ private fun ChartCard(
     routeDistanceM: Float,
     zoom: ChartZoom,
     onZoomChange: (ChartZoom) -> Unit,
+    // Landscape only: when set, draws the Now/Next detail as a compact pill centered over the
+    // top of the chart instead of its own row elsewhere — see WorkoutScreenLandscape, the only
+    // caller that passes these. Portrait keeps IntervalDetailsSection in its usual spot, so
+    // leaves both null.
+    overlayCurrentStep: WorkoutStep? = null,
+    overlayNextStep: WorkoutStep? = null,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -1107,24 +1109,123 @@ private fun ChartCard(
             .background(ErgSurface, RoundedCornerShape(14.dp))
             .padding(4.dp),
     ) {
-        WorkoutProfileChart(
-            steps = steps,
-            currentStepIndex = currentStepIndex,
-            totalElapsedSec = totalElapsedSec,
-            totalDurationSec = totalDurationSec,
-            samples = samples,
+        Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+            WorkoutProfileChart(
+                steps = steps,
+                currentStepIndex = currentStepIndex,
+                totalElapsedSec = totalElapsedSec,
+                totalDurationSec = totalDurationSec,
+                samples = samples,
+                ftpWatts = ftpWatts,
+                lthrBpm = lthrBpm,
+                intensityPercent = intensityPercent,
+                controlMode = controlMode,
+                maxGradePercent = maxGradePercent,
+                routeProfile = routeProfile,
+                routeDistanceM = routeDistanceM,
+                zoom = zoom,
+                onZoomChange = onZoomChange,
+                modifier = Modifier.fillMaxSize(),
+            )
+            if (overlayCurrentStep != null) {
+                NowNextOverlayPill(
+                    current = overlayCurrentStep,
+                    next = overlayNextStep,
+                    ftpWatts = ftpWatts,
+                    lthrBpm = lthrBpm,
+                    intensityPercent = intensityPercent,
+                    controlMode = controlMode,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 4.dp),
+                )
+            }
+        }
+    }
+}
+
+/** Landscape's compact stand-in for [IntervalDetailsSection]: same Now/Next data, laid out as one
+ *  free-floating pill over the chart instead of a fixed-width row in the data column, where it
+ *  was clipping the power value and losing the Next zone chip entirely. No weight()/marquee here
+ *  (unlike [IntervalDetailBlock]) — the pill just sizes to its own content since nothing here
+ *  constrains its width. */
+@Composable
+private fun NowNextOverlayPill(
+    current: WorkoutStep?,
+    next: WorkoutStep?,
+    ftpWatts: Int,
+    lthrBpm: Int,
+    intensityPercent: Int,
+    controlMode: ControlMode,
+    modifier: Modifier = Modifier,
+) {
+    if (current == null) return
+    Row(
+        modifier = modifier
+            .background(ErgSurface.copy(alpha = 0.92f), RoundedCornerShape(50))
+            .padding(horizontal = 12.dp, vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        OverlayPillEntry(
+            label = "Now",
+            step = current,
             ftpWatts = ftpWatts,
             lthrBpm = lthrBpm,
             intensityPercent = intensityPercent,
             controlMode = controlMode,
-            maxGradePercent = maxGradePercent,
-            routeProfile = routeProfile,
-            routeDistanceM = routeDistanceM,
-            zoom = zoom,
-            onZoomChange = onZoomChange,
+            accentColor = ErgLiveAccent,
+        )
+        if (next != null) {
+            Box(
+                modifier = Modifier
+                    .width(1.dp)
+                    .height(14.dp)
+                    .background(ErgOnSurface.copy(alpha = 0.2f)),
+            )
+            OverlayPillEntry(
+                label = "Next",
+                step = next,
+                ftpWatts = ftpWatts,
+                lthrBpm = lthrBpm,
+                intensityPercent = intensityPercent,
+                controlMode = controlMode,
+                accentColor = null,
+            )
+        }
+    }
+}
+
+@Composable
+private fun OverlayPillEntry(
+    label: String,
+    step: WorkoutStep,
+    ftpWatts: Int,
+    lthrBpm: Int,
+    intensityPercent: Int,
+    controlMode: ControlMode,
+    accentColor: Color?,
+) {
+    val scaledStart = (step.startWatts * intensityPercent / 100f).roundToInt()
+    val scaledEnd = (step.endWatts * intensityPercent / 100f).roundToInt()
+    val zone = zoneFor(scaledEnd, ftpWatts, ErgOnSurface)
+    val valueLabel = if (controlMode == ControlMode.HR_PLUS && ftpWatts > 0) {
+        bpmLabel(scaledStart, scaledEnd, ftpWatts, lthrBpm)
+    } else {
+        wattsLabel(scaledStart, scaledEnd)
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, style = MaterialTheme.typography.labelSmall, color = accentColor ?: ErgOnSurface, maxLines = 1)
+        Text(formatMinSec(step.durationSec), style = MaterialTheme.typography.labelSmall, color = accentColor ?: Color.Unspecified, maxLines = 1)
+        Text(valueLabel, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+        Text(
+            zone.label,
+            style = MaterialTheme.typography.labelSmall,
+            color = Color.Black,
+            maxLines = 1,
             modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
+                .background(zone.color, RoundedCornerShape(6.dp))
+                .padding(horizontal = 6.dp, vertical = 1.dp),
         )
     }
 }
