@@ -54,6 +54,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PointMode
@@ -572,10 +573,22 @@ private fun CoreSkinHsiChart(
             val liveSample = last
             if (liveSample != null && liveSample.tSec in windowStart..windowEnd) {
                 val x = xAt(liveSample.tSec)
-                fun drawInlineLabel(text: String, frac: Float, color: Color) {
+                fun drawInlineLabel(text: String, frac: Float, color: Color, withShadowBackground: Boolean = false) {
                     val measured = textMeasurer.measure(text, TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Black, color = color))
                     val labelX = (x + 6.dp.toPx()).coerceAtMost(w - measured.size.width - 2.dp.toPx())
                     val labelY = (h * frac - measured.size.height / 2f).coerceIn(0f, h - measured.size.height)
+                    if (withShadowBackground) {
+                        // HSI sits frontmost of the SKIN/HSI pair below, so when the two labels
+                        // land on top of each other HSI's own paint needs to actually occlude
+                        // SKIN's, not just its text glyphs — sized to the text plus a 1dp margin,
+                        // not the label's whole touch area.
+                        val pad = 1.dp.toPx()
+                        drawRect(
+                            color = Color.Black.copy(alpha = 0.55f),
+                            topLeft = Offset(labelX - pad, labelY - pad),
+                            size = Size(measured.size.width + pad * 2f, measured.size.height + pad * 2f),
+                        )
+                    }
                     drawText(measured, topLeft = Offset(labelX, labelY))
                 }
                 // Canvas draws paint over earlier ones, so later calls here end up frontmost:
@@ -583,7 +596,7 @@ private fun CoreSkinHsiChart(
                 liveSample.skinTempC?.let { v -> drawInlineLabel("%.1f°".format(v), skinFrac(v), ErgSkinTemp) }
                 liveSample.heatStrainIndex?.let { v ->
                     val floored = floorToOneDecimal(v)
-                    drawInlineLabel("%.1f".format(floored), hsiFrac(v), hsiColor(floored))
+                    drawInlineLabel("%.1f".format(floored), hsiFrac(v), hsiColor(floored), withShadowBackground = true)
                 }
                 liveSample.coreTempC?.let { v ->
                     val floored = floorToOneDecimal(v)
@@ -892,7 +905,11 @@ private fun AxisColumn(
     }
 }
 
-private val NAME_RESERVED_HEIGHT = 18.dp
+// A rotated 9sp bold 4-letter name ("CORE"/"SKIN"/"CAD") spills roughly (textWidth -
+// textHeight) / 2 below the column once rotated -90° around its own center — a few dp, not the
+// much larger reserve this had before, which was eating into both charts' actual plot height for
+// no visual benefit.
+private val NAME_RESERVED_HEIGHT = 10.dp
 
 /** Combines what are today ControlsRow + IntensityRow (two separate rows) into one, at
  *  IntensityRow's own height (38.4dp, already 0.8x-scaled per Task #65) — Start/+5min/Skip as 3
