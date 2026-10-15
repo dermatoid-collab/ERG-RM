@@ -66,6 +66,26 @@ enum class ThemeMode(val label: String, val dark: Boolean? = null) {
     SOLARIZED_LIGHT("Solarized Light", false),
     CATPPUCCIN_LATTE("Catppuccin Latte", false),
     GRUVBOX_LIGHT("Gruvbox Light", false),
+    // From SUNW-RM (same author's weather widget app): its 5 community dev palettes not already
+    // above, plus its own 12 custom single-hue brand themes, carried over under their SUNW-RM
+    // names/spelling.
+    ROSE_PINE("Rosé Pine", true),
+    EVERFOREST("Everforest", true),
+    NIGHT_OWL("Night Owl", true),
+    PALENIGHT("Palenight", true),
+    AYU_MIRAGE("Ayu Mirage", true),
+    VINO("Vino", true),
+    METEOBLUE("MeteoBlue", true),
+    TURCHESE("Turchese", true),
+    VIOLA("Viola", true),
+    CORALLO("Corallo", true),
+    LIME("Lime", true),
+    ARDESIA("Ardesia", false),
+    SALVIA("Salvia", false),
+    DUNA("Duna", false),
+    ILMETEO("ilMeteo", false),
+    AZZURRO("Azzurro", false),
+    GIALLO("Giallo", false),
 }
 
 private class Palette(
@@ -186,6 +206,29 @@ private val Palettes: Map<ThemeMode, Palette> = mapOf(
     ThemeMode.SOLARIZED_LIGHT to Palette(dark = false, background = 0xFDF6E3, surface = 0xF5EEDA, surfaceHigh = 0xEEE8D5, surfaceHighest = 0xE6DFC8, onBackground = 0x073642, onVariant = 0x586E75, primary = 0x1F7BBF, primaryContainer = 0xBBDDF3, onPrimaryContainer = 0x073642, secondary = 0x2AA198, tertiary = 0xB58900, outline = 0x93A1A1, outlineVariant = 0xD9D2BA, error = 0xDC322F, errorContainer = 0xF8D3CF),
     ThemeMode.CATPPUCCIN_LATTE to Palette(dark = false, background = 0xEFF1F5, surface = 0xE6E9EF, surfaceHigh = 0xDCE0E8, surfaceHighest = 0xCCD0DA, onBackground = 0x4C4F69, onVariant = 0x6C6F85, primary = 0x8839EF, primaryContainer = 0xE2CFFB, onPrimaryContainer = 0x2E1A52, secondary = 0x1E66F5, tertiary = 0x179299, outline = 0x9CA0B0, outlineVariant = 0xBCC0CC, error = 0xD20F39, errorContainer = 0xF8CCD4),
     ThemeMode.GRUVBOX_LIGHT to Palette(dark = false, background = 0xFBF1C7, surface = 0xF2E5BC, surfaceHigh = 0xEBDBB2, surfaceHighest = 0xD5C4A1, onBackground = 0x3C3836, onVariant = 0x504945, primary = 0xAF3A03, primaryContainer = 0xFAD7B5, onPrimaryContainer = 0x5A1F00, secondary = 0x79740E, tertiary = 0x427B58, outline = 0x928374, outlineVariant = 0xD5C4A1, error = 0x9D0006, errorContainer = 0xF4C7C3),
+    // From SUNW-RM's Appearance.kt — background/surface/text/textSecondary/dim carried over
+    // directly (pageBackground/cardBackground/text/textSecondary/dim there); primary/secondary/
+    // tertiary/error derived from its highSun/blueHour/goldenHour/sky-ramp fields for the 5
+    // community dev palettes below, or brightened from the theme's own surface color for its 12
+    // single-hue brand themes (SUNW's highSun/blueHour don't reliably stay in those themes' own
+    // hue family). Not visually verified on-device yet.
+    ThemeMode.ROSE_PINE to Palette(dark = true, background = 0x12101B, surface = 0x1F1D2E, surfaceHigh = 0x252334, surfaceHighest = 0x2C2A3B, onBackground = 0xE0DEF4, onVariant = 0x908CAA, primary = 0xF6C177, primaryContainer = 0x9F7E54, onPrimaryContainer = 0xE0DEF4, secondary = 0x9CCFD8, tertiary = 0xEB6F92, outline = 0x6E6A86, outlineVariant = 0x46445A, error = 0xEB6F92, errorContainer = 0x743B51),
+    ThemeMode.EVERFOREST to Palette(dark = true, background = 0x272E33, surface = 0x343F44, surfaceHigh = 0x394347, surfaceHighest = 0x3E484B, onBackground = 0xD3C6AA, onVariant = 0xA7A08B, primary = 0xDBBC7F, primaryContainer = 0x978662, onPrimaryContainer = 0xD3C6AA, secondary = 0x7FBBB3, tertiary = 0xE69875, outline = 0x859289, outlineVariant = 0x5C6866, error = 0xE67E80, errorContainer = 0x7D5256),
+    ThemeMode.NIGHT_OWL to Palette(dark = true, background = 0x01111D, surface = 0x0B2942, surfaceHigh = 0x112E47, surfaceHighest = 0x18354D, onBackground = 0xD6DEEB, onVariant = 0x8AA3BF, primary = 0xECC48D, primaryContainer = 0x938062, onPrimaryContainer = 0xD6DEEB, secondary = 0x82AAFF, tertiary = 0xF78C6C, outline = 0x5F7E97, outlineVariant = 0x35546C, error = 0xEF5350, errorContainer = 0x6C2F34),
+    ThemeMode.PALENIGHT to Palette(dark = true, background = 0x232635, surface = 0x32364A, surfaceHigh = 0x363A4F, surfaceHighest = 0x3B3F54, onBackground = 0xBFC7E8, onVariant = 0x9AA3CC, primary = 0xFFCB6B, primaryContainer = 0xAB8C56, onPrimaryContainer = 0xBFC7E8, secondary = 0x82AAFF, tertiary = 0xF78C6C, outline = 0x676E95, outlineVariant = 0x4C5270, error = 0xF07178, errorContainer = 0x7F4853),
+    ThemeMode.AYU_MIRAGE to Palette(dark = true, background = 0x171B24, surface = 0x2A3142, surfaceHigh = 0x2F3646, surfaceHighest = 0x353B4A, onBackground = 0xCCCAC2, onVariant = 0x9C9A93, primary = 0xFFD173, primaryContainer = 0xA78C55, onPrimaryContainer = 0xCCCAC2, secondary = 0x73D0FF, tertiary = 0xFFAD66, outline = 0x707A8C, outlineVariant = 0x4D5667, error = 0xF28779, errorContainer = 0x7A4C4A),
+    ThemeMode.VINO to Palette(dark = true, background = 0x1F0F13, surface = 0x3A1D25, surfaceHigh = 0x3F232A, surfaceHighest = 0x462931, onBackground = 0xF1DADA, onVariant = 0xC9A5A8, primary = 0x9C8E92, primaryContainer = 0x6C5E62, onPrimaryContainer = 0xF1DADA, secondary = 0x7A9CE0, tertiary = 0xF29A5E, outline = 0x8A6469, outlineVariant = 0x624047, error = 0xE8665F, errorContainer = 0x793635),
+    ThemeMode.METEOBLUE to Palette(dark = true, background = 0x11264D, surface = 0x1B3F78, surfaceHigh = 0x22457C, surfaceHighest = 0x2A4B81, onBackground = 0xFFFFFF, onVariant = 0xBCD0F0, primary = 0x8D9FBC, primaryContainer = 0x5E7192, onPrimaryContainer = 0xFFFFFF, secondary = 0x4DA3FF, tertiary = 0xFFA94D, outline = 0x7F9BCB, outlineVariant = 0x4D6DA2, error = 0xFF6B8A, errorContainer = 0x7C4568),
+    ThemeMode.TURCHESE to Palette(dark = true, background = 0x00535B, surface = 0x006F79, surfaceHigh = 0x08737D, surfaceHighest = 0x117882, onBackground = 0xFFFFFF, onVariant = 0xCFF3F6, primary = 0x80B7BC, primaryContainer = 0x4F9197, onPrimaryContainer = 0xFFFFFF, secondary = 0x38C6D9, tertiary = 0xFFB74D, outline = 0x6FB5BC, outlineVariant = 0x38929A, error = 0xFF6F91, errorContainer = 0x736073),
+    ThemeMode.VIOLA to Palette(dark = true, background = 0x3A157F, surface = 0x5527B8, surfaceHigh = 0x5A2DBA, surfaceHighest = 0x6035BD, onBackground = 0xFFFFFF, onVariant = 0xDCCCFF, primary = 0xAA93DC, primaryContainer = 0x7F63B9, onPrimaryContainer = 0xFFFFFF, secondary = 0x5CC8FF, tertiary = 0xFF9F5A, outline = 0x9C86E0, outlineVariant = 0x7856CC, error = 0xFF5FA2, errorContainer = 0x93368F),
+    ThemeMode.CORALLO to Palette(dark = true, background = 0x85201B, surface = 0xA82A24, surfaceHigh = 0xAB302A, surfaceHighest = 0xAE3731, onBackground = 0xFFF1EF, onVariant = 0xFFCFC9, primary = 0xD49492, primaryContainer = 0xB66865, onPrimaryContainer = 0xFFF1EF, secondary = 0x7FB6FF, tertiary = 0xFFC857, outline = 0xE08E86, outlineVariant = 0xC45C55, error = 0xFFB3A7, errorContainer = 0xBC625A),
+    ThemeMode.LIME to Palette(dark = true, background = 0x0B3D16, surface = 0x14602A, surfaceHigh = 0x1B6530, surfaceHighest = 0x226A36, onBackground = 0xF0FFE8, onVariant = 0xBDEBB0, primary = 0x8AB094, primaryContainer = 0x5A8464, onPrimaryContainer = 0xF0FFE8, secondary = 0x4DD0E1, tertiary = 0xFFB74D, outline = 0x6DB760, outlineVariant = 0x408C45, error = 0xFF8A80, errorContainer = 0x796046),
+    ThemeMode.ARDESIA to Palette(dark = false, background = 0xDDE3EA, surface = 0xCBD3DD, surfaceHigh = 0xC6CED8, surfaceHighest = 0xC0C8D2, onBackground = 0x1F2937, onVariant = 0x475569, primary = 0x98A3B2, primaryContainer = 0xE2E5E9, onPrimaryContainer = 0x1F2937, secondary = 0x2563EB, tertiary = 0xEA580C, outline = 0x8793A3, outlineVariant = 0xA9B3C0, error = 0xDC2626, errorContainer = 0xF9D8D8),
+    ThemeMode.SALVIA to Palette(dark = false, background = 0xDCE4D6, surface = 0xC9D6C1, surfaceHigh = 0xC4D1BC, surfaceHighest = 0xBECBB6, onBackground = 0x22301F, onVariant = 0x425A3C, primary = 0x9AA993, primaryContainer = 0xE3E7E1, onPrimaryContainer = 0x22301F, secondary = 0x2F6F8F, tertiary = 0xC2571A, outline = 0x8A9A84, outlineVariant = 0xAAB8A2, error = 0xB23A48, errorContainer = 0xF1DCDE),
+    ThemeMode.DUNA to Palette(dark = false, background = 0xE8DDC8, surface = 0xD9CBB0, surfaceHigh = 0xD4C6AC, surfaceHighest = 0xCFC1A7, onBackground = 0x3A2F1E, onVariant = 0x5E4F37, primary = 0xAA9B80, primaryContainer = 0xE7E3DB, onPrimaryContainer = 0x3A2F1E, secondary = 0x2F6B8A, tertiary = 0xC0561A, outline = 0x9A8B70, outlineVariant = 0xBAAB90, error = 0xB03A2E, errorContainer = 0xF1DCD9),
+    ThemeMode.ILMETEO to Palette(dark = false, background = 0xFFD79A, surface = 0xFFC066, surfaceHigh = 0xF9BB63, surfaceHighest = 0xF1B55F, onBackground = 0x2B1500, onVariant = 0x5C3A10, primary = 0xCA9451, primaryContainer = 0xF0E1CE, onPrimaryContainer = 0x2B1500, secondary = 0x1E6FB8, tertiary = 0xE65100, outline = 0xB8864A, outlineVariant = 0xDCA358, error = 0xD32F2F, errorContainer = 0xF7DADA),
+    ThemeMode.AZZURRO to Palette(dark = false, background = 0xCDEBFF, surface = 0x9ED4FF, surfaceHigh = 0x99CFF9, surfaceHighest = 0x94C8F2, onBackground = 0x06203D, onVariant = 0x1F4A75, primary = 0x78A9D6, primaryContainer = 0xD9E7F4, onPrimaryContainer = 0x06203D, secondary = 0x0A6CE0, tertiary = 0xE85D04, outline = 0x6C9BC8, outlineVariant = 0x85B8E4, error = 0xD6293E, errorContainer = 0xF8D8DC),
+    ThemeMode.GIALLO to Palette(dark = false, background = 0xFFF0A8, surface = 0xFFE066, surfaceHigh = 0xF9DA63, surfaceHighest = 0xF1D45F, onBackground = 0x2A2000, onVariant = 0x5C4A00, primary = 0xC6AC3C, primaryContainer = 0xEFE8C8, onPrimaryContainer = 0x2A2000, secondary = 0x1E70C8, tertiary = 0xE65100, outline = 0xB39B2E, outlineVariant = 0xD9BE4A, error = 0xD32F2F, errorContainer = 0xF7DADA),
 )
 
 fun themeSwatches(mode: ThemeMode): List<Color> = when (mode) {
