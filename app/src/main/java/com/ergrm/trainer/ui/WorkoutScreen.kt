@@ -68,8 +68,6 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
@@ -1214,13 +1212,15 @@ private fun OverlayPillEntry(
     } else {
         wattsLabel(scaledStart, scaledEnd)
     }
+    // bodyMedium (14sp) to match the data column's own WorkoutStatLines text — was labelSmall
+    // (11sp), noticeably smaller than everything to its left.
     Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(label, style = MaterialTheme.typography.labelSmall, color = accentColor ?: ErgOnSurface, maxLines = 1)
-        Text(formatMinSec(step.durationSec), style = MaterialTheme.typography.labelSmall, color = accentColor ?: Color.Unspecified, maxLines = 1)
-        Text(valueLabel, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+        Text(label, style = MaterialTheme.typography.bodyMedium, color = accentColor ?: ErgOnSurface, maxLines = 1)
+        Text(formatMinSec(step.durationSec), style = MaterialTheme.typography.bodyMedium, color = accentColor ?: Color.Unspecified, maxLines = 1)
+        Text(valueLabel, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
         Text(
             zone.label,
-            style = MaterialTheme.typography.labelSmall,
+            style = MaterialTheme.typography.bodyMedium,
             color = Color.Black,
             maxLines = 1,
             modifier = Modifier
@@ -2062,11 +2062,6 @@ private fun IntensityRow(
         else -> null
     }
     val intensityGlyphColor = if (glyphUp) ErgIntensityUpGlyph else ErgIntensityDownGlyph
-    // Measured so the triangle's center-from-the-right-edge can mirror the mode tag's own
-    // center-from-the-left-edge exactly, regardless of "ERG"/"HR+"/"SLO" having different widths —
-    // a fixed offset would only be symmetric for whichever label happens to be showing.
-    var modeTagWidthPx by remember { mutableStateOf(0) }
-    val density = LocalDensity.current
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         PillIconButton(
             icon = Icons.Filled.KeyboardArrowDown,
@@ -2077,73 +2072,57 @@ private fun IntensityRow(
             height = 38.4.dp,
             modifier = Modifier.width(40.dp),
         )
-        // The triangle sits on the opposite side of the pill from the mode tag (mirroring it, not
-        // sitting next to the percentage), so it can never touch or shift the percentage —
-        // they're not even siblings in the same layout pass.
-        Box(
+        // Mode tag is a fixed-size circle and the triangle a fixed-size box at the opposite end —
+        // same approach as Vitals' own CompactControlRow — instead of a text-width-measured
+        // capsule mirrored by a computed triangle offset: that math fell apart once this pill got
+        // narrow (landscape's tighter data column), landing the triangle on top of the tag instead
+        // of past the far edge.
+        Row(
             modifier = Modifier
                 .weight(1f)
                 .height(38.4.dp)
                 .clip(RoundedCornerShape(50))
                 .background(ErgSurface2),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(modifier = Modifier.matchParentSize(), verticalAlignment = Alignment.CenterVertically) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .clip(RoundedCornerShape(50))
-                        .background(modeColor)
-                        .requireLongPress(enabled, 1000L, onToggleMode)
-                        // Measures the tag's total width (text + padding on both sides) — placed
-                        // before .padding() in the chain so the reported size includes it, since
-                        // this is the same full colored capsule the triangle needs to mirror.
-                        .onGloballyPositioned { modeTagWidthPx = it.size.width }
-                        .padding(horizontal = 11.2.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        // Same font size as the percentage next to it.
-                        modeLabel,
-                        fontSize = 14.1.sp,
-                        fontWeight = FontWeight.Black,
-                        color = Color.Black,
-                    )
-                }
-                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                    Text(
-                        displayText,
-                        fontSize = 14.1.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White,
-                    )
-                }
-                // Balances the mode tag's own width on this side, so the % box above — weight(1f)
-                // of whatever's left — ends up centered in the whole pill instead of sitting in
-                // just the space to the right of the tag (which reads as off-center since the tag
-                // itself has nothing matching it on the right).
-                Spacer(modifier = Modifier.width(with(density) { modeTagWidthPx.toDp() }))
-            }
-            if (intensityGlyph != null) {
-                // Drawn directly rather than as a "▲"/"▼" glyph: a Text's own vertical centering
-                // centers its font-metrics box (ascent to descent), not the triangle's actual
-                // ink, which sits noticeably higher within that box — the glyph visibly floated
-                // above the pill's true center. Drawing it ourselves makes the triangle's visual
-                // center exactly the Canvas's center, which CenterEnd then centers on the pill.
-                val triangleSizeDp = 14.4.dp
-                // The mode tag's text sits exactly at tagWidth/2 from the pill's left edge (the
-                // 11.2dp padding is equal on both sides of it inside the tag). Placing the
-                // triangle's own center at that same distance from the right edge makes the two
-                // exactly symmetric regardless of which label (different widths) is showing.
-                val modeTagWidthDp = with(density) { modeTagWidthPx.toDp() }
-                val triangleEndPadding = ((modeTagWidthDp - triangleSizeDp) / 2).coerceAtLeast(0.dp)
-                IntensityTriangle(
-                    pointingUp = glyphUp,
-                    color = intensityGlyphColor,
-                    sizeDp = triangleSizeDp,
-                    modifier = Modifier
-                        .align(Alignment.CenterEnd)
-                        .padding(end = triangleEndPadding),
+            Box(
+                modifier = Modifier
+                    .size(38.4.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(modeColor)
+                    .requireLongPress(enabled, 1000L, onToggleMode),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    // Same font size as the percentage next to it.
+                    modeLabel,
+                    fontSize = 14.1.sp,
+                    fontWeight = FontWeight.Black,
+                    color = Color.Black,
                 )
+            }
+            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                Text(
+                    displayText,
+                    fontSize = 14.1.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                )
+            }
+            // Same size as the mode circle (balances it so the % box above stays centered in the
+            // whole pill) — also where the ▲/▼ direction triangle shows, when intensity/grade
+            // isn't flat.
+            Box(modifier = Modifier.size(38.4.dp), contentAlignment = Alignment.Center) {
+                if (intensityGlyph != null) {
+                    // Drawn directly rather than as a "▲"/"▼" glyph: a Text's own vertical
+                    // centering centers its font-metrics box (ascent to descent), not the
+                    // triangle's actual ink, which sits noticeably higher within that box.
+                    IntensityTriangle(
+                        pointingUp = glyphUp,
+                        color = intensityGlyphColor,
+                        sizeDp = 14.4.dp,
+                    )
+                }
             }
         }
         PillIconButton(
