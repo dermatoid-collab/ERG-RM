@@ -2,7 +2,9 @@ package com.ergrm.trainer.ui
 
 import android.content.Intent
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,19 +16,26 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -45,6 +54,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
@@ -66,13 +76,42 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.roundToInt
 
-/** Opened from a History row: the full recorded trace plus a summary stats grid. No colored
- *  zone bars — a session only stores what was recorded (watts/HR/cadence/speed), not the
- *  original plan, so this mirrors the live workout chart's traces without the interval backdrop. */
+/** Opened from a History row: swipeable between every session in the list it was opened from
+ *  (same list, same order the History screen is currently showing — sorted/filtered exactly as
+ *  it was there), same left/right gesture as HRV-RM's own measurement-history swipe. */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun SessionDetailScreen(session: WorkoutSession, viewModel: MainViewModel, onBack: () -> Unit) {
+fun SessionDetailScreen(
+    sessions: List<WorkoutSession>,
+    initialIndex: Int,
+    viewModel: MainViewModel,
+    onBack: () -> Unit,
+    onImported: () -> Unit,
+) {
+    val pagerState = rememberPagerState(initialPage = initialIndex) { sessions.size }
+    HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
+        SessionDetailPage(session = sessions[page], viewModel = viewModel, onBack = onBack, onImported = onImported)
+    }
+}
+
+/** The full recorded trace plus a summary stats grid, for one session. No colored zone bars — a
+ *  session only stores what was recorded (watts/HR/cadence/speed), not the original plan, so this
+ *  mirrors the live workout chart's traces without the interval backdrop. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun SessionDetailPage(session: WorkoutSession, viewModel: MainViewModel, onBack: () -> Unit, onImported: () -> Unit) {
     val stats = remember(session.id) { computeSessionStats(session.samples, ftpWatts = session.ftpWatts) }
     val context = LocalContext.current
+    val loadState by viewModel.workoutLoadState.collectAsState()
+    var pendingImport by remember { mutableStateOf(false) }
+    var importMessage by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(loadState) {
+        if (pendingImport && loadState is WorkoutLoadState.Loaded) {
+            pendingImport = false
+            onImported()
+        }
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
@@ -85,12 +124,35 @@ fun SessionDetailScreen(session: WorkoutSession, viewModel: MainViewModel, onBac
                 Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
             }
             Column(modifier = Modifier.weight(1f)) {
-                Text(session.workoutName ?: "Free ride", style = MaterialTheme.typography.titleMedium)
                 Text(
                     formatSessionDate(session.startEpochMillis),
                     style = MaterialTheme.typography.bodySmall,
                     color = ErgOnSurface,
                 )
+                // The import icon beside Share can squeeze this — clip + marquee instead of
+                // wrapping or truncating with an ellipsis, same treatment as the Workout screen's
+                // own Now/Next pill for a long name in a tight space.
+                Text(
+                    session.workoutName ?: "Free ride",
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Clip,
+                    modifier = Modifier.basicMarquee(delayMillis = 5_000, velocity = 15.dp),
+                )
+            }
+            IconButton(onClick = {
+                val name = session.workoutName
+                if (name == null) {
+                    importMessage = "This session has no recorded workout name, so it can't be matched to a library entry."
+                } else {
+                    pendingImport = true
+                    viewModel.importOriginalWorkout(name) { message ->
+                        pendingImport = false
+                        importMessage = message
+                    }
+                }
+            }) {
+                Icon(Icons.Filled.Download, contentDescription = "Re-import original workout")
             }
             IconButton(onClick = {
                 viewModel.exportSessionTcx(session) { file ->
@@ -106,6 +168,17 @@ fun SessionDetailScreen(session: WorkoutSession, viewModel: MainViewModel, onBac
             }) {
                 Icon(Icons.Filled.Share, contentDescription = "Export as TCX")
             }
+        }
+
+        importMessage?.let { message ->
+            AlertDialog(
+                onDismissRequest = { importMessage = null },
+                title = { Text("Can't re-import") },
+                text = { Text(message) },
+                confirmButton = {
+                    TextButton(onClick = { importMessage = null }) { Text("OK") }
+                },
+            )
         }
 
         val hasCoreData = session.samples.any {

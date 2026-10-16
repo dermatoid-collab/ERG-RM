@@ -13,7 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
@@ -69,9 +69,12 @@ private enum class HistorySortField(val label: String) {
 }
 
 @Composable
-fun HistoryScreen(viewModel: MainViewModel) {
+fun HistoryScreen(viewModel: MainViewModel, onImported: () -> Unit = {}) {
     val sessions by viewModel.sessionHistory.collectAsState()
-    var selectedSession by remember { mutableStateOf<WorkoutSession?>(null) }
+    // The index into sortedSessions (below) that's open, not the session itself — so the detail
+    // screen's own left/right swipe (Task: swipe through history like HRV-RM) can page through
+    // this exact list/order without this screen needing to track "what comes next" itself.
+    var selectedIndex by remember { mutableStateOf<Int?>(null) }
     // Workout name, ascending, as requested — not the list's own incoming (newest-first) order.
     var sortField by remember { mutableStateOf(HistorySortField.NAME) }
     var sortAscending by remember { mutableStateOf(true) }
@@ -83,12 +86,6 @@ fun HistoryScreen(viewModel: MainViewModel) {
         // Silently pulls in anything backed up from another device or restored after a
         // reinstall — see MainViewModel.syncHistoryFromBackupFolder for why this is cheap.
         viewModel.syncHistoryFromBackupFolder()
-    }
-
-    val selected = selectedSession
-    if (selected != null) {
-        SessionDetailScreen(session = selected, viewModel = viewModel, onBack = { selectedSession = null })
-        return
     }
 
     val visibleSessions = remember(sessions, searchQuery) {
@@ -115,6 +112,21 @@ fun HistoryScreen(viewModel: MainViewModel) {
         val comparator = if (sortField == HistorySortField.DATE) primary else primary.thenBy { it.startEpochMillis }
         val sorted = visibleSessions.sortedWith(comparator)
         if (sortAscending) sorted else sorted.reversed()
+    }
+
+    val selected = selectedIndex
+    if (selected != null && selected in sortedSessions.indices) {
+        SessionDetailScreen(
+            sessions = sortedSessions,
+            initialIndex = selected,
+            viewModel = viewModel,
+            onBack = { selectedIndex = null },
+            onImported = {
+                selectedIndex = null
+                onImported()
+            },
+        )
+        return
     }
 
     Column(
@@ -202,10 +214,10 @@ fun HistoryScreen(viewModel: MainViewModel) {
                     .padding(top = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                items(sortedSessions, key = { it.id }) { session ->
+                itemsIndexed(sortedSessions, key = { _, it -> it.id }) { index, session ->
                     SessionRow(
                         session = session,
-                        onClick = { selectedSession = session },
+                        onClick = { selectedIndex = index },
                         onDelete = { viewModel.deleteSession(session.id) },
                     )
                 }

@@ -881,6 +881,50 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** History's own "re-import" action: a recorded session keeps no link back to the workout it
+     *  was originally loaded from (only its name), so this is a best-effort exact-name search
+     *  across whichever libraries are currently configured — Intervals.icu first, then the local
+     *  folder — loading the FIRST match exactly as it stands there now (any mid-ride +5min
+     *  extensions or skips the original ride took are not reproduced, by design: this reloads the
+     *  plan, not the ride). [onNotFound] fires with a human-readable reason when neither library
+     *  has it, instead of silently doing nothing; a successful match drives [workoutLoadState] the
+     *  same way every other import path already does. */
+    fun importOriginalWorkout(workoutName: String, onNotFound: (String) -> Unit) {
+        viewModelScope.launch {
+            val s = settings.value
+            if (s.intervalsConfigured) {
+                val result = intervalsRepository.fetchLibrary(s.intervalsApiKey, s.intervalsAthleteId)
+                if (result is LibraryFetchResult.Success) {
+                    val match = result.folders.flatMap { it.workouts }.firstOrNull { it.name == workoutName }
+                    if (match != null) {
+                        loadIntervalsLibraryWorkout(match)
+                        return@launch
+                    }
+                }
+            }
+            val folderUriString = s.libraryFolderUri
+            if (folderUriString != null) {
+                val match = try {
+                    libraryRepository.listWorkouts(Uri.parse(folderUriString))
+                        .firstOrNull { it.name.substringBeforeLast(".", it.name) == workoutName }
+                } catch (_: Exception) {
+                    null
+                }
+                if (match != null) {
+                    importLibraryWorkout(match)
+                    return@launch
+                }
+            }
+            onNotFound(
+                if (!s.intervalsConfigured && folderUriString == null) {
+                    "No library is configured — set up Intervals.icu or a workout folder in Settings to re-import \"$workoutName\"."
+                } else {
+                    "\"$workoutName\" wasn't found in your configured librar${if (s.intervalsConfigured && folderUriString != null) "ies" else "y"}."
+                },
+            )
+        }
+    }
+
     /** Same folder-picking pattern as [onLibraryFolderPicked], for a separate GPX routes folder —
      *  kept apart from the workout-plan library folder since the two file types are naturally
      *  organized separately (e.g. two different synced Drive folders). */

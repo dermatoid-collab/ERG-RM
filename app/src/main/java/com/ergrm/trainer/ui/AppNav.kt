@@ -497,7 +497,7 @@ private fun MainPager(
                 onImported = { onOverlayChange(Overlay.NONE) },
                 otherSources = otherSources,
             )
-            3 -> HistoryScreen(viewModel)
+            3 -> HistoryScreen(viewModel, onImported = { onOverlayChange(Overlay.NONE) })
             else -> SettingsScreen(
                 settings = settings,
                 viewModel = viewModel,
