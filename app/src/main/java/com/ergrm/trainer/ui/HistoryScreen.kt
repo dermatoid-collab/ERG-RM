@@ -75,9 +75,10 @@ fun HistoryScreen(viewModel: MainViewModel, onImported: () -> Unit = {}) {
     // screen's own left/right swipe (Task: swipe through history like HRV-RM) can page through
     // this exact list/order without this screen needing to track "what comes next" itself.
     var selectedIndex by remember { mutableStateOf<Int?>(null) }
-    // Workout name, ascending, as requested — not the list's own incoming (newest-first) order.
-    var sortField by remember { mutableStateOf(HistorySortField.NAME) }
-    var sortAscending by remember { mutableStateOf(true) }
+    // Date, descending (most recent first) — History's own default, unlike the Library screens'
+    // (name, ascending).
+    var sortField by remember { mutableStateOf(HistorySortField.DATE) }
+    var sortAscending by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
     var searchActive by remember { mutableStateOf(false) }
 
