@@ -53,6 +53,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -266,14 +267,26 @@ private fun VitalsScreenLandscape(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                CoreSkinHsiChart(
-                    samples = coreSamples,
-                    totalElapsedSec = workoutState.totalElapsedSec,
-                    totalDurationSec = workoutState.totalDurationSec,
-                    zoom = zoom,
-                    onTap = { onZoomChange(zoom.next()) },
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
-                )
+                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                    CoreSkinHsiChart(
+                        samples = coreSamples,
+                        totalElapsedSec = workoutState.totalElapsedSec,
+                        totalDurationSec = workoutState.totalDurationSec,
+                        zoom = zoom,
+                        onTap = { onZoomChange(zoom.next()) },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    // Landscape drops the scrollable stat column off the bottom of the viewport
+                    // before Core HTL (the last line) ever comes into view, so it gets the same
+                    // overlay-pill treatment WorkoutScreenLandscape gives Now/Next: centered over
+                    // the top of the one chart it actually belongs to.
+                    CoreHtlOverlayPill(
+                        heatTrainingLoad = stats.heatTrainingLoad,
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(top = 4.dp),
+                    )
+                }
                 ChartTimeAxis(zoom = zoom, totalElapsedSec = workoutState.totalElapsedSec, totalDurationSec = workoutState.totalDurationSec)
             }
             Box(
@@ -436,6 +449,22 @@ private fun GroupCard(lines: List<StatRow>, modifier: Modifier = Modifier) {
  *  to any real tap or short press, short enough to recover quickly from one stuck gesture. */
 private const val GESTURE_UP_TIMEOUT_MS = 1500L
 
+/** Landscape-only stand-in for the "Core HTL" line in [VitalsSummaryLines], which the stat
+ *  column's own limited height can scroll out of view — a free-floating pill over the Core chart
+ *  instead, mirroring [NowNextOverlayPill] over the Workout screen's own chart. */
+@Composable
+private fun CoreHtlOverlayPill(heatTrainingLoad: Float?, modifier: Modifier = Modifier) {
+    Text(
+        "Core HTL: ${heatTrainingLoad?.let { "%.1f/10".format(it) } ?: "--"}",
+        style = MaterialTheme.typography.bodyMedium,
+        color = ErgHeatLoad,
+        maxLines = 1,
+        modifier = modifier
+            .background(ErgSurface.copy(alpha = 0.92f), RoundedCornerShape(50))
+            .padding(horizontal = 12.dp, vertical = 5.dp),
+    )
+}
+
 /** CORE/SKIN/HSI over the whole ride. CORE and HSI are drawn one short segment at a time so each
  *  can take the exact same color its tile would show for that instant (same thresholds as
  *  [coreColor]/[hsiColor]) — SKIN stays [ErgSkinTemp] throughout, since its tile has no
@@ -563,12 +592,16 @@ private fun CoreSkinHsiChart(
                         // HSI sits frontmost of the SKIN/HSI pair below, so when the two labels
                         // land on top of each other HSI's own paint needs to actually occlude
                         // SKIN's, not just its text glyphs — sized to the text plus a 1dp margin,
-                        // not the label's whole touch area.
+                        // not the label's whole touch area. Pill-shaped (fully rounded) rather than
+                        // a sharp rect, at a lighter 30% opacity so it still reads as a background
+                        // and not a solid tag.
                         val pad = 1.dp.toPx()
-                        drawRect(
-                            color = Color.Black.copy(alpha = 0.55f),
+                        val bgHeight = measured.size.height + pad * 2f
+                        drawRoundRect(
+                            color = Color.Black.copy(alpha = 0.3f),
                             topLeft = Offset(labelX - pad, labelY - pad),
-                            size = Size(measured.size.width + pad * 2f, measured.size.height + pad * 2f),
+                            size = Size(measured.size.width + pad * 2f, bgHeight),
+                            cornerRadius = CornerRadius(bgHeight / 2f, bgHeight / 2f),
                         )
                     }
                     drawText(measured, topLeft = Offset(labelX, labelY))
