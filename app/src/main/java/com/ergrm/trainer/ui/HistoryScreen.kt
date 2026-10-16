@@ -17,8 +17,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -29,6 +31,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -38,7 +42,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PointMode
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
@@ -68,6 +75,8 @@ fun HistoryScreen(viewModel: MainViewModel) {
     // Workout name, ascending, as requested — not the list's own incoming (newest-first) order.
     var sortField by remember { mutableStateOf(HistorySortField.NAME) }
     var sortAscending by remember { mutableStateOf(true) }
+    var searchQuery by remember { mutableStateOf("") }
+    var searchActive by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         viewModel.refreshHistory()
@@ -82,7 +91,14 @@ fun HistoryScreen(viewModel: MainViewModel) {
         return
     }
 
-    val sortedSessions = remember(sessions, sortField, sortAscending) {
+    val visibleSessions = remember(sessions, searchQuery) {
+        if (searchQuery.isBlank()) {
+            sessions
+        } else {
+            sessions.filter { (it.workoutName ?: "Free ride").contains(searchQuery, ignoreCase = true) }
+        }
+    }
+    val sortedSessions = remember(visibleSessions, sortField, sortAscending) {
         val primary: Comparator<WorkoutSession> = when (sortField) {
             HistorySortField.NAME -> compareBy { (it.workoutName ?: "").lowercase() }
             HistorySortField.DATE -> compareBy { it.startEpochMillis }
@@ -97,7 +113,7 @@ fun HistoryScreen(viewModel: MainViewModel) {
         // back to date-time, so they still land in a stable, predictable order instead of
         // whatever sortedWith happens to leave them in.
         val comparator = if (sortField == HistorySortField.DATE) primary else primary.thenBy { it.startEpochMillis }
-        val sorted = sessions.sortedWith(comparator)
+        val sorted = visibleSessions.sortedWith(comparator)
         if (sortAscending) sorted else sorted.reversed()
     }
 
@@ -111,19 +127,56 @@ fun HistoryScreen(viewModel: MainViewModel) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("History", style = MaterialTheme.typography.titleLarge)
-            // Icon-only controls (no field name shown inline) so sorting doesn't cost any extra
-            // header width — both sit left of Refresh, as asked.
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                HistorySortFieldMenu(selected = sortField, onSelect = { sortField = it })
-                IconButton(onClick = { sortAscending = !sortAscending }) {
-                    Icon(
-                        if (sortAscending) Icons.Filled.ArrowUpward else Icons.Filled.ArrowDownward,
-                        contentDescription = if (sortAscending) "Sort ascending" else "Sort descending",
+            if (!searchActive) {
+                Text("History", style = MaterialTheme.typography.titleLarge)
+            }
+            // Icon-only sort/direction controls (no field name shown inline) so sorting doesn't
+            // cost any extra header width. Search expands into the same full-width field, with
+            // the same close-to-collapse behavior, as every other workout-source list screen's
+            // own SearchableHeaderRow — just inlined here since History isn't one of those
+            // screens (no "Other sources" menu) and shares this single title+icons row instead of
+            // that row's separate one above its own title.
+            Row(
+                modifier = if (searchActive) Modifier.weight(1f) else Modifier,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (searchActive) {
+                    val focusRequester = remember { FocusRequester() }
+                    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+                    TextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        modifier = Modifier
+                            .weight(1f)
+                            .focusRequester(focusRequester),
+                        placeholder = { Text("Search") },
+                        singleLine = true,
+                        colors = TextFieldDefaults.colors(
+                            unfocusedContainerColor = Color.Transparent,
+                            focusedContainerColor = Color.Transparent,
+                            unfocusedIndicatorColor = ErgOnSurface.copy(alpha = 0.3f),
+                        ),
                     )
-                }
-                IconButton(onClick = { viewModel.syncHistoryFromBackupFolder() }) {
-                    Icon(Icons.Filled.Refresh, contentDescription = "Sync from backup folder")
+                    IconButton(onClick = {
+                        searchQuery = ""
+                        searchActive = false
+                    }) {
+                        Icon(Icons.Filled.Close, contentDescription = "Close search")
+                    }
+                } else {
+                    HistorySortFieldMenu(selected = sortField, onSelect = { sortField = it })
+                    IconButton(onClick = { sortAscending = !sortAscending }) {
+                        Icon(
+                            if (sortAscending) Icons.Filled.ArrowUpward else Icons.Filled.ArrowDownward,
+                            contentDescription = if (sortAscending) "Sort ascending" else "Sort descending",
+                        )
+                    }
+                    IconButton(onClick = { searchActive = true }) {
+                        Icon(Icons.Filled.Search, contentDescription = "Search")
+                    }
+                    IconButton(onClick = { viewModel.syncHistoryFromBackupFolder() }) {
+                        Icon(Icons.Filled.Refresh, contentDescription = "Sync from backup folder")
+                    }
                 }
             }
         }
@@ -131,6 +184,13 @@ fun HistoryScreen(viewModel: MainViewModel) {
         if (sessions.isEmpty()) {
             Text(
                 "No recorded sessions yet — completed workouts are saved here automatically when you tap Stop.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = ErgOnSurface,
+                modifier = Modifier.padding(top = 16.dp),
+            )
+        } else if (sortedSessions.isEmpty()) {
+            Text(
+                "No results for \"$searchQuery\".",
                 style = MaterialTheme.typography.bodyMedium,
                 color = ErgOnSurface,
                 modifier = Modifier.padding(top = 16.dp),
