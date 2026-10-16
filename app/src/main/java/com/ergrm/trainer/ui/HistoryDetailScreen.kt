@@ -146,7 +146,7 @@ private fun SessionDetailPage(session: WorkoutSession, viewModel: MainViewModel,
                     importMessage = "This session has no recorded workout name, so it can't be matched to a library entry."
                 } else {
                     pendingImport = true
-                    viewModel.importOriginalWorkout(name) { message ->
+                    viewModel.importOriginalWorkout(name, session.source) { message ->
                         pendingImport = false
                         importMessage = message
                     }

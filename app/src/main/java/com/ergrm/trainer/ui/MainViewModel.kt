@@ -35,6 +35,7 @@ import com.ergrm.trainer.history.HeatTrainingLoad
 import com.ergrm.trainer.history.SessionHistoryRepository
 import com.ergrm.trainer.history.SessionSample
 import com.ergrm.trainer.history.WorkoutSession
+import com.ergrm.trainer.history.WorkoutSource
 import com.ergrm.trainer.intervals.AthleteSettingsResult
 import com.ergrm.trainer.intervals.CalendarFetchResult
 import com.ergrm.trainer.intervals.CalendarWorkout
@@ -80,7 +81,9 @@ enum class AutoBackupNeededReason { NOT_CONFIGURED, WRITE_FAILED }
 sealed interface WorkoutLoadState {
     data object Idle : WorkoutLoadState
     data object Loading : WorkoutLoadState
-    data class Loaded(val name: String) : WorkoutLoadState
+    // [source] is null for a GPX route or anything else with no traceable origin — exitWorkout()
+    // carries it straight onto the saved WorkoutSession for a later exact re-import.
+    data class Loaded(val name: String, val source: WorkoutSource? = null) : WorkoutLoadState
     data object Empty : WorkoutLoadState
     data class Error(val message: String) : WorkoutLoadState
 }
@@ -291,7 +294,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val result = intervalsRepository.fetchTodayWorkout(s.intervalsApiKey, s.intervalsAthleteId, s.ftpWatts)
             if (result is FetchResult.Success) {
                 workoutExecutor.load(result.workout.steps)
-                _workoutLoadState.value = WorkoutLoadState.Loaded(result.workout.name)
+                _workoutLoadState.value = WorkoutLoadState.Loaded(
+                    result.workout.name,
+                    source = WorkoutSource.IntervalsCalendarEvent(result.workout.id),
+                )
             }
         }
     }
@@ -543,7 +549,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             when (val result = intervalsRepository.fetchTodayWorkout(s.intervalsApiKey, s.intervalsAthleteId, s.ftpWatts)) {
                 is FetchResult.Success -> {
                     workoutExecutor.load(result.workout.steps)
-                    _workoutLoadState.value = WorkoutLoadState.Loaded(result.workout.name)
+                    _workoutLoadState.value = WorkoutLoadState.Loaded(
+                        result.workout.name,
+                        source = WorkoutSource.IntervalsCalendarEvent(result.workout.id),
+                    )
                 }
                 FetchResult.NoStepsFound -> _workoutLoadState.value = WorkoutLoadState.Empty
                 is FetchResult.Error -> _workoutLoadState.value = WorkoutLoadState.Error(result.message)
@@ -608,7 +617,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             ) {
                 is FetchResult.Success -> {
                     workoutExecutor.load(result.workout.steps)
-                    _workoutLoadState.value = WorkoutLoadState.Loaded(result.workout.name)
+                    _workoutLoadState.value = WorkoutLoadState.Loaded(
+                        result.workout.name,
+                        source = WorkoutSource.IntervalsCalendarEvent(workout.eventId),
+                    )
                 }
                 FetchResult.NoStepsFound -> _workoutLoadState.value = WorkoutLoadState.Empty
                 is FetchResult.Error -> _workoutLoadState.value = WorkoutLoadState.Error(result.message)
@@ -647,7 +659,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             ) {
                 is FetchResult.Success -> {
                     workoutExecutor.load(result.workout.steps)
-                    _workoutLoadState.value = WorkoutLoadState.Loaded(result.workout.name)
+                    _workoutLoadState.value = WorkoutLoadState.Loaded(
+                        result.workout.name,
+                        source = WorkoutSource.IntervalsLibrary(workout.workoutId),
+                    )
                 }
                 FetchResult.NoStepsFound -> _workoutLoadState.value = WorkoutLoadState.Empty
                 is FetchResult.Error -> _workoutLoadState.value = WorkoutLoadState.Error(result.message)
@@ -707,6 +722,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 samples = sessionSamples,
                 heatTrainingLoad = HeatTrainingLoad.compute(sessionSamples),
                 ftpWatts = settings.value.ftpWatts,
+                source = (workoutLoadState.value as? WorkoutLoadState.Loaded)?.source,
             )
             viewModelScope.launch {
                 historyRepository.saveSession(session)
@@ -874,6 +890,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     workoutExecutor.load(result.steps)
                     _workoutLoadState.value = WorkoutLoadState.Loaded(
                         file.name.substringBeforeLast(".", file.name),
+                        source = WorkoutSource.LocalFile(file.uri.toString()),
                     )
                 }
                 is LibraryImportResult.Error -> _workoutLoadState.value = WorkoutLoadState.Error(result.message)
@@ -881,17 +898,61 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** History's own "re-import" action: a recorded session keeps no link back to the workout it
-     *  was originally loaded from (only its name), so this is a best-effort exact-name search
-     *  across whichever libraries are currently configured — Intervals.icu first, then the local
-     *  folder — loading the FIRST match exactly as it stands there now (any mid-ride +5min
-     *  extensions or skips the original ride took are not reproduced, by design: this reloads the
-     *  plan, not the ride). [onNotFound] fires with a human-readable reason when neither library
-     *  has it, instead of silently doing nothing; a successful match drives [workoutLoadState] the
-     *  same way every other import path already does. */
-    fun importOriginalWorkout(workoutName: String, onNotFound: (String) -> Unit) {
+    /** History's own "re-import" action, in two tiers. First choice: [source], the exact workout
+     *  this session was originally loaded from — recorded on sessions saved from here on (see
+     *  WorkoutLoadState.Loaded/exitWorkout), looked up directly by id, so renames don't break it.
+     *  Second choice, picked automatically (not asked of the rider) whenever the first either
+     *  isn't recorded (a session saved before this existed) or no longer resolves (the workout was
+     *  since deleted/moved): the original best-effort exact-name search across whichever libraries
+     *  are configured — Intervals.icu first, then the local folder. Either tier loads the FIRST
+     *  match exactly as it stands there now (any mid-ride +5min extensions or skips the original
+     *  ride took are not reproduced, by design: this reloads the plan, not the ride). [onNotFound]
+     *  fires with a human-readable reason when nothing resolves at all, instead of silently doing
+     *  nothing; a successful match drives [workoutLoadState] the same way every other import path
+     *  already does. */
+    fun importOriginalWorkout(workoutName: String, source: WorkoutSource?, onNotFound: (String) -> Unit) {
+        _workoutLoadState.value = WorkoutLoadState.Loading
         viewModelScope.launch {
             val s = settings.value
+
+            when (source) {
+                is WorkoutSource.IntervalsLibrary -> if (s.intervalsConfigured) {
+                    val result = intervalsRepository.loadLibraryWorkout(
+                        s.intervalsApiKey, s.intervalsAthleteId, LibraryWorkout(source.workoutId, workoutName), s.ftpWatts,
+                    )
+                    if (result is FetchResult.Success) {
+                        workoutExecutor.load(result.workout.steps)
+                        _workoutLoadState.value = WorkoutLoadState.Loaded(result.workout.name, source)
+                        return@launch
+                    }
+                }
+                is WorkoutSource.IntervalsCalendarEvent -> if (s.intervalsConfigured) {
+                    val result = intervalsRepository.fetchWorkoutByEventId(
+                        s.intervalsApiKey, s.intervalsAthleteId, source.eventId, workoutName, s.ftpWatts,
+                    )
+                    if (result is FetchResult.Success) {
+                        workoutExecutor.load(result.workout.steps)
+                        _workoutLoadState.value = WorkoutLoadState.Loaded(result.workout.name, source)
+                        return@launch
+                    }
+                }
+                is WorkoutSource.LocalFile -> {
+                    val result = try {
+                        libraryRepository.importWorkout(Uri.parse(source.uri), workoutName, s.ftpWatts)
+                    } catch (_: Exception) {
+                        null
+                    }
+                    if (result is LibraryImportResult.Success) {
+                        workoutExecutor.load(result.steps)
+                        _workoutLoadState.value = WorkoutLoadState.Loaded(workoutName, source)
+                        return@launch
+                    }
+                }
+                null -> {}
+            }
+
+            // Fell through: no recorded source, or it no longer resolves — same best-effort
+            // exact-name search this action used before sources were tracked.
             if (s.intervalsConfigured) {
                 val result = intervalsRepository.fetchLibrary(s.intervalsApiKey, s.intervalsAthleteId)
                 if (result is LibraryFetchResult.Success) {
@@ -915,6 +976,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     return@launch
                 }
             }
+            _workoutLoadState.value = WorkoutLoadState.Idle
             onNotFound(
                 if (!s.intervalsConfigured && folderUriString == null) {
                     "No library is configured — set up Intervals.icu or a workout folder in Settings to re-import \"$workoutName\"."

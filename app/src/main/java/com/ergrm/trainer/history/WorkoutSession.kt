@@ -18,6 +18,23 @@ data class SessionSample(
     val heatStrainIndex: Float? = null,
 )
 
+/** Where a loaded workout actually came from, if it's traceable at all — recorded on
+ *  [WorkoutSession] at save time from the active [com.ergrm.trainer.ui.WorkoutLoadState.Loaded]'s
+ *  own source, so a later re-import (MainViewModel.importOriginalWorkout) can go straight back to
+ *  the exact same workout by id instead of a name search. Absent on a manual free ride, a GPX
+ *  route, or any session saved before this was added — those still fall back to the name search. */
+@Serializable
+sealed interface WorkoutSource {
+    @Serializable
+    data class IntervalsLibrary(val workoutId: Long) : WorkoutSource
+
+    @Serializable
+    data class IntervalsCalendarEvent(val eventId: Long) : WorkoutSource
+
+    @Serializable
+    data class LocalFile(val uri: String) : WorkoutSource
+}
+
 /** A completed (started and then stopped) workout session, saved locally for the history list. */
 @Serializable
 data class WorkoutSession(
@@ -38,6 +55,7 @@ data class WorkoutSession(
     // SessionStats.tss) stays correct for an old session even after the rider's FTP changes.
     // Absent (default null) on sessions saved before this was added.
     val ftpWatts: Int? = null,
+    val source: WorkoutSource? = null,
 )
 
 /** Energy for the whole ride from its stored average power and duration — the same "watts summed

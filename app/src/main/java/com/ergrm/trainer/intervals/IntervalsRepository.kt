@@ -111,7 +111,7 @@ class IntervalsRepository {
                 val candidate = events.firstOrNull { it.category == "WORKOUT" && (it.type == null || it.type in BIKE_TYPES) }
                     ?: events.firstOrNull { it.category == "WORKOUT" }
                     ?: return@withContext FetchResult.NoStepsFound
-                loadWorkout(candidate.name ?: "Workout", ftpWatts, "event ${candidate.id}") {
+                loadWorkout(candidate.id, candidate.name ?: "Workout", ftpWatts, "event ${candidate.id}") {
                     api.getWorkoutZwo(athleteId, candidate.id)
                 }
             } catch (t: Exception) {
@@ -165,7 +165,7 @@ class IntervalsRepository {
     ): FetchResult = withContext(Dispatchers.IO) {
         try {
             val api = buildApi(apiKey)
-            loadWorkout(name, ftpWatts, "event $eventId") { api.getWorkoutZwo(athleteId, eventId) }
+            loadWorkout(eventId, name, ftpWatts, "event $eventId") { api.getWorkoutZwo(athleteId, eventId) }
         } catch (t: Exception) {
             FetchResult.Error(describeError(t))
         }
@@ -253,7 +253,7 @@ class IntervalsRepository {
                 val api = buildApi(apiKey)
                 val rawWorkout = api.getWorkoutRaw(athleteId, workout.workoutId).string()
                 val body = rawWorkout.toRequestBody("application/json".toMediaType())
-                loadWorkout(workout.name, ftpWatts, "library workout ${workout.workoutId}") {
+                loadWorkout(workout.workoutId, workout.name, ftpWatts, "library workout ${workout.workoutId}") {
                     api.downloadWorkoutFromJson(athleteId, body)
                 }
             } catch (t: Exception) {
@@ -295,7 +295,7 @@ class IntervalsRepository {
             emptyList()
         }
 
-    private suspend fun loadWorkout(name: String, ftpWatts: Int, sourceLabel: String, download: suspend () -> ResponseBody): FetchResult {
+    private suspend fun loadWorkout(id: Long, name: String, ftpWatts: Int, sourceLabel: String, download: suspend () -> ResponseBody): FetchResult {
         val zwoBody = try {
             download().string()
         } catch (t: Exception) {
@@ -309,7 +309,10 @@ class IntervalsRepository {
         }
         val steps = ZwoParser.parse(zwoBody, ftpWatts)
         if (steps.isEmpty()) return FetchResult.NoStepsFound
-        return FetchResult.Success(LoadedWorkout(id = 0, name = name, steps = steps))
+        // [id] is the Intervals.icu event or library-workout id this came from (the caller's own
+        // concern which kind), not previously plumbed through — MainViewModel now records it on
+        // the saved session as its re-importable source.
+        return FetchResult.Success(LoadedWorkout(id = id, name = name, steps = steps))
     }
 
     /** FTP (preferring indoor FTP, since that's what a smart-trainer ERG session actually trains
