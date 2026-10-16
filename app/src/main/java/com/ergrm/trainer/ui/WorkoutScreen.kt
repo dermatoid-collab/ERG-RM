@@ -49,6 +49,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -108,6 +109,7 @@ import com.ergrm.trainer.workout.WorkoutStep
 import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
 
 @Composable
@@ -1247,6 +1249,12 @@ private const val CHART_ZOOM_TAP_FRACTION = 0.75f
  *  to any real tap or short press, short enough to recover quickly from one stuck gesture. */
 private const val GESTURE_UP_TIMEOUT_MS = 1500L
 
+/** How often [IntervalDetailBlock]'s Now/Next value Text is force-recreated as a last-resort
+ *  recovery from a wedged basicMarquee animation — see the comment at its own `key()` call.
+ *  Long enough that a healthy marquee's remount is rarely noticed, short enough that a stuck one
+ *  never stays stuck for more than one of these. */
+private const val MARQUEE_SELF_HEAL_INTERVAL_MS = 12_000L
+
 /**
  * Watts ceiling for the chart's Y axis, fixed relative to FTP (not auto-fit to the data) so that
  * raising or lowering the live %FTP intensity actually changes bar heights against a stable
@@ -1868,15 +1876,34 @@ private fun IntervalDetailBlock(
         // instead of ellipsizing, so the full range stays readable without shrinking the font.
         // velocity halved from the 30.dp/s default; delayMillis=5_000 is the pause before each
         // pass (also before the very first one).
-        Text(
-            valueLabel,
-            style = MaterialTheme.typography.bodyMedium,
-            maxLines = 1,
-            overflow = TextOverflow.Clip,
-            modifier = Modifier
-                .weight(1f)
-                .basicMarquee(delayMillis = 5_000, velocity = 15.dp),
-        )
+        //
+        // Reported (repeatedly) to get visually stuck/garbled after a chart zoom tap elsewhere on
+        // this screen: basicMarquee's own animation coroutine is a Modifier.Node internal to
+        // Compose Foundation, with no public handle this app can reach in to detect or recover a
+        // wedged instance directly. Instead of chasing that internal state, marqueeResetKey below
+        // forces this Text (and the marquee node attached to it) to be fully disposed and
+        // recreated — on every "Now"/"Next" step change (a fresh node per interval, instead of one
+        // that persists stale scroll state across them) and, as a bound on any other way it could
+        // still wedge, on a periodic timer — so a freeze from any cause self-heals within one
+        // period instead of lasting the rest of the ride.
+        var marqueeResetKey by remember { mutableStateOf(0) }
+        LaunchedEffect(Unit) {
+            while (true) {
+                delay(MARQUEE_SELF_HEAL_INTERVAL_MS)
+                marqueeResetKey++
+            }
+        }
+        key(label, step.durationSec, step.startWatts, step.endWatts, marqueeResetKey) {
+            Text(
+                valueLabel,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Clip,
+                modifier = Modifier
+                    .weight(1f)
+                    .basicMarquee(delayMillis = 5_000, velocity = 15.dp),
+            )
+        }
         Text(
             zone.label,
             style = MaterialTheme.typography.labelSmall,
