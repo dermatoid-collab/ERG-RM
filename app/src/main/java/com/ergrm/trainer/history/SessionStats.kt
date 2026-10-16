@@ -68,8 +68,10 @@ fun computeSessionStats(samples: List<SessionSample>, ftpWatts: Int? = null): Se
 
 /** Standard Normalized Power: a 30-second rolling average of power, raised to the 4th power,
  *  averaged, then 4th-rooted — this rewards the physiological cost of surges that a plain average
- *  hides. Needs at least 30 one-second samples; shorter sessions have no meaningful window. */
-private fun normalizedPower(watts: List<Int>): Int? {
+ *  hides. Needs at least 30 one-second samples; shorter sessions have no meaningful window.
+ *  Internal (not private) so [com.ergrm.trainer.workout.previewStats] can reuse it for a planned
+ *  workout's synthesized 1Hz power series, instead of duplicating this math. */
+internal fun normalizedPower(watts: List<Int>): Int? {
     val window = 30
     if (watts.size < window) return null
     var windowSum = watts.take(window).sum()

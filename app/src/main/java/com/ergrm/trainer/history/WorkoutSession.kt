@@ -39,3 +39,8 @@ data class WorkoutSession(
     // Absent (default null) on sessions saved before this was added.
     val ftpWatts: Int? = null,
 )
+
+/** Energy for the whole ride from its stored average power and duration — the same "watts summed
+ *  over ~1-second samples" assumption [computeSessionStats]'s own totalKj relies on, without
+ *  re-walking every sample just to show this on a history list row. */
+val WorkoutSession.totalKj: Int get() = (avgWatts.toLong() * durationSec / 1000).toInt()

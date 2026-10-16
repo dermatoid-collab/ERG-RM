@@ -3,6 +3,7 @@ package com.ergrm.trainer.ui
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -10,14 +11,19 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -38,16 +44,29 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.unit.dp
 import com.ergrm.trainer.history.SessionSample
 import com.ergrm.trainer.history.WorkoutSession
+import com.ergrm.trainer.history.totalKj
 import com.ergrm.trainer.ui.theme.ErgAccent
 import com.ergrm.trainer.ui.theme.ErgOnSurface
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+private enum class HistorySortField(val label: String) {
+    DATE("Date"),
+    DURATION("Duration"),
+    AVG_WATTS("W avg"),
+    AVG_HR("BPM avg"),
+    KJ("kJ"),
+}
+
 @Composable
 fun HistoryScreen(viewModel: MainViewModel) {
     val sessions by viewModel.sessionHistory.collectAsState()
     var selectedSession by remember { mutableStateOf<WorkoutSession?>(null) }
+    // Newest-first by default — the same order the underlying list already came in, so picking
+    // this as the default keeps existing behavior for anyone who never opens the sort menu.
+    var sortField by remember { mutableStateOf(HistorySortField.DATE) }
+    var sortDescending by remember { mutableStateOf(true) }
 
     LaunchedEffect(Unit) {
         viewModel.refreshHistory()
@@ -62,6 +81,20 @@ fun HistoryScreen(viewModel: MainViewModel) {
         return
     }
 
+    val sortedSessions = remember(sessions, sortField, sortDescending) {
+        val comparator: Comparator<WorkoutSession> = when (sortField) {
+            HistorySortField.DATE -> compareBy { it.startEpochMillis }
+            HistorySortField.DURATION -> compareBy { it.durationSec }
+            HistorySortField.AVG_WATTS -> compareBy { it.avgWatts }
+            // compareValues is nulls-first by default, same as every other nullable stat sorted
+            // anywhere else in the app.
+            HistorySortField.AVG_HR -> Comparator { a, b -> compareValues(a.avgHrBpm, b.avgHrBpm) }
+            HistorySortField.KJ -> compareBy { it.totalKj }
+        }
+        val sorted = sessions.sortedWith(comparator)
+        if (sortDescending) sorted.reversed() else sorted
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -73,8 +106,22 @@ fun HistoryScreen(viewModel: MainViewModel) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text("History", style = MaterialTheme.typography.titleLarge)
-            IconButton(onClick = { viewModel.syncHistoryFromBackupFolder() }) {
-                Icon(Icons.Filled.Refresh, contentDescription = "Sync from backup folder")
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                HistorySortMenu(
+                    field = sortField,
+                    descending = sortDescending,
+                    onSelect = { field ->
+                        if (field == sortField) {
+                            sortDescending = !sortDescending
+                        } else {
+                            sortField = field
+                            sortDescending = true
+                        }
+                    },
+                )
+                IconButton(onClick = { viewModel.syncHistoryFromBackupFolder() }) {
+                    Icon(Icons.Filled.Refresh, contentDescription = "Sync from backup folder")
+                }
             }
         }
 
@@ -92,13 +139,44 @@ fun HistoryScreen(viewModel: MainViewModel) {
                     .padding(top = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                items(sessions, key = { it.id }) { session ->
+                items(sortedSessions, key = { it.id }) { session ->
                     SessionRow(
                         session = session,
                         onClick = { selectedSession = session },
                         onDelete = { viewModel.deleteSession(session.id) },
                     )
                 }
+            }
+        }
+    }
+}
+
+/** Tapping the already-selected field flips its direction instead of re-selecting it, so toggling
+ *  sort order never needs a second menu open. A freshly-picked field always starts descending
+ *  (newest/highest first) — the more useful default for a date or any of these stats. */
+@Composable
+private fun HistorySortMenu(field: HistorySortField, descending: Boolean, onSelect: (HistorySortField) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        TextButton(onClick = { expanded = true }) {
+            Text(field.label)
+            Icon(
+                if (descending) Icons.Filled.ArrowDownward else Icons.Filled.ArrowUpward,
+                contentDescription = if (descending) "Descending" else "Ascending",
+                modifier = Modifier
+                    .padding(start = 4.dp)
+                    .size(16.dp),
+            )
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            HistorySortField.entries.forEach { f ->
+                DropdownMenuItem(
+                    text = { Text(f.label) },
+                    onClick = {
+                        expanded = false
+                        onSelect(f)
+                    },
+                )
             }
         }
     }
@@ -118,12 +196,12 @@ private fun SessionRow(session: WorkoutSession, onClick: () -> Unit, onDelete: (
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(session.workoutName ?: "Free ride", style = MaterialTheme.typography.bodyLarge)
                 Text(
                     formatDate(session.startEpochMillis),
                     style = MaterialTheme.typography.bodySmall,
                     color = ErgOnSurface,
                 )
+                Text(session.workoutName ?: "Free ride", style = MaterialTheme.typography.bodyLarge)
                 Spacer(Modifier.height(4.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(formatDuration(session.durationSec), style = MaterialTheme.typography.bodySmall)
@@ -131,6 +209,7 @@ private fun SessionRow(session: WorkoutSession, onClick: () -> Unit, onDelete: (
                     session.avgHrBpm?.let {
                         Text("$it bpm avg", style = MaterialTheme.typography.bodySmall)
                     }
+                    Text("${session.totalKj}kJ", style = MaterialTheme.typography.bodySmall)
                 }
             }
             if (session.samples.size >= 2) {

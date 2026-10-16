@@ -50,6 +50,7 @@ import androidx.documentfile.provider.DocumentFile
 import com.ergrm.trainer.library.LibraryWorkoutFile
 import com.ergrm.trainer.ui.theme.ErgOnSurface
 import com.ergrm.trainer.workout.WorkoutStep
+import com.ergrm.trainer.workout.previewStats
 
 @Composable
 fun LibraryScreen(
@@ -268,7 +269,8 @@ private fun LibraryFileRow(
     LaunchedEffect(file.uri) { previewSteps = fetchPreview(file) }
 
     Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(12.dp)) {
+        // Top/bottom trimmed 20% from the original 12dp (9.6dp) — horizontal unchanged.
+        Column(modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 9.6.dp, bottom = 9.6.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -292,12 +294,18 @@ private fun LibraryFileRow(
             }
             val steps = previewSteps
             if (!steps.isNullOrEmpty()) {
-                Text(
-                    formatWorkoutDuration(steps.sumOf { it.durationSec }),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = ErgOnSurface,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
+                val stats = remember(steps) { steps.previewStats() }
+                // Title-to-duration gap trimmed 20% (4dp -> 3.2dp); duration-to-chart gap below
+                // (6dp) is unchanged.
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.padding(top = 3.2.dp),
+                ) {
+                    Text(formatWorkoutDuration(steps.sumOf { it.durationSec }), style = MaterialTheme.typography.bodySmall, color = ErgOnSurface)
+                    Text("${stats.avgWatts}W avg", style = MaterialTheme.typography.bodySmall, color = ErgOnSurface)
+                    stats.normalizedWatts?.let { Text("NP ${it}W", style = MaterialTheme.typography.bodySmall, color = ErgOnSurface) }
+                    Text("${stats.totalKj}kJ", style = MaterialTheme.typography.bodySmall, color = ErgOnSurface)
+                }
                 WorkoutMiniChart(
                     steps = steps,
                     ftpWatts = ftpWatts,
