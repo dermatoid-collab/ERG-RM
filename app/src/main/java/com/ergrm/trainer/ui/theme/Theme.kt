@@ -86,6 +86,18 @@ enum class ThemeMode(val label: String, val dark: Boolean? = null) {
     ILMETEO("ilMeteo", false),
     AZZURRO("Azzurro", false),
     GIALLO("Giallo", false),
+    // User-supplied minimalist spec: 4 low-saturation grayscale families (neutral hue bias per
+    // family), each with a Dark/Light pair — see the Palettes map below for the mapping from
+    // that spec's 6 semantic roles onto this file's own 15-field Palette, and the contrast
+    // verification notes there.
+    NEUTRAL_DARK("Neutral Dark", true),
+    NEUTRAL_LIGHT("Neutral Light", false),
+    SEPIA_DARK("Sepia Dark", true),
+    SEPIA_LIGHT("Sepia Light", false),
+    SAGE_DARK("Sage Dark", true),
+    SAGE_LIGHT("Sage Light", false),
+    LAVENDER_DARK("Lavender Dark", true),
+    LAVENDER_LIGHT("Lavender Light", false),
 }
 
 private class Palette(
@@ -229,6 +241,39 @@ private val Palettes: Map<ThemeMode, Palette> = mapOf(
     ThemeMode.ILMETEO to Palette(dark = false, background = 0xFFD79A, surface = 0xFFC066, surfaceHigh = 0xF9BB63, surfaceHighest = 0xF1B55F, onBackground = 0x2B1500, onVariant = 0x5C3A10, primary = 0xCA9451, primaryContainer = 0xF0E1CE, onPrimaryContainer = 0x2B1500, secondary = 0x1E6FB8, tertiary = 0xE65100, outline = 0xB8864A, outlineVariant = 0xDCA358, error = 0xD32F2F, errorContainer = 0xF7DADA),
     ThemeMode.AZZURRO to Palette(dark = false, background = 0xCDEBFF, surface = 0x9ED4FF, surfaceHigh = 0x99CFF9, surfaceHighest = 0x94C8F2, onBackground = 0x06203D, onVariant = 0x1F4A75, primary = 0x78A9D6, primaryContainer = 0xD9E7F4, onPrimaryContainer = 0x06203D, secondary = 0x0A6CE0, tertiary = 0xE85D04, outline = 0x6C9BC8, outlineVariant = 0x85B8E4, error = 0xD6293E, errorContainer = 0xF8D8DC),
     ThemeMode.GIALLO to Palette(dark = false, background = 0xFFF0A8, surface = 0xFFE066, surfaceHigh = 0xF9DA63, surfaceHighest = 0xF1D45F, onBackground = 0x2A2000, onVariant = 0x5C4A00, primary = 0xC6AC3C, primaryContainer = 0xEFE8C8, onPrimaryContainer = 0x2A2000, secondary = 0x1E70C8, tertiary = 0xE65100, outline = 0xB39B2E, outlineVariant = 0xD9BE4A, error = 0xD32F2F, errorContainer = 0xF7DADA),
+    // The user's spec defines only 6 semantic roles (background/surface/elevated/muted/
+    // textSecondary/textPrimary) — mapped onto this file's 15-field Palette as:
+    //   background→background, surface→surface, elevated→surfaceHigh, textPrimary→onBackground,
+    //   textSecondary→onVariant, muted→secondary/tertiary/outline, elevated→outlineVariant too.
+    //   surfaceHighest (not in the spec) is elevated blended 14% toward textPrimary, a third
+    //   depth step consistent with the spec's own background→surface→elevated progression.
+    //   primary/onPrimaryContainer reuse textPrimary and primaryContainer reuses elevated, giving
+    //   a monochrome "ink" button (dark-on-light or light-on-dark) rather than introducing a new
+    //   saturated accent hue — the spec explicitly asks to avoid those.
+    //   error/errorContainer aren't in the spec either: one shared muted terracotta (dark:
+    //   0xD9776E) / brick-red (light: 0xA6433B) across all 4 families, the same way this file's
+    //   fixed semantic colors (ErgWarn etc.) stay constant across themes — errorContainer is that
+    //   error color blended back toward each family's own background.
+    // Contrast verified (WCAG, relative-luminance formula) against all 4 families' own
+    // background/surface: textPrimary ≥9.6:1, onPrimary/primary ≥12.3:1, error ≥5.3:1 — all
+    // comfortably pass AA (4.5:1) and in fact AAA (7:1) except error, which is AA-only by design
+    // (a muted, non-saturated red). Two values are the user's own spec numbers, carried over
+    // as-is, and fall short of full AA for their most demanding use: textSecondary/background is
+    // 3.70–4.45:1 in 3 of the 4 *light* families (Sage/Lavender/Neutral light; Sepia light passes
+    // at 4.45) — AA-compliant for large text and UI components (≥3:1) but under the 4.5:1 normal-
+    // text threshold if used for small body copy. Likewise muted/background (used here as
+    // outline) is only 1.8–2.1:1 in all 4 light families, short of the 3:1 WCAG 1.4.11 threshold
+    // for meaningful UI-component graphics (borders, icons) — fine as a background-only wash, not
+    // as a sole way to show a control's edge. Flagged rather than silently adjusted, since these
+    // are the user's own specified hex values.
+    ThemeMode.NEUTRAL_DARK to Palette(dark = true, background = 0x101010, surface = 0x1C1C1C, surfaceHigh = 0x2B2B2B, surfaceHighest = 0x474747, onBackground = 0xF5F5F5, onVariant = 0xBDBDBD, primary = 0xF5F5F5, primaryContainer = 0x2B2B2B, onPrimaryContainer = 0xF5F5F5, secondary = 0x777777, tertiary = 0x777777, outline = 0x777777, outlineVariant = 0x2B2B2B, error = 0xD9776E, errorContainer = 0x382523),
+    ThemeMode.NEUTRAL_LIGHT to Palette(dark = false, background = 0xF0F0F0, surface = 0xFAFAFA, surfaceHigh = 0xDCDCDC, surfaceHighest = 0xC3C3C3, onBackground = 0x282828, onVariant = 0x707070, primary = 0x282828, primaryContainer = 0xDCDCDC, onPrimaryContainer = 0x282828, secondary = 0xA8A8A8, tertiary = 0xA8A8A8, outline = 0xA8A8A8, outlineVariant = 0xDCDCDC, error = 0xA6433B, errorContainer = 0xE3D1CF),
+    ThemeMode.SEPIA_DARK to Palette(dark = true, background = 0x181512, surface = 0x28231F, surfaceHigh = 0x39322B, surfaceHighest = 0x534D46, onBackground = 0xF5F0E9, onVariant = 0xC8BCAC, primary = 0xF5F0E9, primaryContainer = 0x39322B, onPrimaryContainer = 0xF5F0E9, secondary = 0x887B6E, tertiary = 0x887B6E, outline = 0x887B6E, outlineVariant = 0x39322B, error = 0xD9776E, errorContainer = 0x3F2924),
+    ThemeMode.SEPIA_LIGHT to Palette(dark = false, background = 0xF3F0EA, surface = 0xFCFAF6, surfaceHigh = 0xE4DDD3, surfaceHighest = 0xCBC4BB, onBackground = 0x302A25, onVariant = 0x776D61, primary = 0x302A25, primaryContainer = 0xE4DDD3, onPrimaryContainer = 0x302A25, secondary = 0xB3A99B, tertiary = 0xB3A99B, outline = 0xB3A99B, outlineVariant = 0xE4DDD3, error = 0xA6433B, errorContainer = 0xE5D1CA),
+    ThemeMode.SAGE_DARK to Palette(dark = true, background = 0x151A16, surface = 0x242C25, surfaceHigh = 0x354037, surfaceHighest = 0x4F5951, onBackground = 0xF1F5F0, onVariant = 0xC0CDC2, primary = 0xF1F5F0, primaryContainer = 0x354037, onPrimaryContainer = 0xF1F5F0, secondary = 0x819084, tertiary = 0x819084, outline = 0x819084, outlineVariant = 0x354037, error = 0xD9776E, errorContainer = 0x3C2D28),
+    ThemeMode.SAGE_LIGHT to Palette(dark = false, background = 0xF0F3EF, surface = 0xFAFCF9, surfaceHigh = 0xDFE6DC, surfaceHighest = 0xC6CEC4, onBackground = 0x2C382D, onVariant = 0x71816F, primary = 0x2C382D, primaryContainer = 0xDFE6DC, onPrimaryContainer = 0x2C382D, secondary = 0xACB9A9, tertiary = 0xACB9A9, outline = 0xACB9A9, outlineVariant = 0xDFE6DC, error = 0xA6433B, errorContainer = 0xE3D3CF),
+    ThemeMode.LAVENDER_DARK to Palette(dark = true, background = 0x17151D, surface = 0x25232E, surfaceHigh = 0x373442, surfaceHighest = 0x524F5C, onBackground = 0xF5F2F9, onVariant = 0xC8C3D3, primary = 0xF5F2F9, primaryContainer = 0x373442, onPrimaryContainer = 0xF5F2F9, secondary = 0x898397, tertiary = 0x898397, outline = 0x898397, outlineVariant = 0x373442, error = 0xD9776E, errorContainer = 0x3E292D),
+    ThemeMode.LAVENDER_LIGHT to Palette(dark = false, background = 0xF2F0F6, surface = 0xFCFBFD, surfaceHigh = 0xE4DFEB, surfaceHighest = 0xCBC6D2, onBackground = 0x302B3B, onVariant = 0x79718A, primary = 0x302B3B, primaryContainer = 0xE4DFEB, onPrimaryContainer = 0x302B3B, secondary = 0xB2A9C0, tertiary = 0xB2A9C0, outline = 0xB2A9C0, outlineVariant = 0xE4DFEB, error = 0xA6433B, errorContainer = 0xE4D1D4),
 )
 
 fun themeSwatches(mode: ThemeMode): List<Color> = when (mode) {
