@@ -69,6 +69,10 @@ fun IntervalsLibraryScreen(
     var expandedFolders by remember { mutableStateOf<Set<String>>(emptySet()) }
     var searchQuery by remember { mutableStateOf("") }
     var searchActive by remember { mutableStateOf(false) }
+    // Name is the only thing sortable without fetching every workout's full plan first (duration/
+    // watts come from the preview, not this listing's own metadata) — ascending by default.
+    // Reorders the workouts inside each folder; folders themselves stay alphabetical regardless.
+    var sortAscending by remember { mutableStateOf(true) }
 
     LaunchedEffect(Unit) { viewModel.fetchIntervalsLibrary() }
 
@@ -91,6 +95,8 @@ fun IntervalsLibraryScreen(
             onActiveChange = { searchActive = it },
             onRefresh = { viewModel.fetchIntervalsLibrary() },
             otherSources = otherSources,
+            ascending = sortAscending,
+            onToggleSortAscending = { sortAscending = !sortAscending },
         )
         Text("Library (Intervals.icu)", style = MaterialTheme.typography.titleLarge)
 
@@ -122,14 +128,18 @@ fun IntervalsLibraryScreen(
                 // matches drops out of the list entirely instead of appearing empty. The real,
                 // manually-set expandedFolders is left untouched, so clearing the query restores
                 // exactly what the user had open before searching.
-                val displayFolders = remember(sortedFolders, searchQuery) {
-                    if (searchQuery.isBlank()) {
+                val displayFolders = remember(sortedFolders, searchQuery, sortAscending) {
+                    val matchingFolders = if (searchQuery.isBlank()) {
                         sortedFolders
                     } else {
                         sortedFolders.mapNotNull { folder ->
                             val matches = folder.workouts.filter { it.name.contains(searchQuery, ignoreCase = true) }
                             if (matches.isEmpty()) null else folder.copy(workouts = matches)
                         }
+                    }
+                    matchingFolders.map { folder ->
+                        val sorted = folder.workouts.sortedBy { it.name.lowercase() }
+                        folder.copy(workouts = if (sortAscending) sorted else sorted.reversed())
                     }
                 }
                 val effectiveExpanded = if (searchQuery.isBlank()) {

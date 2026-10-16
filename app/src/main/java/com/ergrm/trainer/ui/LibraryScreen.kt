@@ -13,7 +13,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Refresh
@@ -62,6 +64,9 @@ fun LibraryScreen(
     val libraryState by viewModel.libraryState.collectAsState()
     var searchQuery by remember { mutableStateOf("") }
     var searchActive by remember { mutableStateOf(false) }
+    // Name is the only thing sortable without fetching and parsing every file first (duration/
+    // watts live inside each file, not in this listing's own metadata) — ascending by default.
+    var sortAscending by remember { mutableStateOf(true) }
 
     val context = LocalContext.current
     val folderPicker = rememberLauncherForActivityResult(
@@ -89,6 +94,8 @@ fun LibraryScreen(
             onActiveChange = { searchActive = it },
             onRefresh = { viewModel.refreshLibrary() },
             otherSources = otherSources,
+            ascending = sortAscending,
+            onToggleSortAscending = { sortAscending = !sortAscending },
         )
         Text("Workout Library", style = MaterialTheme.typography.titleLarge)
 
@@ -131,12 +138,14 @@ fun LibraryScreen(
                 )
             }
             is LibraryUiState.Loaded -> {
-                val visibleFiles = remember(state.files, searchQuery) {
-                    if (searchQuery.isBlank()) {
+                val visibleFiles = remember(state.files, searchQuery, sortAscending) {
+                    val matching = if (searchQuery.isBlank()) {
                         state.files
                     } else {
                         state.files.filter { it.name.contains(searchQuery, ignoreCase = true) }
                     }
+                    val sorted = matching.sortedBy { it.name.lowercase() }
+                    if (sortAscending) sorted else sorted.reversed()
                 }
                 if (state.files.isEmpty()) {
                     Text(
@@ -205,10 +214,13 @@ internal fun WorkoutSourceMenu(items: List<Pair<String, () -> Unit>>) {
 }
 
 /** Same search affordance reused on every workout-source list screen (Library, Calendar,
- *  Intervals.icu Library): a magnifying-glass icon between "Other sources" and Refresh that
- *  expands into a full-width text field in their place, with a close button to collapse it and
- *  clear the query. This only owns the icon/field chrome and the query text — filtering the list
- *  by that query is each screen's own job. */
+ *  Intervals.icu Library): a magnifying-glass icon that expands into a full-width text field in
+ *  its place, with a close button to collapse it and clear the query. This only owns the
+ *  icon/field chrome and the query text — filtering the list by that query is each screen's own
+ *  job. "Other sources" sits on the left, the rest of the icons (an optional sort toggle, then
+ *  Search, then Refresh) on the right, so the two don't crowd into the same corner. [ascending]/
+ *  [onToggleSortAscending] are both null on screens with nothing meaningful to sort by (Calendar,
+ *  GPX routes) — passing one without the other is a misuse, not a silent no-op. */
 @Composable
 internal fun SearchableHeaderRow(
     query: String,
@@ -217,10 +229,12 @@ internal fun SearchableHeaderRow(
     onActiveChange: (Boolean) -> Unit,
     onRefresh: () -> Unit,
     otherSources: List<Pair<String, () -> Unit>>,
+    ascending: Boolean? = null,
+    onToggleSortAscending: (() -> Unit)? = null,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.End,
+        horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (active) {
@@ -248,11 +262,21 @@ internal fun SearchableHeaderRow(
             }
         } else {
             WorkoutSourceMenu(otherSources)
-            IconButton(onClick = { onActiveChange(true) }) {
-                Icon(Icons.Filled.Search, contentDescription = "Search")
-            }
-            IconButton(onClick = onRefresh) {
-                Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (ascending != null && onToggleSortAscending != null) {
+                    IconButton(onClick = onToggleSortAscending) {
+                        Icon(
+                            if (ascending) Icons.Filled.ArrowUpward else Icons.Filled.ArrowDownward,
+                            contentDescription = if (ascending) "Sort ascending" else "Sort descending",
+                        )
+                    }
+                }
+                IconButton(onClick = { onActiveChange(true) }) {
+                    Icon(Icons.Filled.Search, contentDescription = "Search")
+                }
+                IconButton(onClick = onRefresh) {
+                    Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
+                }
             }
         }
     }
