@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -20,6 +19,7 @@ import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
@@ -41,6 +41,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.PointMode
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.ergrm.trainer.history.SessionSample
 import com.ergrm.trainer.history.WorkoutSession
@@ -52,6 +53,7 @@ import java.util.Date
 import java.util.Locale
 
 private enum class HistorySortField(val label: String) {
+    NAME("Name"),
     DATE("Date"),
     DURATION("Duration"),
     AVG_WATTS("W avg"),
@@ -63,10 +65,9 @@ private enum class HistorySortField(val label: String) {
 fun HistoryScreen(viewModel: MainViewModel) {
     val sessions by viewModel.sessionHistory.collectAsState()
     var selectedSession by remember { mutableStateOf<WorkoutSession?>(null) }
-    // Newest-first by default — the same order the underlying list already came in, so picking
-    // this as the default keeps existing behavior for anyone who never opens the sort menu.
-    var sortField by remember { mutableStateOf(HistorySortField.DATE) }
-    var sortDescending by remember { mutableStateOf(true) }
+    // Workout name, ascending, as requested — not the list's own incoming (newest-first) order.
+    var sortField by remember { mutableStateOf(HistorySortField.NAME) }
+    var sortAscending by remember { mutableStateOf(true) }
 
     LaunchedEffect(Unit) {
         viewModel.refreshHistory()
@@ -81,8 +82,9 @@ fun HistoryScreen(viewModel: MainViewModel) {
         return
     }
 
-    val sortedSessions = remember(sessions, sortField, sortDescending) {
-        val comparator: Comparator<WorkoutSession> = when (sortField) {
+    val sortedSessions = remember(sessions, sortField, sortAscending) {
+        val primary: Comparator<WorkoutSession> = when (sortField) {
+            HistorySortField.NAME -> compareBy { (it.workoutName ?: "").lowercase() }
             HistorySortField.DATE -> compareBy { it.startEpochMillis }
             HistorySortField.DURATION -> compareBy { it.durationSec }
             HistorySortField.AVG_WATTS -> compareBy { it.avgWatts }
@@ -91,8 +93,12 @@ fun HistoryScreen(viewModel: MainViewModel) {
             HistorySortField.AVG_HR -> Comparator { a, b -> compareValues(a.avgHrBpm, b.avgHrBpm) }
             HistorySortField.KJ -> compareBy { it.totalKj }
         }
+        // Two sessions tied on the primary field (e.g. the same workout name ridden twice) fall
+        // back to date-time, so they still land in a stable, predictable order instead of
+        // whatever sortedWith happens to leave them in.
+        val comparator = if (sortField == HistorySortField.DATE) primary else primary.thenBy { it.startEpochMillis }
         val sorted = sessions.sortedWith(comparator)
-        if (sortDescending) sorted.reversed() else sorted
+        if (sortAscending) sorted else sorted.reversed()
     }
 
     Column(
@@ -106,19 +112,16 @@ fun HistoryScreen(viewModel: MainViewModel) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text("History", style = MaterialTheme.typography.titleLarge)
+            // Icon-only controls (no field name shown inline) so sorting doesn't cost any extra
+            // header width — both sit left of Refresh, as asked.
             Row(verticalAlignment = Alignment.CenterVertically) {
-                HistorySortMenu(
-                    field = sortField,
-                    descending = sortDescending,
-                    onSelect = { field ->
-                        if (field == sortField) {
-                            sortDescending = !sortDescending
-                        } else {
-                            sortField = field
-                            sortDescending = true
-                        }
-                    },
-                )
+                HistorySortFieldMenu(selected = sortField, onSelect = { sortField = it })
+                IconButton(onClick = { sortAscending = !sortAscending }) {
+                    Icon(
+                        if (sortAscending) Icons.Filled.ArrowUpward else Icons.Filled.ArrowDownward,
+                        contentDescription = if (sortAscending) "Sort ascending" else "Sort descending",
+                    )
+                }
                 IconButton(onClick = { viewModel.syncHistoryFromBackupFolder() }) {
                     Icon(Icons.Filled.Refresh, contentDescription = "Sync from backup folder")
                 }
@@ -151,27 +154,22 @@ fun HistoryScreen(viewModel: MainViewModel) {
     }
 }
 
-/** Tapping the already-selected field flips its direction instead of re-selecting it, so toggling
- *  sort order never needs a second menu open. A freshly-picked field always starts descending
- *  (newest/highest first) — the more useful default for a date or any of these stats. */
+/** A single Sort icon instead of a labeled button — the active field only shows once the menu is
+ *  open (bolded there), so this costs no header width of its own. Direction is its own separate
+ *  icon button next to this one, not folded in here. */
 @Composable
-private fun HistorySortMenu(field: HistorySortField, descending: Boolean, onSelect: (HistorySortField) -> Unit) {
+private fun HistorySortFieldMenu(selected: HistorySortField, onSelect: (HistorySortField) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Box {
-        TextButton(onClick = { expanded = true }) {
-            Text(field.label)
-            Icon(
-                if (descending) Icons.Filled.ArrowDownward else Icons.Filled.ArrowUpward,
-                contentDescription = if (descending) "Descending" else "Ascending",
-                modifier = Modifier
-                    .padding(start = 4.dp)
-                    .size(16.dp),
-            )
+        IconButton(onClick = { expanded = true }) {
+            Icon(Icons.Filled.Sort, contentDescription = "Sort by")
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             HistorySortField.entries.forEach { f ->
                 DropdownMenuItem(
-                    text = { Text(f.label) },
+                    text = {
+                        Text(f.label, fontWeight = if (f == selected) FontWeight.Bold else FontWeight.Normal)
+                    },
                     onClick = {
                         expanded = false
                         onSelect(f)
