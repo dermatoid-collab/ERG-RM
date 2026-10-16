@@ -24,7 +24,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -152,7 +152,7 @@ private fun SessionDetailPage(session: WorkoutSession, viewModel: MainViewModel,
                     }
                 }
             }) {
-                Icon(Icons.Filled.Download, contentDescription = "Re-import original workout")
+                Icon(Icons.Filled.Restore, contentDescription = "Re-import original workout")
             }
             IconButton(onClick = {
                 viewModel.exportSessionTcx(session) { file ->
