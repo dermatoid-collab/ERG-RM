@@ -191,8 +191,27 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
                         if (AppNavigationEvents.userLeftApp) {
                             AppNavigationEvents.userLeftApp = false
                             if (!returningFromPicker) {
-                                overlay = Overlay.NONE
-                                screen = Screen.WORKOUT
+                                // A library-type overlay (local "Workout Library" folder,
+                                // Intervals.icu Library/Calendar, GPX folder) stays open across
+                                // this reset instead of being dismissed to the Workout screen like
+                                // every other overlay — that's the whole point of a "connected
+                                // library" surviving a pause. Falls back to the local Workout
+                                // Library (always available, no setup required) only when the one
+                                // that was open needs a data source since unset in Settings.
+                                val libraryStillAvailable = when (overlay) {
+                                    Overlay.LIBRARY -> true
+                                    Overlay.GPX_LIBRARY -> settings.gpxFolderUri != null
+                                    Overlay.CALENDAR, Overlay.INTERVALS_LIBRARY -> settings.intervalsConfigured
+                                    else -> null
+                                }
+                                when (libraryStillAvailable) {
+                                    true -> Unit
+                                    false -> overlay = Overlay.LIBRARY
+                                    null -> {
+                                        overlay = Overlay.NONE
+                                        screen = Screen.WORKOUT
+                                    }
+                                }
                             }
                         }
                     }
