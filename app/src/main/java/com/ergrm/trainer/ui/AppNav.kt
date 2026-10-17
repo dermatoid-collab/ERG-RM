@@ -502,7 +502,16 @@ private fun MainPager(
         }
     }
 
-    HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
+    // beyondBoundsPageCount: 1 keeps each page's immediate neighbor composed instead of the
+    // default 0, which tears a page all the way down the moment it scrolls fully out of view and
+    // rebuilds it from scratch (full LazyColumn + LaunchedEffect(Unit) re-firing, History's own
+    // re-sort/backup-folder sync included) the next time it's swiped back into view — reported as
+    // the swipe itself feeling choppy specifically around History, which is exactly the page with
+    // the heaviest fresh-composition cost (sparkline-drawing rows) here. Harmless for the other
+    // 4 screens' own background state; unlike ActiveWorkoutPager (2 pages, deliberately still
+    // relies on disposal-on-swipe-away — see its own doc comment), nothing here depends on being
+    // torn down as soon as it's one page away.
+    HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize(), beyondBoundsPageCount = 1) { page ->
         when (page) {
             0 -> WorkoutScreen(
                 viewModel,
