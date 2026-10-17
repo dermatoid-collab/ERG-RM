@@ -18,11 +18,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Sort
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -30,7 +28,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
@@ -219,7 +216,6 @@ fun HistoryScreen(viewModel: MainViewModel, onImported: () -> Unit = {}) {
                     SessionRow(
                         session = session,
                         onClick = { selectedIndex = index },
-                        onDelete = { viewModel.deleteSession(session.id) },
                     )
                 }
             }
@@ -254,9 +250,7 @@ private fun HistorySortFieldMenu(selected: HistorySortField, onSelect: (HistoryS
 }
 
 @Composable
-private fun SessionRow(session: WorkoutSession, onClick: () -> Unit, onDelete: () -> Unit) {
-    var confirmDelete by remember { mutableStateOf(false) }
-
+private fun SessionRow(session: WorkoutSession, onClick: () -> Unit) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
@@ -292,27 +286,7 @@ private fun SessionRow(session: WorkoutSession, onClick: () -> Unit, onDelete: (
                         .padding(horizontal = 8.dp),
                 )
             }
-            IconButton(onClick = { confirmDelete = true }) {
-                Icon(Icons.Filled.Delete, contentDescription = "Delete session")
-            }
         }
-    }
-
-    if (confirmDelete) {
-        AlertDialog(
-            onDismissRequest = { confirmDelete = false },
-            title = { Text("Delete session?") },
-            text = { Text("This can't be undone.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    confirmDelete = false
-                    onDelete()
-                }) { Text("Delete") }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirmDelete = false }) { Text("Cancel") }
-            },
-        )
     }
 }
 

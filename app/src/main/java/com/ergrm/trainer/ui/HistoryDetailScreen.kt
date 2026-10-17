@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
@@ -105,6 +106,10 @@ private fun SessionDetailPage(session: WorkoutSession, viewModel: MainViewModel,
     val loadState by viewModel.workoutLoadState.collectAsState()
     var pendingImport by remember { mutableStateOf(false) }
     var importMessage by remember { mutableStateOf<String?>(null) }
+    // Moved here from the History list row (Task: declutter the list, confirm-delete only once
+    // you've actually opened the session) — onBack() after deleting, since the pager this screen
+    // lives in (SessionDetailScreen) still holds the stale sessions list otherwise.
+    var confirmDelete by remember { mutableStateOf(false) }
 
     LaunchedEffect(loadState) {
         if (pendingImport && loadState is WorkoutLoadState.Loaded) {
@@ -154,6 +159,9 @@ private fun SessionDetailPage(session: WorkoutSession, viewModel: MainViewModel,
             }) {
                 Icon(Icons.Filled.Restore, contentDescription = "Re-import original workout")
             }
+            IconButton(onClick = { confirmDelete = true }) {
+                Icon(Icons.Filled.Delete, contentDescription = "Delete session")
+            }
             IconButton(onClick = {
                 viewModel.exportSessionTcx(session) { file ->
                     val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
@@ -177,6 +185,24 @@ private fun SessionDetailPage(session: WorkoutSession, viewModel: MainViewModel,
                 text = { Text(message) },
                 confirmButton = {
                     TextButton(onClick = { importMessage = null }) { Text("OK") }
+                },
+            )
+        }
+
+        if (confirmDelete) {
+            AlertDialog(
+                onDismissRequest = { confirmDelete = false },
+                title = { Text("Delete session?") },
+                text = { Text("This can't be undone.") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        confirmDelete = false
+                        viewModel.deleteSession(session.id)
+                        onBack()
+                    }) { Text("Delete") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { confirmDelete = false }) { Text("Cancel") }
                 },
             )
         }
