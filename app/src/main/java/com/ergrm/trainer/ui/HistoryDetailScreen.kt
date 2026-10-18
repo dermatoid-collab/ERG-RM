@@ -578,7 +578,9 @@ private fun StatLine(label: String, value: String, valueColor: Color = ErgOnSurf
 /** The full stat set for a session, as (label, value, color) in display order — shared by
  *  [SessionStatsLines] (landscape, one column) and [StatsGrid] (portrait, split into two columns),
  *  so the two orientations can never drift out of sync on what they show or in what order. SS Time
- *  and Z4+ Time sit right after NP in both, per request. */
+ *  and Z4+ Time sit right after NP in both, per request. @Composable because ErgOnSurface/ErgHrLine/
+ *  ErgProgressLine/ErgHeatLoad are themselves @Composable getters (theme-reactive). */
+@Composable
 private fun sessionStatLines(session: WorkoutSession, stats: SessionStats): List<Triple<String, String, Color>> = buildList {
     add(Triple("Duration", formatWorkoutDuration(session.durationSec), ErgOnSurface))
     add(Triple("Distance", stats.distanceKm?.let { "%.1f km".format(it) } ?: "n/a", ErgOnSurface))
