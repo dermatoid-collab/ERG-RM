@@ -24,10 +24,23 @@ data class SessionStats(
     val heatTrainingLoad: Float?,
     // Training Stress Score (Coggan) — null without both an FTP and enough samples for NP.
     val tss: Int?,
+    // Seconds spent in the Sweet Spot band and at Z4+ — both null without an FTP, same as [tss].
+    val ssTimeSec: Int?,
+    val z4PlusTimeSec: Int?,
 )
 
 /** Heat-strain alert threshold for [SessionStats.timeAboveCoreTempSec], as requested. */
 const val CORE_TEMP_ALERT_C = 38.3f
+
+/** Sweet Spot: the ~84-97% FTP band straddling the top of Tempo and the bottom of Threshold
+ *  (the common TrainerRoad/Fast Talk Labs convention) — not tied to
+ *  [com.ergrm.trainer.ui.POWER_ZONES]' Z3/Z4 split, which has no zone at exactly this band. */
+private const val SWEET_SPOT_MIN_PCT = 0.84f
+private const val SWEET_SPOT_MAX_PCT = 0.97f
+
+/** Matches [com.ergrm.trainer.ui.POWER_ZONES]' own Z3→Z4 boundary (90% FTP) — kept as its own
+ *  constant here rather than importing that ui-package value, so history doesn't depend on ui. */
+private const val Z4_PLUS_MIN_PCT = 0.90f
 
 /** [ftpWatts] should be the FTP in effect *during* the ride, not necessarily the rider's current
  *  one — see [WorkoutSession.ftpWatts], which is what the history view passes in. */
@@ -60,6 +73,17 @@ fun computeSessionStats(samples: List<SessionSample>, ftpWatts: Int? = null): Se
         tss = if (ftpWatts != null && ftpWatts > 0 && normalizedWatts != null) {
             val intensityFactor = normalizedWatts.toDouble() / ftpWatts
             (samples.size * normalizedWatts * intensityFactor / (ftpWatts * 3600.0) * 100.0).roundToInt()
+        } else {
+            null
+        },
+        // Each sample is ~1 recorded second, same assumption totalKj/timeAboveCoreTempSec rely on.
+        ssTimeSec = if (ftpWatts != null && ftpWatts > 0) {
+            samples.count { it.watts.toFloat() / ftpWatts in SWEET_SPOT_MIN_PCT..SWEET_SPOT_MAX_PCT }
+        } else {
+            null
+        },
+        z4PlusTimeSec = if (ftpWatts != null && ftpWatts > 0) {
+            samples.count { it.watts.toFloat() / ftpWatts > Z4_PLUS_MIN_PCT }
         } else {
             null
         },

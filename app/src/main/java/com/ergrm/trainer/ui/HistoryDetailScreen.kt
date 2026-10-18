@@ -21,7 +21,6 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
@@ -576,139 +575,72 @@ private fun StatLine(label: String, value: String, valueColor: Color = ErgOnSurf
     }
 }
 
+/** The full stat set for a session, as (label, value, color) in display order — shared by
+ *  [SessionStatsLines] (landscape, one column) and [StatsGrid] (portrait, split into two columns),
+ *  so the two orientations can never drift out of sync on what they show or in what order. SS Time
+ *  and Z4+ Time sit right after NP in both, per request. */
+private fun sessionStatLines(session: WorkoutSession, stats: SessionStats): List<Triple<String, String, Color>> = buildList {
+    add(Triple("Duration", formatWorkoutDuration(session.durationSec), ErgOnSurface))
+    add(Triple("Distance", stats.distanceKm?.let { "%.1f km".format(it) } ?: "n/a", ErgOnSurface))
+    add(Triple("Avg speed", stats.avgSpeedKmh?.let { "%.1f km/h".format(it) } ?: "n/a", ErgOnSurface))
+    add(Triple("Work", "${stats.totalKj} kJ", ErgOnSurface))
+    add(Triple("Avg watts", "${stats.avgWatts} W", ErgOnSurface))
+    add(Triple("NP", stats.normalizedWatts?.let { "$it W" } ?: "n/a", ErgOnSurface))
+    add(Triple("SS Time", stats.ssTimeSec?.let { formatMmSs(it) } ?: "n/a", ErgOnSurface))
+    add(Triple("Z4+ Time", stats.z4PlusTimeSec?.let { formatMmSs(it) } ?: "n/a", ErgOnSurface))
+    add(Triple("Max HR", stats.maxHrBpm?.let { "$it bpm" } ?: "n/a", if (stats.maxHrBpm != null) ErgHrLine else ErgOnSurface))
+    add(Triple("Avg HR", stats.avgHrBpm?.let { "$it bpm" } ?: "n/a", if (stats.avgHrBpm != null) ErgHrLine else ErgOnSurface))
+    add(
+        Triple(
+            "Avg cadence", stats.avgCadenceRpm?.let { "$it rpm" } ?: "n/a",
+            if (stats.avgCadenceRpm != null) ErgProgressLine else ErgOnSurface,
+        ),
+    )
+    if (stats.avgCoreTempC != null) {
+        add(Triple("Avg core temp", "%.2f°C".format(stats.avgCoreTempC), ErgOnSurface))
+        add(Triple("Max core temp", stats.maxCoreTempC?.let { "%.2f°C".format(it) } ?: "n/a", ErgOnSurface))
+        add(Triple("Mins > ${CORE_TEMP_ALERT_C}°", formatMmSs(stats.timeAboveCoreTempSec), ErgOnSurface))
+    }
+    // Prefers the value stored on the session itself (computed once at save time, see
+    // MainViewModel.exitWorkout) over recomputing it here — falls back to the live derivation
+    // only for sessions saved before that field existed.
+    val htl = session.heatTrainingLoad ?: stats.heatTrainingLoad
+    if (htl != null || stats.tss != null) {
+        add(Triple("Core HTL", htl?.let { "%.1f/10".format(it) } ?: "n/a", if (htl != null) ErgHeatLoad else ErgOnSurface))
+        add(Triple("TSS", stats.tss?.toString() ?: "n/a", ErgOnSurface))
+    }
+}
+
 /** Landscape stand-in for [StatsGrid]: the same stats as one flat stack of "label: value" lines
  *  instead of a grid of tiles. */
 @Composable
 private fun SessionStatsLines(session: WorkoutSession, stats: SessionStats) {
-    val lines = buildList {
-        add(Triple("Duration", formatWorkoutDuration(session.durationSec), ErgOnSurface))
-        add(Triple("Distance", stats.distanceKm?.let { "%.1f km".format(it) } ?: "n/a", ErgOnSurface))
-        add(Triple("Avg speed", stats.avgSpeedKmh?.let { "%.1f km/h".format(it) } ?: "n/a", ErgOnSurface))
-        add(Triple("Work", "${stats.totalKj} kJ", ErgOnSurface))
-        add(Triple("Avg watts", "${stats.avgWatts} W", ErgOnSurface))
-        add(Triple("NP", stats.normalizedWatts?.let { "$it W" } ?: "n/a", ErgOnSurface))
-        add(Triple("Max HR", stats.maxHrBpm?.let { "$it bpm" } ?: "n/a", if (stats.maxHrBpm != null) ErgHrLine else ErgOnSurface))
-        add(Triple("Avg HR", stats.avgHrBpm?.let { "$it bpm" } ?: "n/a", if (stats.avgHrBpm != null) ErgHrLine else ErgOnSurface))
-        add(
-            Triple(
-                "Avg cadence", stats.avgCadenceRpm?.let { "$it rpm" } ?: "n/a",
-                if (stats.avgCadenceRpm != null) ErgProgressLine else ErgOnSurface,
-            ),
-        )
-        if (stats.avgCoreTempC != null) {
-            add(Triple("Avg core temp", "%.2f°C".format(stats.avgCoreTempC), ErgOnSurface))
-            add(Triple("Max core temp", stats.maxCoreTempC?.let { "%.2f°C".format(it) } ?: "n/a", ErgOnSurface))
-            add(Triple("Mins > ${CORE_TEMP_ALERT_C}°", formatMmSs(stats.timeAboveCoreTempSec), ErgOnSurface))
-        }
-        // Prefers the value stored on the session itself (computed once at save time, see
-        // MainViewModel.exitWorkout) over recomputing it here — falls back to the live derivation
-        // only for sessions saved before that field existed.
-        val htl = session.heatTrainingLoad ?: stats.heatTrainingLoad
-        if (htl != null || stats.tss != null) {
-            add(Triple("Core HTL", htl?.let { "%.1f/10".format(it) } ?: "n/a", if (htl != null) ErgHeatLoad else ErgOnSurface))
-            add(Triple("TSS", stats.tss?.toString() ?: "n/a", ErgOnSurface))
-        }
-    }
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        lines.forEach { (label, value, color) -> StatLine(label, value, color) }
+        sessionStatLines(session, stats).forEach { (label, value, color) -> StatLine(label, value, color) }
     }
 }
 
+/** Portrait's own stat list, as two side-by-side columns instead of [SessionStatsLines]' single
+ *  one — a 3-tiles-per-row DetailTile grid ran out of width the moment SS Time/Z4+ Time were added,
+ *  so this switches to the same compact StatLine style landscape already uses, split right after
+ *  Z4+ Time: everything through it on the left, everything after it on the right. */
 @Composable
 private fun StatsGrid(session: WorkoutSession, stats: SessionStats) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
-            DetailTile("Duration", formatWorkoutDuration(session.durationSec), modifier = Modifier.weight(1f))
-            DetailTile("Distance", stats.distanceKm?.let { "%.1f".format(it) } ?: "n/a", unit = "km", modifier = Modifier.weight(1f))
-            DetailTile("Avg speed", stats.avgSpeedKmh?.let { "%.1f".format(it) } ?: "n/a", unit = "km/h", modifier = Modifier.weight(1f))
+    val lines = sessionStatLines(session, stats)
+    val splitIndex = lines.indexOfFirst { it.first == "Z4+ Time" } + 1
+    val (left, right) = lines.take(splitIndex) to lines.drop(splitIndex)
+    Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            left.forEach { (label, value, color) -> StatLine(label, value, color) }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
-            DetailTile("Work", "${stats.totalKj}", unit = "kJ", modifier = Modifier.weight(1f))
-            DetailTile("Avg watts", "${stats.avgWatts}", unit = "W", modifier = Modifier.weight(1f))
-            DetailTile("NP", stats.normalizedWatts?.let { "$it" } ?: "n/a", unit = "W", modifier = Modifier.weight(1f))
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
-            DetailTile(
-                "Max HR", stats.maxHrBpm?.let { "$it" } ?: "n/a", unit = "bpm", modifier = Modifier.weight(1f),
-                valueColor = if (stats.maxHrBpm != null) ErgHrLine else ErgOnSurface,
-            )
-            DetailTile(
-                "Avg HR", stats.avgHrBpm?.let { "$it" } ?: "n/a", unit = "bpm", modifier = Modifier.weight(1f),
-                valueColor = if (stats.avgHrBpm != null) ErgHrLine else ErgOnSurface,
-            )
-            DetailTile(
-                "Avg cadence", stats.avgCadenceRpm?.let { "$it" } ?: "n/a", unit = "rpm", modifier = Modifier.weight(1f),
-                // Same blue as this screen's own cadence trace/legend above, not Vitals' slightly
-                // different blue.
-                valueColor = if (stats.avgCadenceRpm != null) ErgProgressLine else ErgOnSurface,
-            )
-        }
-        if (stats.avgCoreTempC != null) {
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
-                DetailTile("Avg core temp", "%.2f".format(stats.avgCoreTempC), unit = "°C", modifier = Modifier.weight(1f))
-                DetailTile(
-                    "Max core temp", stats.maxCoreTempC?.let { "%.2f".format(it) } ?: "n/a", unit = "°C",
-                    modifier = Modifier.weight(1f),
-                )
-                DetailTile(
-                    "Mins > ${CORE_TEMP_ALERT_C}°", formatMmSs(stats.timeAboveCoreTempSec),
-                    modifier = Modifier.weight(1f),
-                )
-            }
-        }
-        // Recomputed from the samples so every session reflects the current HTL estimate (see
-        // HeatTrainingLoad.kt) — the value stored at save time is only a fallback for sessions
-        // whose per-second samples aren't available.
-        val htl = stats.heatTrainingLoad ?: session.heatTrainingLoad
-        if (htl != null || stats.tss != null) {
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
-                // Estimate of CORE's Heat Training Load, see HeatTrainingLoad.kt. Same orange as
-                // Vitals' own Core HTL tile.
-                DetailTile(
-                    "Core HTL", htl?.let { "%.1f/10".format(it) } ?: "n/a",
-                    valueColor = if (htl != null) ErgHeatLoad else ErgOnSurface,
-                    modifier = Modifier.weight(1f),
-                )
-                DetailTile("TSS", stats.tss?.toString() ?: "n/a", modifier = Modifier.weight(1f))
-            }
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            right.forEach { (label, value, color) -> StatLine(label, value, color) }
         }
     }
 }
 
 private fun formatMmSs(totalSeconds: Int): String =
     "%02d:%02d".format(totalSeconds / 60, totalSeconds % 60)
-
-@Composable
-private fun DetailTile(
-    label: String,
-    value: String,
-    modifier: Modifier = Modifier,
-    unit: String? = null,
-    valueColor: Color = ErgOnSurface,
-) {
-    Column(
-        modifier = modifier
-            .background(ErgSurface, RoundedCornerShape(13.dp))
-            .padding(horizontal = 10.dp, vertical = 8.dp),
-    ) {
-        Text(
-            label.uppercase(),
-            style = MaterialTheme.typography.labelSmall,
-            color = ErgOnSurface.copy(alpha = 0.6f),
-        )
-        Row {
-            Text(value, style = MaterialTheme.typography.titleMedium, color = valueColor)
-            if (unit != null && value != "n/a") {
-                Text(
-                    " $unit",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = ErgOnSurface.copy(alpha = 0.6f),
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-            }
-        }
-    }
-}
 
 private fun formatSessionDate(epochMillis: Long): String =
     SimpleDateFormat("d MMM yyyy, HH:mm", Locale.getDefault()).format(Date(epochMillis))
