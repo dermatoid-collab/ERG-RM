@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
@@ -127,6 +128,14 @@ fun HistoryScreen(viewModel: MainViewModel, onImported: () -> Unit = {}) {
         return
     }
 
+    val listState = rememberLazyListState()
+    // Jump back to the top of the (re-)sorted list on a sort change — otherwise the list keeps
+    // whatever scroll offset it had under the old order, which can land on an unrelated session
+    // now that the rows underneath it have moved.
+    LaunchedEffect(sortField, sortAscending) {
+        listState.scrollToItem(0)
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -207,6 +216,7 @@ fun HistoryScreen(viewModel: MainViewModel, onImported: () -> Unit = {}) {
             )
         } else {
             LazyColumn(
+                state = listState,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 12.dp),

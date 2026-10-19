@@ -6,6 +6,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -89,7 +90,12 @@ fun SessionDetailScreen(
     onImported: () -> Unit,
 ) {
     val pagerState = rememberPagerState(initialPage = initialIndex) { sessions.size }
-    HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
+    // beyondBoundsPageCount: 1 keeps the next/previous session's page composed instead of the
+    // default 0, which tears a page down the moment it scrolls fully out of view — each page
+    // here is its own computeSessionStats() pass plus 2 sample-heavy Canvas charts, expensive
+    // enough to rebuild from scratch that swiping through history felt choppy (same root cause
+    // already fixed for AppNav's MainPager around the History tab itself).
+    HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize(), beyondBoundsPageCount = 1) { page ->
         SessionDetailPage(session = sessions[page], viewModel = viewModel, onBack = onBack, onImported = onImported)
     }
 }
@@ -363,8 +369,9 @@ private fun LegendEntry(label: String, color: Color) {
 
 @Composable
 private fun SessionDetailChart(samples: List<SessionSample>, modifier: Modifier = Modifier) {
-    // Which sample the scrub line/tooltip currently points at — set on first touch, updated as
-    // the finger drags, and then left as-is (not cleared) until the next touch moves it again.
+    // Which sample the scrub line/tooltip currently points at — set by a drag (updated live as
+    // the finger moves) or toggled by a plain tap (see the Canvas's own pointerInput below), and
+    // left as-is in between.
     var selectedIndex by remember(samples) { mutableStateOf<Int?>(null) }
     val textMeasurer = rememberTextMeasurer()
     // Canvas{} below is a plain DrawScope lambda, not @Composable, so it can't read these
@@ -374,18 +381,32 @@ private fun SessionDetailChart(samples: List<SessionSample>, modifier: Modifier 
     val powerColor = powerTraceColor(MaterialTheme.colorScheme.background.luminance() > 0.5f)
 
     Canvas(
-        modifier = modifier.pointerInput(samples) {
-            val lastIndex = samples.size - 1
-            if (lastIndex < 1) return@pointerInput
-            fun indexAt(touchX: Float) = (touchX / size.width * lastIndex).roundToInt().coerceIn(0, lastIndex)
-            detectDragGestures(
-                onDragStart = { offset -> selectedIndex = indexAt(offset.x) },
-                onDrag = { change, _ ->
-                    change.consume()
-                    selectedIndex = indexAt(change.position.x)
-                },
-            )
-        },
+        modifier = modifier
+            // Separate pointerInput from the drag-to-scrub one below — detectTapGestures only
+            // fires onTap for a touch that never exceeds touch slop, so a real drag never reaches
+            // it and this never fights the scrub gesture. Toggles the tooltip off once it's
+            // showing (previously stuck until the next drag moved it — see the comment on
+            // selectedIndex above), or on at the tapped position if it wasn't.
+            .pointerInput(samples) {
+                val lastIndex = samples.size - 1
+                if (lastIndex < 1) return@pointerInput
+                fun indexAt(touchX: Float) = (touchX / size.width * lastIndex).roundToInt().coerceIn(0, lastIndex)
+                detectTapGestures(
+                    onTap = { offset -> selectedIndex = if (selectedIndex != null) null else indexAt(offset.x) },
+                )
+            }
+            .pointerInput(samples) {
+                val lastIndex = samples.size - 1
+                if (lastIndex < 1) return@pointerInput
+                fun indexAt(touchX: Float) = (touchX / size.width * lastIndex).roundToInt().coerceIn(0, lastIndex)
+                detectDragGestures(
+                    onDragStart = { offset -> selectedIndex = indexAt(offset.x) },
+                    onDrag = { change, _ ->
+                        change.consume()
+                        selectedIndex = indexAt(change.position.x)
+                    },
+                )
+            },
     ) {
         val n = samples.size
         if (n < 2) return@Canvas
@@ -498,18 +519,29 @@ private fun CoreSkinHsiDetailChart(samples: List<SessionSample>, modifier: Modif
     val surfaceColor = ErgSurface
 
     Canvas(
-        modifier = modifier.pointerInput(samples) {
-            val lastIndex = samples.size - 1
-            if (lastIndex < 1) return@pointerInput
-            fun indexAt(touchX: Float) = (touchX / size.width * lastIndex).roundToInt().coerceIn(0, lastIndex)
-            detectDragGestures(
-                onDragStart = { offset -> selectedIndex = indexAt(offset.x) },
-                onDrag = { change, _ ->
-                    change.consume()
-                    selectedIndex = indexAt(change.position.x)
-                },
-            )
-        },
+        modifier = modifier
+            // See SessionDetailChart's own identical pair of pointerInputs: a plain tap toggles
+            // the tooltip off (or on), a drag scrubs it live — the two never fight each other.
+            .pointerInput(samples) {
+                val lastIndex = samples.size - 1
+                if (lastIndex < 1) return@pointerInput
+                fun indexAt(touchX: Float) = (touchX / size.width * lastIndex).roundToInt().coerceIn(0, lastIndex)
+                detectTapGestures(
+                    onTap = { offset -> selectedIndex = if (selectedIndex != null) null else indexAt(offset.x) },
+                )
+            }
+            .pointerInput(samples) {
+                val lastIndex = samples.size - 1
+                if (lastIndex < 1) return@pointerInput
+                fun indexAt(touchX: Float) = (touchX / size.width * lastIndex).roundToInt().coerceIn(0, lastIndex)
+                detectDragGestures(
+                    onDragStart = { offset -> selectedIndex = indexAt(offset.x) },
+                    onDrag = { change, _ ->
+                        change.consume()
+                        selectedIndex = indexAt(change.position.x)
+                    },
+                )
+            },
     ) {
         val n = samples.size
         if (n < 2) return@Canvas
