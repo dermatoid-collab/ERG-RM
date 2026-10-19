@@ -44,7 +44,9 @@ import androidx.core.content.FileProvider
 import androidx.documentfile.provider.DocumentFile
 import com.ergrm.trainer.BuildConfig
 import com.ergrm.trainer.data.AppSettings
+import com.ergrm.trainer.ui.theme.ThemeCategory
 import com.ergrm.trainer.ui.theme.ThemeMode
+import com.ergrm.trainer.ui.theme.themeCategory
 import com.ergrm.trainer.ui.theme.themeSwatches
 
 @Composable
@@ -371,22 +373,27 @@ fun SettingsScreen(
             modifier = Modifier.padding(top = 24.dp, bottom = 8.dp),
         )
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            ThemeMode.entries.chunked(3).forEach { rowModes ->
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    rowModes.forEach { mode ->
-                        ThemeOptionCard(
-                            mode = mode,
-                            selected = settings.themeMode == mode,
-                            onClick = { viewModel.setThemeMode(mode) },
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
-                    // Keeps the last, possibly-shorter row's cards the same width as every other
-                    // row's instead of stretching to fill the gap.
-                    repeat(3 - rowModes.size) { Box(modifier = Modifier.weight(1f)) }
+            // ERG-RM Legacy always first and on its own, outside any category — the original
+            // look, not one choice among the 39 others.
+            ThemeModeGrid(
+                modes = listOf(ThemeMode.ERG_RM_LEGACY),
+                selectedMode = settings.themeMode,
+                onSelect = { viewModel.setThemeMode(it) },
+            )
+            ThemeCategory.entries.forEach { category ->
+                val modes = ThemeMode.entries.filter { themeCategory(it) == category }
+                if (modes.isNotEmpty()) {
+                    Text(
+                        category.label,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                    ThemeModeGrid(
+                        modes = modes,
+                        selectedMode = settings.themeMode,
+                        onSelect = { viewModel.setThemeMode(it) },
+                    )
                 }
             }
         }
@@ -438,6 +445,33 @@ private fun String.filterDecimal(): String {
             c.isDigit() -> true
             c == '.' && !seenDot -> { seenDot = true; true }
             else -> false
+        }
+    }
+}
+
+/** A category's (or Legacy's own single-item) set of [ThemeOptionCard]s, 3 per row — shared so
+ *  the picker's grid sizing/spacing can't drift between Legacy's standalone row and every
+ *  category's own grid below it. */
+@Composable
+private fun ThemeModeGrid(modes: List<ThemeMode>, selectedMode: ThemeMode, onSelect: (ThemeMode) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        modes.chunked(3).forEach { rowModes ->
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                rowModes.forEach { mode ->
+                    ThemeOptionCard(
+                        mode = mode,
+                        selected = selectedMode == mode,
+                        onClick = { onSelect(mode) },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                // Keeps a shorter row's cards the same width as every other row's instead of
+                // stretching to fill the gap — including Legacy's own 1-card row.
+                repeat(3 - rowModes.size) { Box(modifier = Modifier.weight(1f)) }
+            }
         }
     }
 }

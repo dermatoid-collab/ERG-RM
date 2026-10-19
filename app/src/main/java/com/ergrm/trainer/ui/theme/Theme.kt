@@ -283,6 +283,40 @@ fun themeSwatches(mode: ThemeMode): List<Color> = when (mode) {
     else -> Palettes[mode]?.swatches() ?: ErgRmLegacyPalette.swatches()
 }
 
+/** Groups for the theme picker (Settings) — ERG_RM_LEGACY has none of these: it's always shown
+ *  first and on its own, never grouped with anything else (see [themeCategory]). */
+enum class ThemeCategory(val label: String) {
+    SYSTEM("System"),
+    COMMUNITY_DARK("Community — Dark"),
+    COMMUNITY_LIGHT("Community — Light"),
+    SUNW_DARK("SUNW-RM — Dark"),
+    SUNW_LIGHT("SUNW-RM — Light"),
+    MINIMALIST("Minimalist"),
+}
+
+/** Which [ThemeCategory] a mode belongs to in the picker — null only for ERG_RM_LEGACY. An
+ *  exhaustive `when` (no `else`) so a future ThemeMode addition forces a conscious choice of
+ *  where it belongs here, instead of silently falling into some default bucket. */
+fun themeCategory(mode: ThemeMode): ThemeCategory? = when (mode) {
+    ThemeMode.ERG_RM_LEGACY -> null
+    ThemeMode.SYSTEM, ThemeMode.LIGHT, ThemeMode.DARK -> ThemeCategory.SYSTEM
+    ThemeMode.TOKYO_NIGHT, ThemeMode.NORD, ThemeMode.DRACULA, ThemeMode.GRUVBOX_DARK,
+    ThemeMode.CATPPUCCIN_MOCHA, ThemeMode.ONE_DARK, ThemeMode.SOLARIZED_DARK, ThemeMode.AMOLED,
+    -> ThemeCategory.COMMUNITY_DARK
+    ThemeMode.SOLARIZED_LIGHT, ThemeMode.CATPPUCCIN_LATTE, ThemeMode.GRUVBOX_LIGHT,
+    -> ThemeCategory.COMMUNITY_LIGHT
+    ThemeMode.ROSE_PINE, ThemeMode.EVERFOREST, ThemeMode.NIGHT_OWL, ThemeMode.PALENIGHT,
+    ThemeMode.AYU_MIRAGE, ThemeMode.VINO, ThemeMode.METEOBLUE, ThemeMode.TURCHESE,
+    ThemeMode.VIOLA, ThemeMode.CORALLO, ThemeMode.LIME,
+    -> ThemeCategory.SUNW_DARK
+    ThemeMode.ARDESIA, ThemeMode.SALVIA, ThemeMode.DUNA, ThemeMode.ILMETEO,
+    ThemeMode.AZZURRO, ThemeMode.GIALLO,
+    -> ThemeCategory.SUNW_LIGHT
+    ThemeMode.NEUTRAL_DARK, ThemeMode.NEUTRAL_LIGHT, ThemeMode.SEPIA_DARK, ThemeMode.SEPIA_LIGHT,
+    ThemeMode.SAGE_DARK, ThemeMode.SAGE_LIGHT, ThemeMode.LAVENDER_DARK, ThemeMode.LAVENDER_LIGHT,
+    -> ThemeCategory.MINIMALIST
+}
+
 // Currently resolved MaterialTheme colors — used by non-Canvas @Composable call sites that need
 // the "surface" family to react to the active ThemeMode. (A Canvas{} draw block is a plain
 // DrawScope lambda, not @Composable, so it can't read these directly: hoist a local val from the
