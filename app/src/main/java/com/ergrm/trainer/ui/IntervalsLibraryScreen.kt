@@ -253,7 +253,7 @@ private fun buildLibraryRows(folders: List<LibraryFolderGroup>, expanded: Set<St
 }
 
 @Composable
-private fun FolderHeader(name: String, expanded: Boolean, onToggle: () -> Unit) {
+internal fun FolderHeader(name: String, expanded: Boolean, onToggle: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -279,7 +279,7 @@ private fun FolderHeader(name: String, expanded: Boolean, onToggle: () -> Unit) 
 /** A thin vertical scroll-position indicator that fades in while [listState] is scrolling and
  *  fades out shortly after it stops — just a "where am I" cue, not a draggable thumb. */
 @Composable
-private fun AutoHideScrollbar(listState: LazyListState, modifier: Modifier = Modifier) {
+internal fun AutoHideScrollbar(listState: LazyListState, modifier: Modifier = Modifier) {
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(listState.isScrollInProgress) {
         if (listState.isScrollInProgress) {

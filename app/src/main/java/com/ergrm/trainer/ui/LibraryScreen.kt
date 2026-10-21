@@ -6,12 +6,14 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -51,6 +53,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.documentfile.provider.DocumentFile
 import com.ergrm.trainer.library.LibraryWorkoutFile
+import com.ergrm.trainer.library.LocalFolderGroup
 import com.ergrm.trainer.ui.theme.ErgOnSurface
 import com.ergrm.trainer.workout.WorkoutStep
 import com.ergrm.trainer.workout.previewStats
@@ -68,6 +71,10 @@ fun LibraryScreen(
     // Name is the only thing sortable without fetching and parsing every file first (duration/
     // watts live inside each file, not in this listing's own metadata) — ascending by default.
     var sortAscending by remember { mutableStateOf(true) }
+    // Which folders are expanded — session-only (resets to all-collapsed whenever this
+    // composable enters composition fresh), not persisted to disk. Same pattern
+    // IntervalsLibraryScreen uses for its own folder groups.
+    var expandedFolders by remember { mutableStateOf<Set<String>>(emptySet()) }
 
     val context = LocalContext.current
     val folderPicker = rememberLauncherForActivityResult(
@@ -139,23 +146,39 @@ fun LibraryScreen(
                 )
             }
             is LibraryUiState.Loaded -> {
-                val visibleFiles = remember(state.files, searchQuery, sortAscending) {
-                    val matching = if (searchQuery.isBlank()) {
-                        state.files
+                val sortedFolders = remember(state.folders) { state.folders.sortedBy { it.name.lowercase() } }
+                // Same approach as IntervalsLibraryScreen's own search: scan every folder
+                // regardless of its collapsed state (everything's already loaded in memory) and
+                // show only matches, dropping a folder with none entirely rather than showing it
+                // empty. The real, manually-set expandedFolders stays untouched, so clearing the
+                // query restores exactly what was open before searching.
+                val displayFolders = remember(sortedFolders, searchQuery, sortAscending) {
+                    val matchingFolders = if (searchQuery.isBlank()) {
+                        sortedFolders
                     } else {
-                        state.files.filter { it.name.contains(searchQuery, ignoreCase = true) }
+                        sortedFolders.mapNotNull { folder ->
+                            val matches = folder.files.filter { it.name.contains(searchQuery, ignoreCase = true) }
+                            if (matches.isEmpty()) null else folder.copy(files = matches)
+                        }
                     }
-                    val sorted = matching.sortedBy { it.name.lowercase() }
-                    if (sortAscending) sorted else sorted.reversed()
+                    matchingFolders.map { folder ->
+                        val sorted = folder.files.sortedBy { it.name.lowercase() }
+                        folder.copy(files = if (sortAscending) sorted else sorted.reversed())
+                    }
                 }
-                if (state.files.isEmpty()) {
+                val effectiveExpanded = if (searchQuery.isBlank()) {
+                    expandedFolders
+                } else {
+                    displayFolders.map { it.name }.toSet()
+                }
+                if (state.folders.isEmpty()) {
                     Text(
                         "No .zwo, .erg or .mrc file found in this folder.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = ErgOnSurface,
                         modifier = Modifier.padding(top = 16.dp),
                     )
-                } else if (visibleFiles.isEmpty()) {
+                } else if (displayFolders.isEmpty()) {
                     Text(
                         "No results for \"$searchQuery\".",
                         style = MaterialTheme.typography.bodyMedium,
@@ -163,23 +186,59 @@ fun LibraryScreen(
                         modifier = Modifier.padding(top = 16.dp),
                     )
                 } else {
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        items(visibleFiles, key = { it.uri.toString() }) { file ->
-                            LibraryFileRow(
-                                file = file,
-                                ftpWatts = settings.ftpWatts,
-                                fetchPreview = viewModel::previewLocalWorkout,
-                                onImport = {
-                                    viewModel.importLibraryWorkout(file)
-                                    onImported()
-                                },
-                            )
+                    val rows = remember(displayFolders, effectiveExpanded) {
+                        buildLocalLibraryRows(displayFolders, effectiveExpanded)
+                    }
+                    val listState = rememberLazyListState()
+
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            items(rows, key = { it.key }) { row ->
+                                when (row) {
+                                    is LocalLibraryRow.Header -> FolderHeader(
+                                        name = row.folderName,
+                                        expanded = row.folderName in effectiveExpanded,
+                                        onToggle = {
+                                            expandedFolders = if (row.folderName in expandedFolders) {
+                                                expandedFolders - row.folderName
+                                            } else {
+                                                expandedFolders + row.folderName
+                                            }
+                                        },
+                                    )
+                                    is LocalLibraryRow.Empty -> Text(
+                                        "No workouts in this folder.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = ErgOnSurface,
+                                    )
+                                    is LocalLibraryRow.Item -> {
+                                        val file = row.file
+                                        LibraryFileRow(
+                                            file = file,
+                                            ftpWatts = settings.ftpWatts,
+                                            fetchPreview = viewModel::previewLocalWorkout,
+                                            onImport = {
+                                                viewModel.importLibraryWorkout(file)
+                                                onImported()
+                                            },
+                                        )
+                                    }
+                                }
+                            }
                         }
+                        AutoHideScrollbar(
+                            listState = listState,
+                            modifier = Modifier
+                                .align(Alignment.CenterEnd)
+                                .fillMaxHeight()
+                                .padding(vertical = 12.dp, horizontal = 2.dp),
+                        )
                     }
                 }
             }
@@ -281,6 +340,36 @@ internal fun SearchableHeaderRow(
                 IconButton(onClick = onRefresh) {
                     Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
                 }
+            }
+        }
+    }
+}
+
+/** Same row-flattening shape as IntervalsLibraryScreen's own (file-private) LibraryRow — a
+ *  distinct type here since it carries a [LibraryWorkoutFile] (a local file) instead of an
+ *  Intervals.icu [com.ergrm.trainer.intervals.LibraryWorkout]. */
+private sealed class LocalLibraryRow {
+    abstract val key: String
+
+    data class Header(val folderName: String) : LocalLibraryRow() {
+        override val key get() = "header-$folderName"
+    }
+    data class Empty(val folderName: String) : LocalLibraryRow() {
+        override val key get() = "empty-$folderName"
+    }
+    data class Item(val file: LibraryWorkoutFile) : LocalLibraryRow() {
+        override val key get() = "item-${file.uri}"
+    }
+}
+
+private fun buildLocalLibraryRows(folders: List<LocalFolderGroup>, expanded: Set<String>): List<LocalLibraryRow> = buildList {
+    folders.forEach { folder ->
+        add(LocalLibraryRow.Header(folder.name))
+        if (folder.name in expanded) {
+            if (folder.files.isEmpty()) {
+                add(LocalLibraryRow.Empty(folder.name))
+            } else {
+                folder.files.forEach { add(LocalLibraryRow.Item(it)) }
             }
         }
     }

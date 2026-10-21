@@ -19,6 +19,17 @@ data class LibraryWorkoutFile(
     val lastModifiedMillis: Long,
 )
 
+/** One immediate subfolder of the chosen library folder, with every supported workout file
+ *  nested anywhere beneath it (sub-subfolders flattened in) — plus one more group named
+ *  "Library" for files sitting directly in the root, when there are any, since a folder can hold
+ *  loose files and subfolders side by side and both need to show. Same one-level grouping model
+ *  [com.ergrm.trainer.intervals.LibraryFolderGroup] already uses for Intervals.icu's own Library
+ *  screen, so the two folder browsers behave the same way. */
+data class LocalFolderGroup(
+    val name: String,
+    val files: List<LibraryWorkoutFile>,
+)
+
 sealed interface LibraryImportResult {
     data class Success(val steps: List<WorkoutStep>) : LibraryImportResult
     data class Error(val message: String) : LibraryImportResult
@@ -32,12 +43,28 @@ sealed interface LibraryImportResult {
  */
 class LibraryRepository(private val context: Context) {
 
-    suspend fun listWorkouts(folderUri: Uri): List<LibraryWorkoutFile> = withContext(Dispatchers.IO) {
-        val folder = DocumentFile.fromTreeUri(context, folderUri) ?: return@withContext emptyList()
-        folder.listFiles()
+    private fun DocumentFile.workoutFiles(): List<LibraryWorkoutFile> =
+        listFiles()
             .filter { file -> file.isFile && SUPPORTED_EXTENSIONS.any { file.name?.endsWith(it, ignoreCase = true) == true } }
             .map { LibraryWorkoutFile(it.uri, it.name ?: "workout.zwo", it.length(), it.lastModified()) }
-            .sortedBy { it.name.lowercase() }
+
+    private fun DocumentFile.workoutFilesRecursive(): List<LibraryWorkoutFile> =
+        workoutFiles() + listFiles().filter { it.isDirectory }.flatMap { it.workoutFilesRecursive() }
+
+    /** The chosen library folder's contents as groups — see [LocalFolderGroup]. An otherwise-
+     *  empty subfolder still gets its own (empty) group, so the folder list matches the real one
+     *  instead of silently dropping a folder that just happens to hold nothing right now —
+     *  same reasoning [com.ergrm.trainer.intervals.LibraryFolderGroup] already documents. */
+    suspend fun listFolders(folderUri: Uri): List<LocalFolderGroup> = withContext(Dispatchers.IO) {
+        val folder = DocumentFile.fromTreeUri(context, folderUri) ?: return@withContext emptyList()
+        val looseFiles = folder.workoutFiles().sortedBy { it.name.lowercase() }
+        val subfolders = folder.listFiles()
+            .filter { it.isDirectory }
+            .map { sub -> LocalFolderGroup(sub.name ?: "Folder", sub.workoutFilesRecursive().sortedBy { it.name.lowercase() }) }
+        buildList {
+            if (looseFiles.isNotEmpty()) add(LocalFolderGroup("Library", looseFiles))
+            addAll(subfolders)
+        }
     }
 
     suspend fun importWorkout(fileUri: Uri, fileName: String, ftpWatts: Int): LibraryImportResult = withContext(Dispatchers.IO) {

@@ -51,6 +51,7 @@ import com.ergrm.trainer.library.GpxRouteFile
 import com.ergrm.trainer.library.LibraryImportResult
 import com.ergrm.trainer.library.LibraryRepository
 import com.ergrm.trainer.library.LibraryWorkoutFile
+import com.ergrm.trainer.library.LocalFolderGroup
 import com.ergrm.trainer.notify.AppNotifications
 import com.ergrm.trainer.service.TrainerForegroundService
 import com.ergrm.trainer.ui.theme.ThemeMode
@@ -110,7 +111,7 @@ sealed interface IntervalsLibraryUiState {
 sealed interface LibraryUiState {
     data object NoFolder : LibraryUiState
     data object Loading : LibraryUiState
-    data class Loaded(val files: List<LibraryWorkoutFile>) : LibraryUiState
+    data class Loaded(val folders: List<LocalFolderGroup>) : LibraryUiState
     data class Error(val message: String) : LibraryUiState
 }
 
@@ -980,8 +981,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _libraryState.value = LibraryUiState.Loading
         viewModelScope.launch {
             try {
-                val files = libraryRepository.listWorkouts(Uri.parse(folderUriString))
-                _libraryState.value = LibraryUiState.Loaded(files)
+                val folders = libraryRepository.listFolders(Uri.parse(folderUriString))
+                _libraryState.value = LibraryUiState.Loaded(folders)
             } catch (t: Exception) {
                 _libraryState.value = LibraryUiState.Error(t.message ?: t.javaClass.simpleName)
             }
@@ -1072,7 +1073,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val folderUriString = s.libraryFolderUri
             if (folderUriString != null) {
                 val match = try {
-                    libraryRepository.listWorkouts(Uri.parse(folderUriString))
+                    libraryRepository.listFolders(Uri.parse(folderUriString))
+                        .flatMap { it.files }
                         .firstOrNull { it.name.substringBeforeLast(".", it.name) == workoutName }
                 } catch (_: Exception) {
                     null
