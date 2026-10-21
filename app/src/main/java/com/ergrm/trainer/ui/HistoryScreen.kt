@@ -1,6 +1,7 @@
 package com.ergrm.trainer.ui
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,10 +12,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
@@ -40,6 +43,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
@@ -234,8 +238,8 @@ fun HistoryScreen(viewModel: MainViewModel, onImported: () -> Unit = {}) {
 }
 
 /** A single Sort icon instead of a labeled button — the active field only shows once the menu is
- *  open (bolded there), so this costs no header width of its own. Direction is its own separate
- *  icon button next to this one, not folded in here. */
+ *  open (bolded there, plus a small dot beside its name), so this costs no header width of its
+ *  own. Direction is its own separate icon button next to this one, not folded in here. */
 @Composable
 private fun HistorySortFieldMenu(selected: HistorySortField, onSelect: (HistorySortField) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
@@ -247,7 +251,18 @@ private fun HistorySortFieldMenu(selected: HistorySortField, onSelect: (HistoryS
             HistorySortField.entries.forEach { f ->
                 DropdownMenuItem(
                     text = {
-                        Text(f.label, fontWeight = if (f == selected) FontWeight.Bold else FontWeight.Normal)
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            // Transparent (not absent) for every other row, so the dot's own
+                            // width still reserves its spot — the text stays aligned column-wise
+                            // across all rows instead of only the active one shifting right.
+                            Box(
+                                modifier = Modifier
+                                    .size(6.dp)
+                                    .clip(CircleShape)
+                                    .background(if (f == selected) MaterialTheme.colorScheme.primary else Color.Transparent),
+                            )
+                            Text(f.label, fontWeight = if (f == selected) FontWeight.Bold else FontWeight.Normal)
+                        }
                     },
                     onClick = {
                         expanded = false
