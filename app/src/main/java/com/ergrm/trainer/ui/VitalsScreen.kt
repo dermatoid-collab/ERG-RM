@@ -631,7 +631,7 @@ private fun CoreSkinHsiChart(
             ticks = listOf("10", "7.5", "5", "2.5"),
             liveValueText = last?.heatStrainIndex?.let { "%.1f".format(floorToOneDecimal(it)) } ?: "--",
             liveFraction = last?.heatStrainIndex?.let { hsiFrac(it) } ?: 1f,
-            valueColor = last?.heatStrainIndex?.let { hsiColor(floorToOneDecimal(it)) } ?: ErgOnSurface,
+            valueColor = last?.heatStrainIndex?.let { hsiColor(floorToOneDecimal(it)).let { c -> if (isLightTheme) lerp(c, Color.Black, 0.35f) else c } } ?: ErgOnSurface,
         )
     }
 }

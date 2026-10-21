@@ -533,6 +533,11 @@ private fun WorkoutStatLines(
     }
     val flooredCore = coreReading?.coreTempC?.let { floorToOneDecimal(it) }
     val flooredHsi = coreReading?.heatStrainIndex?.let { floorToOneDecimal(it) }
+    // HSI's own low-band green (ErgAccent) is too bright to read on a light background — darken
+    // it there the same way the Vitals screen's HSI chart label already does; every other HSI
+    // band (amber/red/purple) stays as-is, same as that other call site.
+    val isLightTheme = MaterialTheme.colorScheme.background.luminance() > 0.5f
+    val hsiValueColor = flooredHsi?.let { hsiColor(it).let { c -> if (isLightTheme) lerp(c, Color.Black, 0.35f) else c } } ?: ErgOnSurface
 
     val route = workoutState.routeProfile
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -568,7 +573,7 @@ private fun WorkoutStatLines(
         )
         StatLine(
             "HSI", flooredHsi?.let { "%.1f".format(it) } ?: "--",
-            valueColor = flooredHsi?.let { hsiColor(it) } ?: ErgOnSurface,
+            valueColor = hsiValueColor,
         )
     }
 }
@@ -908,6 +913,10 @@ internal fun coreColor(coreTempC: Float): Color = when {
 private fun CoreTempTileRow(reading: CoreTempReading?, modifier: Modifier = Modifier) {
     val flooredCore = reading?.coreTempC?.let { floorToOneDecimal(it) }
     val flooredHsi = reading?.heatStrainIndex?.let { floorToOneDecimal(it) }
+    // Same light-theme darkening as WorkoutStatLines' own HSI value — ErgAccent's green is too
+    // bright to read there otherwise.
+    val isLightTheme = MaterialTheme.colorScheme.background.luminance() > 0.5f
+    val hsiValueColor = flooredHsi?.let { hsiColor(it).let { c -> if (isLightTheme) lerp(c, Color.Black, 0.35f) else c } } ?: ErgOnSurface
     // SKIN, then CORE (the center tile), then HSI.
     Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         CoreTempTile(
@@ -925,7 +934,7 @@ private fun CoreTempTileRow(reading: CoreTempReading?, modifier: Modifier = Modi
         CoreTempTile(
             label = "HSI",
             value = flooredHsi?.let { "%.1f".format(it) } ?: "--",
-            valueColor = flooredHsi?.let { hsiColor(it) } ?: ErgOnSurface,
+            valueColor = hsiValueColor,
             modifier = Modifier.weight(1f),
         )
     }
