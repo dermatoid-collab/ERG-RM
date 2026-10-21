@@ -39,6 +39,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -2220,6 +2221,10 @@ private fun WorkoutHeader(title: String, otherSources: List<Pair<String, () -> U
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             otherSources.forEach { (label, action) ->
+                // "Free ride" is a starting point to shape with the existing controls, not a
+                // source to pick a workout FROM like every item above it — set off with its own
+                // divider instead of blending into the rest of the list.
+                if (label == "Free ride") HorizontalDivider()
                 DropdownMenuItem(
                     text = { Text(label) },
                     onClick = {

@@ -615,6 +615,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** A deliberate starting point for an unstructured ride — a single flat 100W/1h00m00s step
+     *  the rider then reshapes with the existing intensity (+/-) and +5min extend controls,
+     *  rather than SLO's true no-plan-loaded freeform riding (which already falls back to the
+     *  same "Free ride" label in history — see SessionRow — whenever a saved session has no
+     *  workoutName). No [WorkoutSource]: this plan isn't backed by anything to re-import from. */
+    fun loadFreeRide() {
+        val steps = listOf(WorkoutStep(durationSec = 3600, startWatts = 100, endWatts = 100, label = "Free ride"))
+        workoutExecutor.load(steps)
+        _workoutLoadState.value = WorkoutLoadState.Loaded("Free ride")
+    }
+
     /** Refreshes the two-week calendar list (current week + next week) shown in [CalendarScreen].
      *  On success, also persists it via [calendarCacheRepository] for a future offline/outage
      *  fallback. On failure, a cached list already on screen is left as-is (just flagged stale,

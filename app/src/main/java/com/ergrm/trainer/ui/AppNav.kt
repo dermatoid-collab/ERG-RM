@@ -227,7 +227,7 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
                 ActivityResultContracts.GetContent(),
             ) { uri -> if (uri != null) viewModel.loadRouteFromGpx(uri) }
 
-            // The same 5 items, same order, on every screen's "Other sources" menu (Workout's own
+            // The same 6 items, same order, on every screen's "Other sources" menu (Workout's own
             // header included) — each item still works when tapped from the screen it points to,
             // it's just a no-op, so the menu never has to leave anything out to stay consistent.
             val otherSources: List<Pair<String, () -> Unit>> = listOf(
@@ -250,6 +250,14 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
                         screen = Screen.WORKOUT
                         gpxPickerLauncher.launch("*/*")
                     }
+                },
+                // Last, set off by its own divider in the menu (see WorkoutHeader/
+                // WorkoutSourceMenu) — not a workout source to pick FROM like the 5 above it, but
+                // a blank 100W/1h00m00s starting point to shape with the existing controls.
+                "Free ride" to {
+                    viewModel.loadFreeRide()
+                    overlay = Overlay.NONE
+                    screen = Screen.WORKOUT
                 },
             )
 

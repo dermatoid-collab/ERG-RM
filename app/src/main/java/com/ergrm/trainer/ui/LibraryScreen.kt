@@ -25,6 +25,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -201,6 +202,9 @@ internal fun WorkoutSourceMenu(items: List<Pair<String, () -> Unit>>) {
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             items.forEach { (label, action) ->
+                // Same divider WorkoutHeader's own copy of this menu gives "Free ride" — see its
+                // comment for why.
+                if (label == "Free ride") HorizontalDivider()
                 DropdownMenuItem(
                     text = { Text(label) },
                     onClick = {
