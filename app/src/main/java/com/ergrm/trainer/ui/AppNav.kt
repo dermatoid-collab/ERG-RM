@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bluetooth
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.History
@@ -69,7 +70,7 @@ import com.ergrm.trainer.ui.theme.ErgRmTheme
 import com.ergrm.trainer.ui.theme.ErgWarn
 
 private enum class Screen { CONNECT, WORKOUT }
-private enum class Overlay { NONE, SETTINGS, LIBRARY, HISTORY, CALENDAR, INTERVALS_LIBRARY, GPX_LIBRARY }
+private enum class Overlay { NONE, SETTINGS, LIBRARY, HISTORY, BUILDER, CALENDAR, INTERVALS_LIBRARY, GPX_LIBRARY }
 
 // See ActiveWorkoutPager's doc comment: large enough to feel infinite, small enough that
 // HorizontalPager's internal fling/snap math over this range doesn't hit Infinity/NaN.
@@ -329,6 +330,12 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
                                 underlineOffsetX = 1.5.dp,
                             )
                             NavIcon(
+                                icon = Icons.Filled.Edit,
+                                contentDescription = "Workout Builder",
+                                active = overlay == Overlay.BUILDER,
+                                onClick = { overlay = Overlay.BUILDER },
+                            )
+                            NavIcon(
                                 icon = Icons.Filled.Settings,
                                 contentDescription = "Settings",
                                 active = overlay == Overlay.SETTINGS,
@@ -413,6 +420,12 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
  *  FitnessCenter dumbbell, the History clock-arrow) aren't drawn symmetrically within their own
  *  24dp bounds, so a mark centered on the *layout* box reads as off-center under the *glyph*. A
  *  perfectly symmetric icon (Bluetooth, FolderOpen, Settings) needs no correction. */
+// Material3's IconButton defaults to a 48dp touch target regardless of its icon's own size.
+// Fitting the new pencil (Workout Builder) icon into the same top bar as a 6th icon, without it
+// reading as more crowded than the original 5, called for shrinking that target by 20% (0.8x) —
+// the icons themselves keep their normal size, only the tappable box around each shrinks.
+private val NAV_ICON_TOUCH_SIZE = (48 * 0.8).dp
+
 @Composable
 private fun NavIcon(
     icon: ImageVector,
@@ -423,7 +436,7 @@ private fun NavIcon(
     underlineOffsetX: Dp = 0.dp,
 ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        IconButton(onClick = onClick) {
+        IconButton(onClick = onClick, modifier = Modifier.size(NAV_ICON_TOUCH_SIZE)) {
             Icon(icon, contentDescription = contentDescription, tint = tint)
         }
         Box(
@@ -461,18 +474,20 @@ private fun ActiveWorkoutPager(dashboard: @Composable () -> Unit, vitals: @Compo
     }
 }
 
-/** Maps the 5 topBar-icon destinations (Calendar/Intervals.icu Library are reached only from
- *  "Other sources" and aren't part of this swipeable set) to a page index, 0-4 in icon order. */
+/** Maps the 6 topBar-icon destinations (Calendar/Intervals.icu Library are reached only from
+ *  "Other sources" and aren't part of this swipeable set) to a page index, 0-5 in icon order. */
 private fun pageFor(overlay: Overlay, screen: Screen): Int = when (overlay) {
     Overlay.NONE -> if (screen == Screen.WORKOUT) 0 else 1
     Overlay.LIBRARY -> 2
     Overlay.HISTORY -> 3
-    Overlay.SETTINGS -> 4
+    Overlay.BUILDER -> 4
+    Overlay.SETTINGS -> 5
     Overlay.CALENDAR, Overlay.INTERVALS_LIBRARY, Overlay.GPX_LIBRARY -> 0 // unreachable here — see the when{} in ErgRmApp
 }
 
-/** Swipe between the app's 5 main destinations (Task #73), bounded (no wrap at either end) —
- *  Workout, Connect, Library, History, Settings, in the same order as their topBar icons. Two
+/** Swipe between the app's 6 main destinations (Task #73, extended for the Workout Builder),
+ *  bounded (no wrap at either end) — Workout, Connect, Library, History, Workout Builder,
+ *  Settings, in the same order as their topBar icons. Two
  *  effects keep this pager and the existing (overlay, screen) state in sync in both directions
  *  without fighting each other: [targetPage] (derived from that state) drives the pager whenever
  *  something OTHER than a swipe changes it — tapping a topBar icon, the auto-reconnect jump to
@@ -493,7 +508,7 @@ private fun MainPager(
     settings: AppSettings,
 ) {
     val targetPage = pageFor(overlay, screen)
-    val pagerState = rememberPagerState(initialPage = targetPage) { 5 }
+    val pagerState = rememberPagerState(initialPage = targetPage) { 6 }
 
     LaunchedEffect(targetPage) {
         if (pagerState.currentPage != targetPage) pagerState.animateScrollToPage(targetPage)
@@ -505,7 +520,8 @@ private fun MainPager(
                 1 -> { onOverlayChange(Overlay.NONE); onScreenChange(Screen.CONNECT) }
                 2 -> onOverlayChange(Overlay.LIBRARY)
                 3 -> onOverlayChange(Overlay.HISTORY)
-                4 -> onOverlayChange(Overlay.SETTINGS)
+                4 -> onOverlayChange(Overlay.BUILDER)
+                5 -> onOverlayChange(Overlay.SETTINGS)
             }
         }
     }
@@ -534,6 +550,7 @@ private fun MainPager(
                 otherSources = otherSources,
             )
             3 -> HistoryScreen(viewModel, onImported = { onOverlayChange(Overlay.NONE) })
+            4 -> WorkoutBuilderScreen(viewModel)
             else -> SettingsScreen(
                 settings = settings,
                 viewModel = viewModel,

@@ -55,9 +55,18 @@ import com.ergrm.trainer.library.LocalFolderGroup
 import com.ergrm.trainer.notify.AppNotifications
 import com.ergrm.trainer.service.TrainerForegroundService
 import com.ergrm.trainer.ui.theme.ThemeMode
+import com.ergrm.trainer.workout.DraftStep
+import com.ergrm.trainer.workout.ErgParser
 import com.ergrm.trainer.workout.GpxParser
+import com.ergrm.trainer.workout.PowerTarget
+import com.ergrm.trainer.workout.StructuredZwoReader
+import com.ergrm.trainer.workout.WorkoutBlock
+import com.ergrm.trainer.workout.WorkoutDraft
+import com.ergrm.trainer.workout.WorkoutDslParser
+import com.ergrm.trainer.workout.WorkoutDslSerializer
 import com.ergrm.trainer.workout.WorkoutExecutor
 import com.ergrm.trainer.workout.WorkoutStep
+import com.ergrm.trainer.workout.ZwoWriter
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -121,6 +130,18 @@ sealed interface GpxLibraryUiState {
     data class Loaded(val files: List<GpxRouteFile>) : GpxLibraryUiState
     data class Error(val message: String) : GpxLibraryUiState
 }
+
+/** The Workout Builder screen's whole editable state: Name/Description are kept apart from
+ *  [text] (the DSL body) since they're separate fields in the UI, but all three end up merged
+ *  into one [WorkoutDraft] on save/preview (see MainViewModel.currentBuilderDraft). [parseResult]
+ *  is re-derived on every [MainViewModel.updateBuilderText] call, not computed lazily, so the
+ *  screen's "Parses OK" indicator and Save-button enablement never lag a keystroke behind. */
+data class BuilderDraftState(
+    val name: String = "",
+    val description: String = "",
+    val text: String = "",
+    val parseResult: WorkoutDslParser.ParseResult = WorkoutDslParser.parse(""),
+)
 
 /** One CORE sensor reading, time-aligned with [MainViewModel.sampleHistory] via [tSec] — the
  *  Vitals screen's CORE/SKIN/HSI chart traces this the same way the power/HR/cadence chart
@@ -217,6 +238,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _gpxLibraryState = MutableStateFlow<GpxLibraryUiState>(GpxLibraryUiState.NoFolder)
     val gpxLibraryState: StateFlow<GpxLibraryUiState> = _gpxLibraryState.asStateFlow()
+
+    private val _builderState = MutableStateFlow(BuilderDraftState())
+    val builderState: StateFlow<BuilderDraftState> = _builderState.asStateFlow()
 
     private val _sessionHistory = MutableStateFlow<List<WorkoutSession>>(emptyList())
     val sessionHistory: StateFlow<List<WorkoutSession>> = _sessionHistory.asStateFlow()
@@ -1001,6 +1025,92 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     )
                 }
                 is LibraryImportResult.Error -> _workoutLoadState.value = WorkoutLoadState.Error(result.message)
+            }
+        }
+    }
+
+    fun updateBuilderName(name: String) {
+        _builderState.value = _builderState.value.copy(name = name)
+    }
+
+    fun updateBuilderDescription(description: String) {
+        _builderState.value = _builderState.value.copy(description = description)
+    }
+
+    fun updateBuilderText(text: String) {
+        _builderState.value = _builderState.value.copy(text = text, parseResult = WorkoutDslParser.parse(text))
+    }
+
+    /** The draft as it stands right now, with the Name/Description fields (edited separately from
+     *  the DSL body) merged in — null while the DSL body itself doesn't parse. */
+    fun currentBuilderDraft(): WorkoutDraft? {
+        val state = _builderState.value
+        val result = state.parseResult as? WorkoutDslParser.ParseResult.Success ?: return null
+        return result.draft.copy(name = state.name, description = state.description)
+    }
+
+    /** Flattened steps for the builder's live preview card (duration/load/NP/mini chart) — same
+     *  [previewStats] extension the Library/Calendar preview tiles already use, just fed from the
+     *  draft being typed right now instead of a saved file. Null while it doesn't parse. */
+    fun builderPreviewSteps(): List<WorkoutStep>? =
+        currentBuilderDraft()?.let { WorkoutDslParser.flatten(it, settings.value.ftpWatts) }
+
+    /** Import for the Workout Builder (distinct from [importLibraryWorkout], which loads a file
+     *  straight to the trainer): a .zwo goes through [StructuredZwoReader] so a repeat block comes
+     *  back as one editable block instead of flattened; .erg/.mrc has no repeat structure to lose,
+     *  so each [WorkoutStep] from the existing [ErgParser] just becomes its own one-step block. */
+    fun importBuilderFile(uri: Uri, fileName: String) {
+        viewModelScope.launch {
+            val content = try {
+                getApplication<Application>().contentResolver.openInputStream(uri)?.use { it.reader().readText() }
+            } catch (t: Exception) {
+                null
+            }
+            if (content == null) {
+                _snackbarMessages.emit("Couldn't read that file")
+                return@launch
+            }
+            val ftpWatts = settings.value.ftpWatts
+            val fallbackName = fileName.substringBeforeLast(".", fileName)
+            val draft = if (fileName.endsWith(".zwo", ignoreCase = true)) {
+                StructuredZwoReader.read(content, ftpWatts, fallbackName)
+            } else {
+                val steps = ErgParser.parse(content, ftpWatts)
+                if (steps.isEmpty()) {
+                    _snackbarMessages.emit("No steps found in the file")
+                    return@launch
+                }
+                WorkoutDraft(
+                    name = fallbackName,
+                    description = "",
+                    blocks = steps.map { step ->
+                        WorkoutBlock("", 1, listOf(DraftStep(step.label, step.durationSec, PowerTarget.Watts(step.startWatts, step.endWatts))))
+                    },
+                )
+            }
+            _builderState.value = BuilderDraftState(
+                name = draft.name,
+                description = draft.description,
+                text = WorkoutDslSerializer.serialize(draft),
+                parseResult = WorkoutDslParser.ParseResult.Success(draft),
+            )
+        }
+    }
+
+    /** Save As for the Workout Builder: always writes a new file at [uri] (from
+     *  ActivityResultContracts.CreateDocument — see WorkoutBuilderScreen), never overwrites the
+     *  Workout Library folder's existing read-only tree permission. */
+    fun exportBuilderDraft(uri: Uri) {
+        val draft = currentBuilderDraft() ?: return
+        viewModelScope.launch {
+            try {
+                val xml = ZwoWriter.write(draft, settings.value.ftpWatts)
+                getApplication<Application>().contentResolver.openOutputStream(uri)?.use { it.write(xml.toByteArray()) }
+                    ?: throw IllegalStateException("Couldn't open that location for writing")
+                _snackbarMessages.emit("Saved \"${draft.name}.zwo\"")
+                refreshLibrary()
+            } catch (t: Exception) {
+                _snackbarMessages.emit("Save failed: ${t.message ?: t.javaClass.simpleName}")
             }
         }
     }
