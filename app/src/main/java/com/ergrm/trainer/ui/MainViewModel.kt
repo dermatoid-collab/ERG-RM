@@ -69,6 +69,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
 import java.io.File
@@ -638,6 +640,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 is CalendarFetchResult.Success -> {
                     _calendarState.value = CalendarUiState.Loaded(result.workouts, isStale = false)
                     calendarCacheRepository.save(result.workouts)
+                    prefetchCalendarStructures(result.workouts, s)
                 }
                 is CalendarFetchResult.Error -> {
                     val current = _calendarState.value
@@ -652,7 +655,36 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** Loads a specific planned event picked from the calendar list. */
+    /** Proactively downloads every listed event's structure after a Calendar list refresh —
+     *  not just whichever rows happen to scroll into view for their own preview fetch, or
+     *  whichever one is eventually tapped to load — so riding one later with no signal (or
+     *  during an Intervals.icu outage) actually works, not just shows its name. Skips events
+     *  already cached (a specific event's structure is effectively static once set) and prunes
+     *  cached entries for events that dropped out of the list, so the cache tracks the current
+     *  ~2-week window instead of growing forever. Runs fully in the background — no loading
+     *  state of its own, since nothing on screen is waiting on it. */
+    private fun prefetchCalendarStructures(workouts: List<CalendarWorkout>, s: AppSettings) {
+        viewModelScope.launch {
+            calendarCacheRepository.pruneStructures(workouts.map { it.eventId }.toSet())
+            val cached = calendarCacheRepository.loadStructures()
+            val missing = workouts.filter { it.eventId !in cached.keys }
+            missing.map { workout ->
+                async {
+                    val result = intervalsRepository.fetchWorkoutByEventId(
+                        s.intervalsApiKey, s.intervalsAthleteId, workout.eventId, workout.name, s.ftpWatts,
+                    )
+                    if (result is FetchResult.Success) {
+                        calendarCacheRepository.saveStructure(workout.eventId, result.workout.steps)
+                    }
+                }
+            }.awaitAll()
+        }
+    }
+
+    /** Loads a specific planned event picked from the calendar list. Falls back to its cached
+     *  structure (see [prefetchCalendarStructures]) if the live fetch fails — e.g. no signal or
+     *  an Intervals.icu outage — rather than leaving the rider stuck on an error for a workout
+     *  that's already sitting on the device. */
     fun loadCalendarWorkout(workout: CalendarWorkout) {
         val s = settings.value
         _workoutLoadState.value = WorkoutLoadState.Loading
@@ -670,7 +702,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     )
                 }
                 FetchResult.NoStepsFound -> _workoutLoadState.value = WorkoutLoadState.Empty
-                is FetchResult.Error -> _workoutLoadState.value = WorkoutLoadState.Error(result.message)
+                is FetchResult.Error -> {
+                    val cachedSteps = calendarCacheRepository.loadStructures()[workout.eventId]
+                    if (cachedSteps != null) {
+                        workoutExecutor.load(cachedSteps)
+                        _workoutLoadState.value = WorkoutLoadState.Loaded(
+                            workout.name,
+                            source = WorkoutSource.IntervalsCalendarEvent(workout.eventId),
+                        )
+                        _snackbarMessages.emit("Loaded from cache — couldn't reach Intervals.icu (${result.message})")
+                    } else {
+                        _workoutLoadState.value = WorkoutLoadState.Error(result.message)
+                    }
+                }
             }
         }
     }
@@ -722,7 +766,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     suspend fun fetchCalendarWorkoutPreview(eventId: Long): List<WorkoutStep> {
         val s = settings.value
         if (!s.intervalsConfigured) return emptyList()
-        return intervalsRepository.fetchCalendarWorkoutPreview(s.intervalsApiKey, s.intervalsAthleteId, eventId, s.ftpWatts)
+        val live = intervalsRepository.fetchCalendarWorkoutPreview(s.intervalsApiKey, s.intervalsAthleteId, eventId, s.ftpWatts)
+        if (live.isNotEmpty()) return live
+        // Live fetch came back empty (no signal, an outage) — fall back to whatever
+        // prefetchCalendarStructures already downloaded for this event, if anything.
+        return calendarCacheRepository.loadStructures()[eventId].orEmpty()
     }
 
     /** Same as [fetchCalendarWorkoutPreview], for an Intervals.icu Library row. */

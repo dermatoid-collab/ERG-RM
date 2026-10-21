@@ -1,13 +1,16 @@
 package com.ergrm.trainer.workout
 
 import com.ergrm.trainer.history.normalizedPower
+import kotlinx.serialization.Serializable
 import kotlin.math.roundToInt
 
 /**
  * A single block of a structured workout, expressed in absolute watts.
  * [startWatts] and [endWatts] differ only for ramps (warmup/cooldown/ramp blocks);
- * for steady blocks they are equal.
+ * for steady blocks they are equal. @Serializable so a fetched structure can be persisted (see
+ * CalendarCacheRepository) for offline use — all-primitive fields, no custom serializer needed.
  */
+@Serializable
 data class WorkoutStep(
     val durationSec: Int,
     val startWatts: Int,
