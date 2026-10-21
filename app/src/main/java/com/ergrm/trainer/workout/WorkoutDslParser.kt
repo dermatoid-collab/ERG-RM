@@ -38,10 +38,10 @@ object WorkoutDslParser {
         for ((index, raw) in lines.withIndex()) {
             val trimmed = raw.trim()
             if (trimmed.isEmpty()) {
-                if (groups.isNotEmpty() && groups.last().isNotEmpty()) groups += mutableListOf()
+                if (groups.isNotEmpty() && groups.last().isNotEmpty()) groups.add(mutableListOf())
             } else {
-                if (groups.isEmpty()) groups += mutableListOf()
-                groups.last() += (index + 1) to trimmed
+                if (groups.isEmpty()) groups.add(mutableListOf())
+                groups.last().add((index + 1) to trimmed)
             }
         }
         val blocks = mutableListOf<WorkoutBlock>()
