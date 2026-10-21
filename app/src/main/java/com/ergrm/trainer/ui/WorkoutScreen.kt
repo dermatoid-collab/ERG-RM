@@ -1282,8 +1282,8 @@ internal fun mutedZoneColor(zoneColor: Color, active: Boolean, isLightTheme: Boo
 
 /** The power trace line (and anything meant to match it — axis labels, legends, tooltips): white
  *  reads fine on every dark theme's near-black background but disappears on a light one, so light
- *  themes get a distinct, saturated purple instead. */
-internal fun powerTraceColor(isLightTheme: Boolean): Color = if (isLightTheme) Color(0xFFA000FF) else Color.White
+ *  themes get black instead. */
+internal fun powerTraceColor(isLightTheme: Boolean): Color = if (isLightTheme) Color.Black else Color.White
 
 /** Steps at or after [currentStepIndex] reflect a live intensity change; earlier ones are
  *  history and stay as originally ridden. */
