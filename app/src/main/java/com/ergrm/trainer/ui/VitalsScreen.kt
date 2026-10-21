@@ -57,6 +57,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PointMode
@@ -495,6 +496,10 @@ private fun CoreSkinHsiChart(
     val coreTicks = ticksFor(coreMin, coreMax)
     val skinTicks = ticksFor(skinMin, skinMax)
     val textMeasurer = rememberTextMeasurer()
+    // hsiColor()'s bright accent/warn/red/purple reads fine on a dark theme even behind the
+    // HSI inline label's 30%-opacity black wash below, but on a light theme that same wash is
+    // still fairly light, so the text itself also darkens there — background wash unchanged.
+    val isLightTheme = MaterialTheme.colorScheme.background.luminance() > 0.5f
     // pointerInput(Unit) below launches its gesture-detection coroutine once and never restarts
     // it, so without rememberUpdatedState it would keep calling the onTap lambda instance (and
     // the zoom value it closed over) from whenever that coroutine first launched — every tap
@@ -611,7 +616,8 @@ private fun CoreSkinHsiChart(
                 liveSample.skinTempC?.let { v -> drawInlineLabel("%.1f°".format(v), skinFrac(v), ErgSkinTemp) }
                 liveSample.heatStrainIndex?.let { v ->
                     val floored = floorToOneDecimal(v)
-                    drawInlineLabel("%.1f".format(floored), hsiFrac(v), hsiColor(floored), withShadowBackground = true)
+                    val hsiTextColor = hsiColor(floored).let { if (isLightTheme) lerp(it, Color.Black, 0.35f) else it }
+                    drawInlineLabel("%.1f".format(floored), hsiFrac(v), hsiTextColor, withShadowBackground = true)
                 }
                 liveSample.coreTempC?.let { v ->
                     val floored = floorToOneDecimal(v)
@@ -981,6 +987,10 @@ private fun CompactControlRow(
     }
     val glyphUp = if (isSlo) gradePercent > 0.05f else intensityPercent > 100
     val glyphDown = if (isSlo) gradePercent < -0.05f else intensityPercent < 100
+    // Same fix as WorkoutScreen's own IntensityRow pill: white text on this ErgSurface2
+    // background disappears on a light theme, so light themes get dark text instead.
+    val isLightTheme = MaterialTheme.colorScheme.background.luminance() > 0.5f
+    val intensityValueColor = if (isLightTheme) Color.Black else Color.White
 
     Row(
         modifier = Modifier.fillMaxWidth().height(38.4.dp),
@@ -1058,7 +1068,7 @@ private fun CompactControlRow(
                 )
             }
             Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                Text(displayText, fontSize = 12.5.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                Text(displayText, fontSize = 12.5.sp, fontWeight = FontWeight.Bold, color = intensityValueColor)
             }
             // Same width as the mode circle (balances it so the % box above stays centered in
             // the whole pill) — also where the ▲/▼ direction triangle shows, when intensity/grade

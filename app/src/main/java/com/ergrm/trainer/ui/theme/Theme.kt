@@ -98,6 +98,11 @@ enum class ThemeMode(val label: String, val dark: Boolean? = null) {
     SAGE_LIGHT("Sage Light", false),
     LAVENDER_DARK("Lavender Dark", true),
     LAVENDER_LIGHT("Lavender Light", false),
+    // Pure grayscale — unlike NEUTRAL_DARK/LIGHT above (which still color error/errorContainer),
+    // every single field here is a neutral gray (R=G=B), error included, for a rider who wants
+    // zero color anywhere in the UI.
+    GRAYSCALE_DARK("Grayscale Dark", true),
+    GRAYSCALE_LIGHT("Grayscale Light", false),
 }
 
 private class Palette(
@@ -274,6 +279,13 @@ private val Palettes: Map<ThemeMode, Palette> = mapOf(
     ThemeMode.SAGE_LIGHT to Palette(dark = false, background = 0xF0F3EF, surface = 0xFAFCF9, surfaceHigh = 0xDFE6DC, surfaceHighest = 0xC6CEC4, onBackground = 0x2C382D, onVariant = 0x71816F, primary = 0x2C382D, primaryContainer = 0xDFE6DC, onPrimaryContainer = 0x2C382D, secondary = 0xACB9A9, tertiary = 0xACB9A9, outline = 0xACB9A9, outlineVariant = 0xDFE6DC, error = 0xA6433B, errorContainer = 0xE3D3CF),
     ThemeMode.LAVENDER_DARK to Palette(dark = true, background = 0x17151D, surface = 0x25232E, surfaceHigh = 0x373442, surfaceHighest = 0x524F5C, onBackground = 0xF5F2F9, onVariant = 0xC8C3D3, primary = 0xF5F2F9, primaryContainer = 0x373442, onPrimaryContainer = 0xF5F2F9, secondary = 0x898397, tertiary = 0x898397, outline = 0x898397, outlineVariant = 0x373442, error = 0xD9776E, errorContainer = 0x3E292D),
     ThemeMode.LAVENDER_LIGHT to Palette(dark = false, background = 0xF2F0F6, surface = 0xFCFBFD, surfaceHigh = 0xE4DFEB, surfaceHighest = 0xCBC6D2, onBackground = 0x302B3B, onVariant = 0x79718A, primary = 0x302B3B, primaryContainer = 0xE4DFEB, onPrimaryContainer = 0x302B3B, secondary = 0xB2A9C0, tertiary = 0xB2A9C0, outline = 0xB2A9C0, outlineVariant = 0xE4DFEB, error = 0xA6433B, errorContainer = 0xE4D1D4),
+    // Every field pure gray (R=G=B), error/errorContainer included — unlike NEUTRAL_DARK/LIGHT,
+    // which keep a colored error for semantic clarity, this one goes fully monochrome throughout.
+    // Contrast verified: onBackground/background 21:1, outline/background 5.3:1 (dark) / 3.95:1
+    // (light, still clears the 3:1 WCAG 1.4.11 threshold), error/background 7.4:1 (dark) / 8.45:1
+    // (light) — all comfortably AA, most AAA.
+    ThemeMode.GRAYSCALE_DARK to Palette(dark = true, background = 0x000000, surface = 0x0D0D0D, surfaceHigh = 0x1A1A1A, surfaceHighest = 0x262626, onBackground = 0xFFFFFF, onVariant = 0xB0B0B0, primary = 0xFFFFFF, primaryContainer = 0x1A1A1A, onPrimaryContainer = 0xFFFFFF, secondary = 0x808080, tertiary = 0x808080, outline = 0x808080, outlineVariant = 0x1A1A1A, error = 0x999999, errorContainer = 0x303030),
+    ThemeMode.GRAYSCALE_LIGHT to Palette(dark = false, background = 0xFFFFFF, surface = 0xF5F5F5, surfaceHigh = 0xE0E0E0, surfaceHighest = 0xCCCCCC, onBackground = 0x000000, onVariant = 0x595959, primary = 0x000000, primaryContainer = 0xE0E0E0, onPrimaryContainer = 0x000000, secondary = 0x808080, tertiary = 0x808080, outline = 0x808080, outlineVariant = 0xE0E0E0, error = 0x4D4D4D, errorContainer = 0xD9D9D9),
 )
 
 fun themeSwatches(mode: ThemeMode): List<Color> = when (mode) {
@@ -314,6 +326,7 @@ fun themeCategory(mode: ThemeMode): ThemeCategory? = when (mode) {
     -> ThemeCategory.SUNW_LIGHT
     ThemeMode.NEUTRAL_DARK, ThemeMode.NEUTRAL_LIGHT, ThemeMode.SEPIA_DARK, ThemeMode.SEPIA_LIGHT,
     ThemeMode.SAGE_DARK, ThemeMode.SAGE_LIGHT, ThemeMode.LAVENDER_DARK, ThemeMode.LAVENDER_LIGHT,
+    ThemeMode.GRAYSCALE_DARK, ThemeMode.GRAYSCALE_LIGHT,
     -> ThemeCategory.MINIMALIST
 }
 

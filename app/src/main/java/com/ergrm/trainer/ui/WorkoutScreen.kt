@@ -2089,6 +2089,12 @@ private fun IntensityRow(
         else -> null
     }
     val intensityGlyphColor = if (glyphUp) ErgIntensityUpGlyph else ErgIntensityDownGlyph
+    // The percentage/grade box's own background (ErgSurface2) is theme-reactive — white text on
+    // it reads fine on every dark theme but disappears on a light one, so light themes get dark
+    // text instead. Only this value needs it: the mode tag's text sits on a fixed saturated
+    // color (ErgModeErg/HrPlus/Slo), never affected by light/dark theme.
+    val isLightTheme = MaterialTheme.colorScheme.background.luminance() > 0.5f
+    val intensityValueColor = if (isLightTheme) Color.Black else Color.White
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         PillIconButton(
             icon = Icons.Filled.KeyboardArrowDown,
@@ -2133,7 +2139,7 @@ private fun IntensityRow(
                     displayText,
                     fontSize = 14.1.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White,
+                    color = intensityValueColor,
                 )
             }
             // Same size as the mode circle (balances it so the % box above stays centered in the
