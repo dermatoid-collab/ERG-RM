@@ -37,6 +37,7 @@ import com.ergrm.trainer.history.SessionSample
 import com.ergrm.trainer.history.WorkoutSession
 import com.ergrm.trainer.history.WorkoutSource
 import com.ergrm.trainer.intervals.AthleteSettingsResult
+import com.ergrm.trainer.intervals.CalendarCacheRepository
 import com.ergrm.trainer.intervals.CalendarFetchResult
 import com.ergrm.trainer.intervals.CalendarWorkout
 import com.ergrm.trainer.intervals.FetchResult
@@ -90,7 +91,11 @@ sealed interface WorkoutLoadState {
 
 sealed interface CalendarUiState {
     data object Loading : CalendarUiState
-    data class Loaded(val workouts: List<CalendarWorkout>) : CalendarUiState
+    // isStale: true means these came from CalendarCacheRepository (the last successful fetch,
+    // persisted to disk) rather than this session's own live fetch — e.g. right after launch,
+    // before the startup refresh lands, or after a refresh that failed but left the cache as the
+    // best available data (see MainViewModel.fetchCalendarWorkouts).
+    data class Loaded(val workouts: List<CalendarWorkout>, val isStale: Boolean = false) : CalendarUiState
     data class Error(val message: String) : CalendarUiState
 }
 
@@ -130,6 +135,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val settingsRepository = SettingsRepository(application)
     private val intervalsRepository = IntervalsRepository()
+    private val calendarCacheRepository = CalendarCacheRepository(application)
     private val libraryRepository = LibraryRepository(application)
     private val gpxLibraryRepository = GpxLibraryRepository(application)
     private val historyRepository = SessionHistoryRepository(application)
@@ -277,7 +283,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         autoReconnect()
         autoLoadTodayWorkout()
+        autoLoadCalendarCache()
         BackupReminderScheduler.scheduleIfNeeded(application)
+    }
+
+    /** Loads last session's cached Calendar list immediately (so it's there to see even before
+     *  any network call completes, or if one never does — the whole point of caching it), then
+     *  kicks off a real refresh same as opening the Calendar screen would. Silent on failure,
+     *  same as autoLoadTodayWorkout: a 503 or no signal at launch just leaves the cached list (or
+     *  nothing, on a first run) rather than surfacing an error nobody asked for yet. */
+    private fun autoLoadCalendarCache() {
+        viewModelScope.launch {
+            val cached = calendarCacheRepository.load()
+            if (cached.isNotEmpty()) {
+                _calendarState.value = CalendarUiState.Loaded(cached, isStale = true)
+            }
+            if (settingsRepository.settings.first().intervalsConfigured) {
+                fetchCalendarWorkouts(silent = true)
+            }
+        }
     }
 
     /** Tries "Intervals WOD" once on launch, so the rider doesn't have to tap for it every time —
@@ -589,18 +613,41 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** Refreshes the two-week calendar list (current week + next week) shown in [CalendarScreen]. */
-    fun fetchCalendarWorkouts() {
+    /** Refreshes the two-week calendar list (current week + next week) shown in [CalendarScreen].
+     *  On success, also persists it via [calendarCacheRepository] for a future offline/outage
+     *  fallback. On failure, a cached list already on screen is left as-is (just flagged stale,
+     *  with a snackbar noting the refresh itself failed) instead of being replaced by a hard
+     *  error — the cached names/dates/durations are still better than nothing during a transient
+     *  Intervals.icu outage (e.g. a 503). Only shows the full error screen when there's no cached
+     *  list to fall back to. [silent] drops that snackbar — used by the launch-time auto-refresh,
+     *  which shouldn't greet the rider with a network complaint before they've even asked to see
+     *  the calendar. */
+    fun fetchCalendarWorkouts(silent: Boolean = false) {
         val s = settings.value
         if (!s.intervalsConfigured) {
             _calendarState.value = CalendarUiState.Error("Set your Intervals.icu API key and athlete ID first")
             return
         }
-        _calendarState.value = CalendarUiState.Loading
+        // Keeps a cached/previous list on screen while this refreshes, instead of flashing to a
+        // blank spinner every time — only shown when there's nothing to show yet.
+        if (_calendarState.value !is CalendarUiState.Loaded) {
+            _calendarState.value = CalendarUiState.Loading
+        }
         viewModelScope.launch {
-            _calendarState.value = when (val result = intervalsRepository.fetchCalendarWorkouts(s.intervalsApiKey, s.intervalsAthleteId)) {
-                is CalendarFetchResult.Success -> CalendarUiState.Loaded(result.workouts)
-                is CalendarFetchResult.Error -> CalendarUiState.Error(result.message)
+            when (val result = intervalsRepository.fetchCalendarWorkouts(s.intervalsApiKey, s.intervalsAthleteId)) {
+                is CalendarFetchResult.Success -> {
+                    _calendarState.value = CalendarUiState.Loaded(result.workouts, isStale = false)
+                    calendarCacheRepository.save(result.workouts)
+                }
+                is CalendarFetchResult.Error -> {
+                    val current = _calendarState.value
+                    if (current is CalendarUiState.Loaded && current.workouts.isNotEmpty()) {
+                        _calendarState.value = current.copy(isStale = true)
+                        if (!silent) _snackbarMessages.emit("Couldn't refresh calendar: ${result.message}")
+                    } else {
+                        _calendarState.value = CalendarUiState.Error(result.message)
+                    }
+                }
             }
         }
     }

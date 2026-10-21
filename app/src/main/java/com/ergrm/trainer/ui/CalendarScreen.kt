@@ -87,6 +87,18 @@ fun CalendarScreen(
                 )
             }
             is CalendarUiState.Loaded -> {
+                // Stale means this is last session's cached list (CalendarCacheRepository),
+                // shown because the live fetch hasn't completed yet or failed (e.g. a transient
+                // Intervals.icu 503) — flagged so the rider knows it might not reflect a since-
+                // moved or since-added event, not just silently treated as current.
+                if (state.isStale) {
+                    Text(
+                        "Showing cached data — tap refresh to check for updates",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = ErgOnSurface.copy(alpha = 0.6f),
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
                 val visibleWorkouts = remember(state.workouts, searchQuery) {
                     if (searchQuery.isBlank()) {
                         state.workouts
