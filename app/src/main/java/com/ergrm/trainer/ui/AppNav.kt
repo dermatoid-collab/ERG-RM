@@ -239,7 +239,6 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
                 },
                 "Calendar (Intervals.icu)" to { overlay = Overlay.CALENDAR },
                 "Library (Intervals.icu)" to { overlay = Overlay.INTERVALS_LIBRARY },
-                "Workout Library" to { overlay = Overlay.LIBRARY },
                 "GPX route" to {
                     // A folder set in Settings gives a pickable list, same as Workout Library —
                     // otherwise fall back to the one-off system file picker.
@@ -252,9 +251,14 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
                         gpxPickerLauncher.launch("*/*")
                     }
                 },
-                // Last, set off by its own divider in the menu (see WorkoutHeader/
-                // WorkoutSourceMenu) — not a workout source to pick FROM like the 5 above it, but
-                // a blank 100W/1h00m00s starting point to shape with the existing controls.
+                // Set off by its own divider in the menu (see WorkoutHeader/WorkoutSourceMenu):
+                // unlike the 3 items above, this isn't a one-shot picker with no topBar icon of
+                // its own — it's a shortcut to the Workout Library page, which already has its own
+                // icon and sits in the main swipeable set. Listing it here is just a convenience,
+                // not another "source" of the same kind as Calendar/Library(Intervals.icu)/GPX.
+                "Workout Library" to { overlay = Overlay.LIBRARY },
+                // Also its own divider — not a workout source to pick FROM like everything above
+                // it, but a blank 100W/1h00m00s starting point to shape with the existing controls.
                 "Free ride" to {
                     viewModel.loadFreeRide()
                     overlay = Overlay.NONE

@@ -246,11 +246,10 @@ fun LibraryScreen(
     }
 }
 
-/** Same dropdown, reused identically on every workout-source screen (Workout's own header,
- *  Library, Calendar, Intervals.icu Library) so you can jump straight to another source without
- *  backing out first — always the same 4 items in the same order, including the screen you're
- *  already on (tapping it is a harmless no-op), so the menu never looks different depending on
- *  where you opened it from. */
+/** Same dropdown, reused identically on every workout-source screen, so you can jump straight to
+ *  another source without backing out first — always the same 6 items in the same order,
+ *  including the screen you're already on (tapping it is a harmless no-op), so the menu never
+ *  looks different depending on where you opened it from. */
 @Composable
 internal fun WorkoutSourceMenu(items: List<Pair<String, () -> Unit>>) {
     var expanded by remember { mutableStateOf(false) }
@@ -261,9 +260,9 @@ internal fun WorkoutSourceMenu(items: List<Pair<String, () -> Unit>>) {
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             items.forEach { (label, action) ->
-                // Same divider WorkoutHeader's own copy of this menu gives "Free ride" — see its
-                // comment for why.
-                if (label == "Free ride") HorizontalDivider()
+                // Same dividers WorkoutHeader's own copy of this menu gives "Workout Library" and
+                // "Free ride" — see its comment for why.
+                if (label == "Workout Library" || label == "Free ride") HorizontalDivider()
                 DropdownMenuItem(
                     text = { Text(label) },
                     onClick = {

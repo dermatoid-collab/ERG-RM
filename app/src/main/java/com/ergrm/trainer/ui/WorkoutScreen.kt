@@ -2230,10 +2230,12 @@ private fun WorkoutHeader(title: String, otherSources: List<Pair<String, () -> U
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             otherSources.forEach { (label, action) ->
-                // "Free ride" is a starting point to shape with the existing controls, not a
-                // source to pick a workout FROM like every item above it — set off with its own
-                // divider instead of blending into the rest of the list.
-                if (label == "Free ride") HorizontalDivider()
+                // "Workout Library" is a shortcut to a page that already has its own topBar icon
+                // and sits in the main swipeable set, not a one-shot picker like the 3 items above
+                // it — and "Free ride" isn't a source to pick a workout FROM at all, but a blank
+                // 100W/1h00m00s starting point. Both set off with their own divider instead of
+                // blending into the rest of the list.
+                if (label == "Workout Library" || label == "Free ride") HorizontalDivider()
                 DropdownMenuItem(
                     text = { Text(label) },
                     onClick = {
