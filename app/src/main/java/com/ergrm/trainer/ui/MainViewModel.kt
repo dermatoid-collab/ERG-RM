@@ -1060,6 +1060,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** "New" icon: back to the pristine starting state (the default template, not a blank
+     *  editor — see [BuilderDraftState]). The screen itself decides whether that needs a
+     *  "Discard changes?" confirmation first. */
+    fun resetBuilderDraft() {
+        _builderState.value = BuilderDraftState()
+    }
+
     fun updateBuilderName(name: String) {
         _builderState.value = _builderState.value.copy(name = name)
     }

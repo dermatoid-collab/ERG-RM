@@ -20,12 +20,14 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -33,6 +35,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -77,6 +80,7 @@ fun WorkoutBuilderScreen(viewModel: MainViewModel) {
     val settings by viewModel.settings.collectAsState()
     val builder by viewModel.builderState.collectAsState()
     var showHelp by remember { mutableStateOf(false) }
+    var showDiscardWarning by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
     // Hints the system Save-As picker to open in the configured Workout Library folder, via the
@@ -109,10 +113,15 @@ fun WorkoutBuilderScreen(viewModel: MainViewModel) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Text("Workout Builder", style = MaterialTheme.typography.titleLarge)
+            Text("Builder", style = MaterialTheme.typography.titleLarge)
             Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { showHelp = true }) {
-                    Icon(Icons.Filled.HelpOutline, contentDescription = "Workout syntax help")
+                IconButton(onClick = {
+                    // Nothing to lose yet (still the pristine default template/blank fields) —
+                    // reset straight away instead of confirming a discard that wouldn't discard
+                    // anything.
+                    if (builder != BuilderDraftState()) showDiscardWarning = true else viewModel.resetBuilderDraft()
+                }) {
+                    Icon(Icons.Filled.Add, contentDescription = "New")
                 }
                 IconButton(onClick = {
                     AppNavigationEvents.pickerLaunchInFlight = true
@@ -133,7 +142,26 @@ fun WorkoutBuilderScreen(viewModel: MainViewModel) {
                         tint = if (canSave) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
                     )
                 }
+                IconButton(onClick = { showHelp = true }) {
+                    Icon(Icons.Filled.HelpOutline, contentDescription = "Workout syntax help")
+                }
             }
+        }
+
+        if (showDiscardWarning) {
+            AlertDialog(
+                onDismissRequest = { showDiscardWarning = false },
+                title = { Text("Discard changes?") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        viewModel.resetBuilderDraft()
+                        showDiscardWarning = false
+                    }) { Text("Yes") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDiscardWarning = false }) { Text("No") }
+                },
+            )
         }
 
         // Name: boxed (OutlinedTextField) — it's the field that can't be left empty, so it gets
