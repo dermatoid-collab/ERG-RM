@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
@@ -106,52 +107,61 @@ fun WorkoutBuilderScreen(viewModel: MainViewModel) {
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            TextField(
-                value = builder.name,
-                onValueChange = viewModel::updateBuilderName,
-                modifier = Modifier.weight(1f),
-                placeholder = { Text("Name — required") },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-                colors = TextFieldDefaults.colors(
-                    unfocusedContainerColor = Color.Transparent,
-                    focusedContainerColor = Color.Transparent,
-                ),
-            )
-            IconButton(onClick = { showHelp = true }) {
-                Icon(Icons.Filled.HelpOutline, contentDescription = "Workout syntax help")
-            }
-            IconButton(onClick = {
-                AppNavigationEvents.pickerLaunchInFlight = true
-                importLauncher.launch(arrayOf("*/*"))
-            }) {
-                Icon(Icons.Filled.UploadFile, contentDescription = "Import / Upload")
-            }
-            IconButton(
-                onClick = {
+            Text("Workout Builder", style = MaterialTheme.typography.titleLarge)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = { showHelp = true }) {
+                    Icon(Icons.Filled.HelpOutline, contentDescription = "Workout syntax help")
+                }
+                IconButton(onClick = {
                     AppNavigationEvents.pickerLaunchInFlight = true
-                    saveLauncher.launch("${builder.name}.zwo")
-                },
-                enabled = canSave,
-            ) {
-                Icon(
-                    Icons.Filled.Save,
-                    contentDescription = "Save as…",
-                    tint = if (canSave) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
-                )
+                    importLauncher.launch(arrayOf("*/*"))
+                }) {
+                    Icon(Icons.Filled.UploadFile, contentDescription = "Import / Upload")
+                }
+                IconButton(
+                    onClick = {
+                        AppNavigationEvents.pickerLaunchInFlight = true
+                        saveLauncher.launch("${builder.name}.zwo")
+                    },
+                    enabled = canSave,
+                ) {
+                    Icon(
+                        Icons.Filled.Save,
+                        contentDescription = "Save as…",
+                        tint = if (canSave) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                    )
+                }
             }
         }
 
+        // Name: boxed (OutlinedTextField) — it's the field that can't be left empty, so it gets
+        // the visually heavier treatment.
         OutlinedTextField(
+            value = builder.name,
+            onValueChange = viewModel::updateBuilderName,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp),
+            placeholder = { Text("Name (required)") },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+        )
+
+        // Description: plain underline — optional, so it stays visually lighter than Name.
+        TextField(
             value = builder.description,
             onValueChange = viewModel::updateBuilderDescription,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp),
             placeholder = { Text("Description (optional)") },
-            minLines = 2,
-            maxLines = 3,
+            singleLine = true,
+            colors = TextFieldDefaults.colors(
+                unfocusedContainerColor = Color.Transparent,
+                focusedContainerColor = Color.Transparent,
+            ),
         )
 
         HorizontalDivider(modifier = Modifier.padding(top = 8.dp))
@@ -229,36 +239,40 @@ fun WorkoutBuilderScreen(viewModel: MainViewModel) {
             onDismissRequest = { showHelp = false },
             sheetState = sheetState,
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 20.dp, vertical = 8.dp),
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text("Workout syntax", style = MaterialTheme.typography.titleLarge)
-                    IconButton(onClick = { scope.launch { sheetState.hide(); showHelp = false } }) {
-                        Icon(Icons.Filled.Close, contentDescription = "Close")
-                    }
+                Text("Workout syntax", style = MaterialTheme.typography.titleLarge)
+                IconButton(onClick = { scope.launch { sheetState.hide(); showHelp = false } }) {
+                    Icon(Icons.Filled.Close, contentDescription = "Close")
                 }
-                HelpSection(
-                    "Blocks",
-                    "A blank line starts a new block. The first line of a block is a free-text header — give it a repeat count like \"4x\" to repeat every step under it. A block whose first line already starts with \"-\" has no header: it's anonymous and runs once.",
-                    "Warmup\n- 10m 50%\n\n4x\n- 5m 90%\n- 3m 50%\n\nCooldown\n- 10m 40%",
-                )
-                HelpSection(
-                    "Step lines",
-                    "Start with \"-\", then duration, then power. Optional HR and cadence follow. Any free text before the duration becomes the step's own label.",
-                    "- Big gear 5m 90% 60rpm",
-                )
-                HelpSection("Duration", "30s · 10m · 1m30 (1 min 30s) · 1h30m", null)
-                HelpSection("Power", "220w (watts) · 90% or 60-80% (percent FTP — a range is a ramp) · Z3 (zone)", null)
-                HelpSection("Heart rate", "75-85% HR (percent max HR) · 70-80% LTHR (percent LTHR) · Z2 HR (HR zone)", null)
-                HelpSection("Cadence", "85rpm · 85-95rpm", null)
+            }
+            // Selectable so the grammar reference (duration/power/HR/cadence tokens especially)
+            // can be copied out, e.g. into a message asking for help.
+            SelectionContainer {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 20.dp, vertical = 8.dp),
+                ) {
+                    HelpSection(
+                        "Blocks",
+                        "A blank line starts a new block. The first line of a block is a free-text header — give it a repeat count like \"4x\" to repeat every step under it. A block whose first line already starts with \"-\" has no header: it's anonymous and runs once.",
+                        "Warmup\n- 10m 50%\n\n4x\n- 5m 90%\n- 3m 50%\n\nCooldown\n- 10m 40%",
+                    )
+                    HelpSection(
+                        "Step lines",
+                        "Start with \"-\", then duration, then power. Optional HR and cadence follow. Any free text before the duration becomes the step's own label.",
+                        "- Big gear 5m 90% 60rpm",
+                    )
+                    HelpSection("Duration", "30s · 10m · 1m30 (1 min 30s) · 1h30m", null)
+                    HelpSection("Power", "220w (watts) · 90% or 60-80% (percent FTP — a range is a ramp) · Z3 (zone)", null)
+                    HelpSection("Heart rate", "75-85% HR (percent max HR) · 70-80% LTHR (percent LTHR) · Z2 HR (HR zone)", null)
+                    HelpSection("Cadence", "85rpm · 85-95rpm", null)
+                }
             }
         }
     }

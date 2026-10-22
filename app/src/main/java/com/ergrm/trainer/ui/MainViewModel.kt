@@ -131,6 +131,24 @@ sealed interface GpxLibraryUiState {
     data class Error(val message: String) : GpxLibraryUiState
 }
 
+/** A starter example the Builder always opens with instead of a blank (and immediately
+ *  parse-erroring) editor — one of each block shape: a plain warmup, a plain steady block, a
+ *  repeated interval block, and a plain cooldown. */
+private val DEFAULT_BUILDER_TEMPLATE = """
+    Warmup
+    - 10m 50%
+
+    Active
+    - 20m 70%
+
+    4x
+    - 5m 90%
+    - 3m 50%
+
+    Cooldown
+    - 10m 40%
+""".trimIndent()
+
 /** The Workout Builder screen's whole editable state: Name/Description are kept apart from
  *  [text] (the DSL body) since they're separate fields in the UI, but all three end up merged
  *  into one [WorkoutDraft] on save/preview (see MainViewModel.currentBuilderDraft). [parseResult]
@@ -139,8 +157,8 @@ sealed interface GpxLibraryUiState {
 data class BuilderDraftState(
     val name: String = "",
     val description: String = "",
-    val text: String = "",
-    val parseResult: WorkoutDslParser.ParseResult = WorkoutDslParser.parse(""),
+    val text: String = DEFAULT_BUILDER_TEMPLATE,
+    val parseResult: WorkoutDslParser.ParseResult = WorkoutDslParser.parse(DEFAULT_BUILDER_TEMPLATE),
 )
 
 /** One CORE sensor reading, time-aligned with [MainViewModel.sampleHistory] via [tSec] — the
