@@ -114,19 +114,28 @@ fun WorkoutBuilderScreen(viewModel: MainViewModel) {
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text("Builder", style = MaterialTheme.typography.titleLarge)
+            // Same touch-target size as the main topBar's own nav icons (see AppNav's
+            // NAV_ICON_TOUCH_SIZE) — one consistent icon spacing across the whole app, not a
+            // different one just for this screen's header.
             Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = {
-                    // Nothing to lose yet (still the pristine default template/blank fields) —
-                    // reset straight away instead of confirming a discard that wouldn't discard
-                    // anything.
-                    if (builder != BuilderDraftState()) showDiscardWarning = true else viewModel.resetBuilderDraft()
-                }) {
+                IconButton(
+                    onClick = {
+                        // Nothing to lose yet (still the pristine default template/blank fields) —
+                        // reset straight away instead of confirming a discard that wouldn't
+                        // discard anything.
+                        if (builder != BuilderDraftState()) showDiscardWarning = true else viewModel.resetBuilderDraft()
+                    },
+                    modifier = Modifier.size(NAV_ICON_TOUCH_SIZE),
+                ) {
                     Icon(Icons.Filled.Add, contentDescription = "New")
                 }
-                IconButton(onClick = {
-                    AppNavigationEvents.pickerLaunchInFlight = true
-                    importLauncher.launch(arrayOf("*/*"))
-                }) {
+                IconButton(
+                    onClick = {
+                        AppNavigationEvents.pickerLaunchInFlight = true
+                        importLauncher.launch(arrayOf("*/*"))
+                    },
+                    modifier = Modifier.size(NAV_ICON_TOUCH_SIZE),
+                ) {
                     Icon(Icons.Filled.UploadFile, contentDescription = "Import / Upload")
                 }
                 IconButton(
@@ -135,6 +144,7 @@ fun WorkoutBuilderScreen(viewModel: MainViewModel) {
                         saveLauncher.launch("${builder.name}.zwo")
                     },
                     enabled = canSave,
+                    modifier = Modifier.size(NAV_ICON_TOUCH_SIZE),
                 ) {
                     Icon(
                         Icons.Filled.Save,
@@ -142,7 +152,10 @@ fun WorkoutBuilderScreen(viewModel: MainViewModel) {
                         tint = if (canSave) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
                     )
                 }
-                IconButton(onClick = { showHelp = true }) {
+                IconButton(
+                    onClick = { showHelp = true },
+                    modifier = Modifier.size(NAV_ICON_TOUCH_SIZE),
+                ) {
                     Icon(Icons.Filled.HelpOutline, contentDescription = "Workout syntax help")
                 }
             }
