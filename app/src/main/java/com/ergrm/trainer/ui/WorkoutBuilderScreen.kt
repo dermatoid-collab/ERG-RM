@@ -270,8 +270,23 @@ fun WorkoutBuilderScreen(viewModel: MainViewModel) {
                     )
                     HelpSection("Duration", "30s · 10m · 1m30 (1 min 30s) · 1h30m", null)
                     HelpSection("Power", "220w (watts) · 90% or 60-80% (percent FTP — a range is a ramp) · Z3 (zone)", null)
-                    HelpSection("Heart rate", "75-85% HR (percent max HR) · 70-80% LTHR (percent LTHR) · Z2 HR (HR zone)", null)
-                    HelpSection("Cadence", "85rpm · 85-95rpm", null)
+                    HelpSection(
+                        "Heart rate",
+                        "75-85% HR (percent max HR) · 70-80% LTHR (percent LTHR) · Z2 HR (HR zone). " +
+                            "Accepted, but has no effect on a ride in this app: HR+ mode already " +
+                            "reinterprets the step's own power % against your LTHR, no separate HR " +
+                            "token needed — this is kept only so an imported file with HR data " +
+                            "round-trips cleanly, and isn't written to an exported .zwo either.",
+                        null,
+                    )
+                    HelpSection(
+                        "Cadence",
+                        "85rpm · 85-95rpm. Not used while riding in this app (there's no cadence-" +
+                            "target display here), but it is written into the exported .zwo file, " +
+                            "so it carries over if the workout is later opened in Zwift, " +
+                            "Intervals.icu or another app.",
+                        null,
+                    )
                 }
             }
         }
