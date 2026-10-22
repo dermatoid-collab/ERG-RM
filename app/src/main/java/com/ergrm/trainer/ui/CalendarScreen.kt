@@ -48,7 +48,11 @@ fun CalendarScreen(
     var searchQuery by remember { mutableStateOf("") }
     var searchActive by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) { viewModel.fetchCalendarWorkouts() }
+    // Live fetch only the first time this screen opens in the session (ensureCalendarLoaded is a
+    // no-op after that) — reopening the Calendar overlay re-composes this LaunchedEffect every
+    // time, but the cached/already-loaded state is what should show, not a fresh network round
+    // trip. The refresh icon below still always hits the network on demand.
+    LaunchedEffect(Unit) { viewModel.ensureCalendarLoaded() }
 
     Column(
         modifier = Modifier

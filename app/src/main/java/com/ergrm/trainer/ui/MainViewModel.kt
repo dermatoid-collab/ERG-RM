@@ -325,10 +325,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             if (cached.isNotEmpty()) {
                 _calendarState.value = CalendarUiState.Loaded(cached, isStale = true)
             }
-            if (settingsRepository.settings.first().intervalsConfigured) {
-                fetchCalendarWorkouts(silent = true)
-            }
+            // No live fetch here on purpose: this only loads what's already on disk, so launch
+            // never pays for a Calendar refresh (plus prefetchCalendarStructures' own burst of one
+            // request per event) that nobody has asked to see yet. The live fetch happens lazily,
+            // the first time the Calendar screen is actually opened — see ensureCalendarLoaded().
         }
+    }
+
+    private var calendarFetchedThisSession = false
+
+    /** Calendar screen's own launch-time hook: a live fetch (+ structure prefetch) the first time
+     *  it's opened in this app session, relying on the cache the rest of the time it's reopened —
+     *  a no-op on every open after the first. The screen's own refresh icon still always calls
+     *  [fetchCalendarWorkouts] directly for an explicit, on-demand refresh regardless of this. */
+    fun ensureCalendarLoaded() {
+        if (calendarFetchedThisSession) return
+        calendarFetchedThisSession = true
+        fetchCalendarWorkouts(silent = true)
     }
 
     /** Tries "Intervals WOD" once on launch, so the rider doesn't have to tap for it every time —
