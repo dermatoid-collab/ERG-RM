@@ -426,9 +426,11 @@ fun ErgRmApp(viewModel: MainViewModel = viewModel()) {
  *  perfectly symmetric icon (Bluetooth, FolderOpen, Settings) needs no correction. */
 // Material3's IconButton defaults to a 48dp touch target regardless of its icon's own size.
 // Fitting the new pencil (Workout Builder) icon into the same top bar as a 6th icon, without it
-// reading as more crowded than the original 5, called for shrinking that target by 20% (0.8x) —
-// the icons themselves keep their normal size, only the tappable box around each shrinks.
-private val NAV_ICON_TOUCH_SIZE = (48 * 0.8).dp
+// reading as more crowded than the original 5, first called for shrinking that target by 20%
+// (0.8x) — then widened back out by 10% of that reduced size (0.8 * 1.1 = 0.88x the original
+// 48dp) once 6 icons at the tighter spacing felt too cramped. The icons themselves keep their
+// normal size either way, only the tappable (and so visually spacing) box around each changes.
+private val NAV_ICON_TOUCH_SIZE = (48 * 0.8 * 1.1).dp
 
 @Composable
 private fun NavIcon(
