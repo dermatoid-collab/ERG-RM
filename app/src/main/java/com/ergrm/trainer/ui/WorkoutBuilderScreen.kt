@@ -311,7 +311,16 @@ fun WorkoutBuilderScreen(viewModel: MainViewModel) {
                         "- Big gear 5m 90% 60rpm",
                     )
                     HelpSection("Duration", "30s · 10m · 1m30 (1 min 30s) · 1h30m", null)
-                    HelpSection("Power", "220w (watts) · 90% or 60-80% (percent FTP — a range is a ramp) · Z3 (zone)", null)
+                    HelpSection(
+                        "Power",
+                        "220w or 220-250w (watts) · 90% or 60-80% (percent FTP) · Z3 (zone). A low-high range on watts or %FTP is a ramp — see below.",
+                        null,
+                    )
+                    HelpSection(
+                        "Ramp",
+                        "A power range (low-high, in watts or %FTP) ramps linearly across the step's duration instead of holding it steady — works ascending or descending.",
+                        "- 10m 50-80%\n- 5m 250-200w",
+                    )
                     HelpSection(
                         "Heart rate",
                         "75-85% HR (percent max HR) · 70-80% LTHR (percent LTHR) · Z2 HR (HR zone). " +
