@@ -56,12 +56,18 @@ object ZwoParser {
      *  fall through to the default (0.6 exactly, giving a visibly wrong 165W on a 275W FTP), most
      *  likely because the actual separator isn't a plain ASCII hyphen (an en-dash, "to", etc.) —
      *  so instead pull out every number found anywhere in the attribute and average them,
-     *  regardless of what separates them. Also normalizes a percent-style range ("88-90") to a
-     *  0..1 fraction the same way [powerValueToFraction] does for the Library JSON path, in case
-     *  the export uses plain percent numbers instead of 0..1 fractions. */
+     *  regardless of what separates them, then [normalizePowerFraction] that average in case the
+     *  export used plain percent numbers ("88-90") instead of 0..1 fractions.
+     *
+     *  [normalizePowerFraction] is deliberately NOT applied when the attribute parses cleanly as
+     *  a single float: a real-world .zwo had a 209% FTP burst step (Power="2.09"), which that
+     *  >150%-looking-like-a-bare-percent heuristic was misreading as 2.09% FTP (divide by 100),
+     *  turning a ~575W effort into ~6W on a 275W FTP. ZWO's own format always writes power as a
+     *  0..1 fraction for a value that parses as a plain float — the only real ambiguity is in the
+     *  extracted-range fallback below, where the heuristic stays. */
     private fun attrPowerFraction(parser: XmlPullParser, name: String, default: Float): Float {
         val raw = parser.getAttributeValue(null, name) ?: return default
-        raw.toFloatOrNull()?.let { return normalizePowerFraction(it) }
+        raw.toFloatOrNull()?.let { return it }
         val numbers = NUMBER_REGEX.findAll(raw).mapNotNull { it.value.toFloatOrNull() }.toList()
         if (numbers.isEmpty()) return default
         return normalizePowerFraction(numbers.average().toFloat())

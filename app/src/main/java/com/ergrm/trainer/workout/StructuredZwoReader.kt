@@ -117,9 +117,13 @@ object StructuredZwoReader {
     /** Same tolerance as [ZwoParser]'s own private attrPowerFraction: a target authored as a
      *  range on Intervals.icu can come back as text holding both bounds (e.g. "0.88-0.9") rather
      *  than a plain number — pull out every number in the attribute and average them. */
+    /** [normalize] is deliberately NOT applied when the attribute parses cleanly as a single
+     *  float — see [ZwoParser]'s own identical fix: a real .zwo with a 209% FTP burst step
+     *  (Power="2.09") was being misread as 2.09% FTP by that heuristic. Only the extracted-range
+     *  fallback below (a percent-style range with no "0." prefix) still needs it. */
     private fun powerFraction(attrs: Map<String, String>, name: String, default: Float): Float {
         val raw = attrs[name] ?: return default
-        raw.toFloatOrNull()?.let { return normalize(it) }
+        raw.toFloatOrNull()?.let { return it }
         val numbers = NUMBER_REGEX.findAll(raw).mapNotNull { it.value.toFloatOrNull() }.toList()
         if (numbers.isEmpty()) return default
         return normalize(numbers.average().toFloat())
